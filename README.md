@@ -13,6 +13,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Real-reachability probe, not interface status — catches the "connected but blackholed" state
 - Dropdown: public IP (click to copy), city/country, ISP/org, which VPN interface owns the default route, last-change timestamp
 - iCloud Private Relay awareness — knows Safari may exit somewhere your apps don't
+- Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications on exit/connectivity change (off by default), launch at login
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
