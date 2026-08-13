@@ -56,6 +56,23 @@ $ whereamip config set style code
 $ whereamip config set notify true
 ```
 
+## FAQ
+
+**Is my VPN actually working?**
+Look at the flag. WhereAmIP shows the country of your real exit IP in the macOS menu bar — the moment a VPN (Tailscale, OpenVPN, PureVPN, WireGuard, …) takes over your default route, the flag flips. The dropdown names the VPN that owns the route, based on the routing table, not on which apps happen to be running.
+
+**How do I show my public IP in the menu bar on a Mac?**
+`brew install` WhereAmIP, and your current public IP is one click away — with city, country, and ISP. Click the IP to copy it.
+
+**Am I connected to the internet right now?**
+WhereAmIP probes real reachability instead of trusting Wi-Fi status. If the network looks up but nothing actually loads (a classic stale-VPN symptom), the flag becomes an offline symbol — and if OpenVPN's leftover hijack routes are the cause, the dropdown says so.
+
+**Why does Safari show a different location than my other apps?**
+That's iCloud Private Relay: it carries Safari traffic through Apple's relay while other apps take the system route. WhereAmIP detects this split and shows both exits.
+
+**Does it phone home?**
+No — see Privacy below. No accounts, no API keys, no tracking.
+
 ## Privacy — your data stays yours
 
 WhereAmIP has **no tracking, no analytics, no history, and no logs**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, and the Private Relay check) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
