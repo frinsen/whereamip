@@ -1,0 +1,47 @@
+#!/bin/bash
+# Assemble WhereAmIP.app from the SPM release build.
+# Usage: scripts/make-app-bundle.sh [output-dir]   (default: ./dist)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+OUT="${1:-dist}"
+VERSION=$(grep -o '"[0-9][0-9.]*"' Sources/WhereAmIPCore/Version.swift | tr -d '"')
+# SWIFT_BUILD_FLAGS lets callers (e.g. the Homebrew formula, which already ran
+# its own `swift build -c release --disable-sandbox`) pass extra flags into
+# this script's build so it doesn't spawn a second, differently-sandboxed
+# `swift build` invocation. Empty by default for local/CI usage.
+swift build -c release ${SWIFT_BUILD_FLAGS:-}
+APP="$OUT/WhereAmIP.app"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp .build/release/WhereAmIPApp "$APP/Contents/MacOS/whereamip"
+# SPM resource bundles go into Contents/Resources/ (proper macOS bundle
+# structure); codesign rejects loose .bundle dirs sitting in Contents/MacOS/
+# next to the executable. Bundle.main.resourceURL (the resolvers' first
+# candidate) resolves to Contents/Resources/ when launched as a .app.
+for bundle in .build/release/*.bundle; do
+  [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
+done
+cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>WhereAmIP</string>
+  <key>CFBundleDisplayName</key><string>WhereAmIP</string>
+  <key>CFBundleIdentifier</key><string>io.github.frinsen.whereamip</string>
+  <key>CFBundleExecutable</key><string>whereamip</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSAppTransportSecurity</key><dict>
+    <key>NSExceptionDomains</key><dict>
+      <key>api.ipify.org</key><dict>
+        <key>NSExceptionAllowsInsecureHTTPLoads</key><true/>
+      </dict>
+    </dict>
+  </dict>
+</dict></plist>
+PLIST
+codesign --force --sign - "$APP"   # ad-hoc signature (local identity; fine for build-from-source)
+echo "Built $APP (v$VERSION)"
