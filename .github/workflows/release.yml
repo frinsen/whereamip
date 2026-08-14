@@ -11,7 +11,23 @@ jobs:
       - uses: actions/checkout@v4
       - run: swift test
       - name: Create GitHub release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          cat > /tmp/install-notes.md <<'NOTES'
+          ## Install (no download needed — Homebrew builds it for you)
+
+          ```bash
+          brew tap frinsen/tap
+          brew trust frinsen/tap   # newer Homebrew requires trusting third-party taps once
+          brew install whereamip   # or: brew upgrade whereamip
+          open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"
+          ```
+
+          No prebuilt binaries here by design: locally built apps need no Apple
+          notarization and trigger no Gatekeeper warnings. Requires Xcode Command Line Tools.
+
+          ---
+          NOTES
+          gh release create "$GITHUB_REF_NAME" --generate-notes --notes-file /tmp/install-notes.md
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - name: Bump Homebrew formula
         env: { TAP_TOKEN: "${{ secrets.TAP_PUSH_TOKEN }}" }
