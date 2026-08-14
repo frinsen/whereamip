@@ -20,6 +20,8 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 
 ## Install
 
+Installation uses [Homebrew](https://brew.sh), the standard package manager for macOS — if you don't have it yet, it's a one-line install from [brew.sh](https://brew.sh).
+
 ```bash
 brew tap frinsen/tap
 brew trust frinsen/tap   # newer Homebrew requires explicitly trusting third-party taps
