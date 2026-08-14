@@ -8,14 +8,20 @@ public struct MenuActions {
     public var toggleNotifications: () -> Void
     public var toggleLaunchAtLogin: () -> Void
     public var quit: () -> Void
+    public var copyUpdateCommand: () -> Void
+    public var toggleUpdateChecks: () -> Void
     public init(copyIP: @escaping () -> Void = {}, refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
-                quit: @escaping () -> Void = {}) {
+                quit: @escaping () -> Void = {},
+                copyUpdateCommand: @escaping () -> Void = {},
+                toggleUpdateChecks: @escaping () -> Void = {}) {
         self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
+        self.copyUpdateCommand = copyUpdateCommand
+        self.toggleUpdateChecks = toggleUpdateChecks
     }
 }
 
@@ -46,9 +52,20 @@ public enum MenuBuilder {
 
     public static func build(state: ExitState, style: MenuBarStyle,
                              notificationsEnabled: Bool, launchAtLogin: Bool,
+                             availableUpdate: String? = nil, updatesEnabled: Bool = true,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+
+        // Quiet update hint — never a popup or badge, just the first row when
+        // a newer release exists. Clicking copies the brew command; the app
+        // itself never downloads or modifies anything.
+        if let availableUpdate {
+            menu.addItem(action("⬆︎ Update v\(availableUpdate) available (brew upgrade whereamip)") {
+                actions.copyUpdateCommand()
+            })
+            menu.addItem(.separator())
+        }
 
         // Header + warnings
         if state.connectivity == .offline {
@@ -115,6 +132,9 @@ public enum MenuBuilder {
         let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }
         login.state = launchAtLogin ? .on : .off
         settingsMenu.addItem(login)
+        let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
+        checkUpdates.state = updatesEnabled ? .on : .off
+        settingsMenu.addItem(checkUpdates)
         settings.submenu = settingsMenu
         menu.addItem(settings)
 

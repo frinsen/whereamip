@@ -22,6 +22,14 @@ public final class Settings: @unchecked Sendable {
         get { d.bool(forKey: "notificationsEnabled") }
         set { d.set(newValue, forKey: "notificationsEnabled") }
     }
+    // Default-on, unlike notificationsEnabled: `d.bool(forKey:)` returns false
+    // for an absent key, which would make "unset" indistinguishable from
+    // "explicitly disabled". Check `d.object(forKey:)` first so a fresh
+    // install checks for updates by default.
+    public var updatesEnabled: Bool {
+        get { d.object(forKey: "updatesEnabled") == nil ? true : d.bool(forKey: "updatesEnabled") }
+        set { d.set(newValue, forKey: "updatesEnabled") }
+    }
     public func set(key: String, value: String) throws {
         switch key {
         case "style":
@@ -30,10 +38,13 @@ public final class Settings: @unchecked Sendable {
         case "notify":
             guard value == "true" || value == "false" else { throw SettingsError.invalid("notify must be true|false") }
             notificationsEnabled = (value == "true")
-        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify)")
+        case "updates":
+            guard value == "true" || value == "false" else { throw SettingsError.invalid("updates must be true|false") }
+            updatesEnabled = (value == "true")
+        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates)")
         }
     }
     public func allValues() -> [(key: String, value: String)] {
-        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue)]
+        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled))]
     }
 }

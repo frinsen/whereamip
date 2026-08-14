@@ -7,4 +7,5 @@ enum Log {
     static let route   = Logger(subsystem: subsystem, category: "route")
     static let reducer = Logger(subsystem: subsystem, category: "reducer")
     static let relay   = Logger(subsystem: subsystem, category: "relay")
+    static let update  = Logger(subsystem: subsystem, category: "update")
 }

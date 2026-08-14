@@ -11,6 +11,7 @@ final class SettingsTests: XCTestCase {
     func testDefaults() {
         XCTAssertEqual(settings.menuBarStyle, .emoji)
         XCTAssertFalse(settings.notificationsEnabled)
+        XCTAssertTrue(settings.updatesEnabled)
     }
     func testPersistence() {
         settings.menuBarStyle = .code
@@ -23,6 +24,14 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.notificationsEnabled)
         XCTAssertThrowsError(try settings.set(key: "style", value: "banana"))
         XCTAssertThrowsError(try settings.set(key: "nope", value: "x"))
-        XCTAssertEqual(settings.allValues().map(\.key), ["notify", "style"])
+        XCTAssertEqual(settings.allValues().map(\.key), ["notify", "style", "updates"])
+    }
+    func testUpdatesConfigSurface() throws {
+        try settings.set(key: "updates", value: "false")
+        XCTAssertFalse(settings.updatesEnabled)
+        try settings.set(key: "updates", value: "true")
+        XCTAssertTrue(settings.updatesEnabled)
+        XCTAssertThrowsError(try settings.set(key: "updates", value: "banana"))
+        XCTAssertTrue(settings.allValues().map(\.key).contains("updates"))
     }
 }

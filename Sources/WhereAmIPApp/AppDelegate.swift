@@ -10,7 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var monitor: Monitor!
     var pathMonitor: NWPathMonitor!
     let settings = Settings()
+    let updateChecker = UpdateChecker()
     var lastState = ExitState()
+    var availableUpdate: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -39,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
 
         Task { await monitor.fullRefresh() }
+        checkForUpdates()
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { await self.monitor.probeTick() }
@@ -47,9 +50,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             Task { await self.monitor.fullRefresh() }
         }
+        // Cadence per spec: launch + once per 24h + on manual Refresh.
+        Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { [weak self] _ in
+            self?.checkForUpdates()
+        }
     }
 
     @objc func didWake() { Task { await monitor.fullRefresh() } }
+
+    // Passive check only — never downloads or applies anything, just learns
+    // whether a newer GitHub release exists. Respects the `updates` setting:
+    // when disabled, no network request is made at all.
+    func checkForUpdates() {
+        guard settings.updatesEnabled else { return }
+        Task {
+            let latest = await updateChecker.latestVersion()
+            let newer = latest.map { SemVer.isNewer($0, than: whereamipVersion) } ?? false
+            await MainActor.run { self.availableUpdate = newer ? latest : nil }
+        }
+    }
 
     func stateChanged(_ state: ExitState) {
         lastState = state
@@ -76,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             state: lastState, style: settings.menuBarStyle,
             notificationsEnabled: settings.notificationsEnabled,
             launchAtLogin: SMAppService.mainApp.status == .enabled,
+            availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -85,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 refresh: { [weak self] in
                     guard let self else { return }
                     Task { await self.monitor.fullRefresh() }
+                    self.checkForUpdates()
                 },
                 setStyle: { [weak self] style in
                     self?.settings.menuBarStyle = style
@@ -107,7 +128,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         try? SMAppService.mainApp.register()
                     }
                 },
-                quit: { NSApp.terminate(nil) }))
+                quit: { NSApp.terminate(nil) },
+                copyUpdateCommand: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("brew upgrade whereamip", forType: .string)
+                },
+                toggleUpdateChecks: { [weak self] in
+                    guard let self else { return }
+                    settings.updatesEnabled.toggle()
+                    if settings.updatesEnabled {
+                        self.checkForUpdates()
+                    } else {
+                        self.availableUpdate = nil
+                    }
+                }))
         menu.removeAllItems()
         fresh.items.forEach { item in
             fresh.removeItem(item)

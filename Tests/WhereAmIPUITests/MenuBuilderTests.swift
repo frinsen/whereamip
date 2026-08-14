@@ -66,6 +66,35 @@ final class MenuBuilderTests: XCTestCase {
         let styleMenu = settings.items.first { $0.title == "Menu Bar Style" }!.submenu!
         XCTAssertEqual(styleMenu.items.first { $0.state == .on }?.title, "ISO country code")
     }
+    func testUpdateRowAppearsFirstWhenAvailable() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     availableUpdate: "0.3", actions: MenuActions())
+        let first = menu.items.first!
+        XCTAssertTrue(first.title.contains("0.3"))
+        XCTAssertTrue(first.isEnabled)
+    }
+    func testNoUpdateRowWhenUnavailable() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains { $0.contains("Update") })
+    }
+    func testCheckForUpdatesToggleReflectsSettingOn() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     updatesEnabled: true, actions: MenuActions())
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Check for Updates" }!
+        XCTAssertEqual(item.state, .on)
+    }
+    func testCheckForUpdatesToggleReflectsSettingOff() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     updatesEnabled: false, actions: MenuActions())
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Check for Updates" }!
+        XCTAssertEqual(item.state, .off)
+    }
     func testRendererEmoji() {
         let r = StatusItemRenderer.render(.text("🇩🇪"))
         XCTAssertEqual(r.title, "🇩🇪"); XCTAssertNil(r.image)

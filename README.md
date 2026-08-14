@@ -16,6 +16,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications on exit/connectivity change (off by default), launch at login
+- Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
 
 ## Install
@@ -54,9 +55,10 @@ $ whereamip status --json
 $ whereamip watch            # prints a new status line whenever exit IP, route, or connectivity changes
 $ whereamip watch --json
 
-$ whereamip config get       # notify=false / style=emoji
+$ whereamip config get       # notify=false / style=emoji / updates=true
 $ whereamip config set style code
 $ whereamip config set notify true
+$ whereamip config set updates false
 ```
 
 ## FAQ
@@ -82,6 +84,8 @@ Run `whereamip debug`, reproduce the issue, and paste the output into your bug r
 ## Privacy — your data stays yours
 
 WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, and the Private Relay check) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
+
+WhereAmIP also checks `api.github.com/repos/frinsen/whereamip/releases/latest` once a day (and whenever you hit Refresh) to see if a newer release exists — this is a passive version check only, it never downloads or installs anything, it just shows a dropdown row that copies `brew upgrade whereamip` for you to run yourself. This check is on by default; turn it off with `whereamip config set updates false` (or the "Check for Updates" toggle in Settings) and no such request is ever made.
 
 WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), but this creates no privacy problem: the app never writes a log file anywhere. Entries are logged at debug level, which macOS does not persist to disk by default — they exist only in the local system's in-memory ring buffer while you're actively streaming them with `whereamip debug` (or Console.app), and expire on their own shortly after. Nothing is collected, stored, or sent off your Mac.
 
