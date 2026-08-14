@@ -54,13 +54,18 @@ public enum RouteInspector {
 
     public static func snapshot(runningBundleIDs: [String] = []) -> RouteInfo {
         let hijack = RouteTable.liveDump().map { RouteTable.hijackPairPresent(dump: $0) } ?? false
+        if hijack {
+            Log.route.error("snapshot: hijack route pair present (0.0.0.0/1 + 128.0.0.0/1)")
+        }
         guard let (iface, localIP) = defaultRouteInterface() else {
+            Log.route.debug("snapshot: no default route interface found")
             return RouteInfo(defaultInterface: nil, isVPN: false, vpnName: nil, hijackRoutePresent: hijack)
         }
         let isVPN = isTunnelInterface(iface)
         let scServiceName = isVPN ? SCServiceNamer.serviceName(forInterface: iface) : nil
         let name = VPNNamer.name(interface: iface, localAddress: localIP,
                                  scServiceName: scServiceName, runningBundleIDs: runningBundleIDs)
+        Log.route.debug("snapshot: interface=\(iface, privacy: .public) isVPN=\(isVPN, privacy: .public) vpnName=\(name ?? "nil", privacy: .public)")
         return RouteInfo(defaultInterface: iface, isVPN: isVPN, vpnName: name, hijackRoutePresent: hijack)
     }
 }

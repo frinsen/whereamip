@@ -25,12 +25,14 @@ public struct ConnectivityProbe: Sendable {
         self.session = session; self.deadline = deadlineSeconds
     }
     public func check() async -> Bool {
-        (try? await withHardDeadline(seconds: deadline) { [session] in
+        let ok = (try? await withHardDeadline(seconds: deadline) { [session] in
             var req = URLRequest(url: Self.url)
             req.httpMethod = "HEAD"
             let (_, resp) = try await session.data(for: req)
             guard (resp as? HTTPURLResponse)?.statusCode == 204 else { throw BadResponse() }
             return true
         }) ?? false
+        Log.route.debug("probe: \(ok ? "success" : "failure", privacy: .public)")
+        return ok
     }
 }

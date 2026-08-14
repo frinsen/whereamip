@@ -47,12 +47,23 @@ public struct GeoProviderChain: Sendable {
     }
     public func fetch(now: Date = Date()) async -> ExitInfo? {
         for e in Self.endpoints {
-            if let info = await get(e.url, parse: e.parse, now: now) { return info }
+            if let info = await get(e.url, parse: e.parse, now: now) {
+                Log.geo.debug("fetch \(e.name, privacy: .public): success ip=\(info.ip, privacy: .public) country=\(info.countryCode ?? "nil", privacy: .public)")
+                return info
+            }
+            Log.geo.debug("fetch \(e.name, privacy: .public): failure")
         }
+        Log.geo.error("fetch: all geo providers failed")
         return nil
     }
     public func lookup(ip: String, now: Date = Date()) async -> ExitInfo? {
         guard let url = URL(string: "https://ipwho.is/\(ip)") else { return nil }
-        return await get(url, parse: Self.endpoints[0].parse, now: now)
+        let info = await get(url, parse: Self.endpoints[0].parse, now: now)
+        if let info {
+            Log.geo.debug("lookup \(ip, privacy: .public): success country=\(info.countryCode ?? "nil", privacy: .public)")
+        } else {
+            Log.geo.debug("lookup \(ip, privacy: .public): failure")
+        }
+        return info
     }
 }

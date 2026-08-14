@@ -60,6 +60,7 @@ public actor Monitor {
     public func currentState() -> ExitState { state }
 
     public func fullRefresh() async {
+        Log.monitor.debug("fullRefresh() called")
         // Coalesce onto any in-flight state-mutating work. If it's a full refresh, awaiting
         // it satisfies this call. If it's only a tick, a genuine full refresh is still owed:
         // help clear the now-finished slot ourselves (generation-guarded, since several
@@ -75,6 +76,7 @@ public actor Monitor {
         // awaits that instead — bounded by the actual number of concurrent callers, never an
         // unconditional re-observation of the same finished task (which was the round-2 bug).
         while let task = inFlight {
+            Log.monitor.debug("fullRefresh() coalescing onto in-flight \(self.inFlightKind == .full ? "full" : "tick", privacy: .public) work")
             let wasFull = (inFlightKind == .full)
             let gen = inFlightGeneration
             await task.value
@@ -117,10 +119,12 @@ public actor Monitor {
     }
 
     public func probeTick() async {
+        Log.monitor.debug("probeTick() called")
         // ANY in-flight state-mutating work (tick or full refresh) already covers this call's
         // job — await it and return rather than snapshotting `state` ourselves and racing our
         // own `apply(new)` against it.
         if let task = inFlight {
+            Log.monitor.debug("probeTick() coalescing onto in-flight \(self.inFlightKind == .full ? "full" : "tick", privacy: .public) work")
             await task.value
             return
         }
@@ -145,6 +149,7 @@ public actor Monitor {
         new.connectivity = gate.record(success: await probe.check())
         new.route = route.snapshot()
         if before == .offline, new.connectivity == .online {
+            Log.monitor.debug("probeTick escalating to fullRefresh: offline -> online")
             apply(new)
             // Escalating within the same tracked slot — reclassify it as a full refresh so
             // any coalescer awaiting this task treats it as one (and doesn't then run a
@@ -161,6 +166,7 @@ public actor Monitor {
             // can't tell that apart from a genuine leak. Never let a route change reach state
             // without exit info fetched fresh through it: escalate to a full refresh instead,
             // same as the offline→online case above.
+            Log.monitor.debug("probeTick escalating to fullRefresh: route changed \(self.state.route.defaultInterface ?? "nil", privacy: .public) -> \(new.route.defaultInterface ?? "nil", privacy: .public)")
             inFlightKind = .full
             await runFullRefresh()
             return
@@ -169,6 +175,7 @@ public actor Monitor {
     }
 
     public func pathChanged() {
+        Log.monitor.debug("pathChanged() called, debouncing")
         debounceTask?.cancel()
         debounceTask = Task { [debounce] in
             try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
@@ -187,8 +194,12 @@ public actor Monitor {
         }
         guard next != old else { return }
         state = next
+        Log.monitor.debug("apply: connectivity=\(next.connectivity.rawValue, privacy: .public) exit=\(next.exit?.ip ?? "nil", privacy: .public)/\(next.exit?.countryCode ?? "nil", privacy: .public) route=\(next.route.defaultInterface ?? "nil", privacy: .public)/vpn=\(next.route.vpnName ?? "nil", privacy: .public)")
         onChange(next)
         let events = Reducer.events(old: old, new: next)
-        if !events.isEmpty { onEvents(events) }
+        if !events.isEmpty {
+            Log.reducer.debug("events: \(String(describing: events), privacy: .public)")
+            onEvents(events)
+        }
     }
 }

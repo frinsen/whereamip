@@ -76,9 +76,14 @@ That's iCloud Private Relay: it carries Safari traffic through Apple's relay whi
 **Does it phone home?**
 No — see Privacy below. No accounts, no API keys, no tracking.
 
+**How do I debug it / attach logs to a bug report?**
+Run `whereamip debug`, reproduce the issue, and paste the output into your bug report. It live-streams WhereAmIP's diagnostic log — nothing is written to disk, before or after you run it.
+
 ## Privacy — your data stays yours
 
-WhereAmIP has **no tracking, no analytics, no history, and no logs**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, and the Private Relay check) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
+WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, and the Private Relay check) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
+
+WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), but this creates no privacy problem: the app never writes a log file anywhere. Entries are logged at debug level, which macOS does not persist to disk by default — they exist only in the local system's in-memory ring buffer while you're actively streaming them with `whereamip debug` (or Console.app), and expire on their own shortly after. Nothing is collected, stored, or sent off your Mac.
 
 ## Roadmap
 

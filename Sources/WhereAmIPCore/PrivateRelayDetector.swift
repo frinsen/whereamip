@@ -60,10 +60,15 @@ public struct RelayRanges: Sendable {
 
 public enum PrivateRelayDetector {
     public static func decide(httpsIP: String?, httpIP: String?, ranges: RelayRanges) -> PrivateRelay {
-        guard let httpIP else { return .unknown }
+        guard let httpIP else {
+            Log.relay.debug("decide: httpIP=nil -> unknown")
+            return .unknown
+        }
         if ranges.containsIPv4(httpIP), httpIP != httpsIP {
+            Log.relay.debug("decide: httpIP=\(httpIP, privacy: .public) httpsIP=\(httpsIP ?? "nil", privacy: .public) -> active")
             return .active(egressIP: httpIP, egressCountry: nil)
         }
+        Log.relay.debug("decide: httpIP=\(httpIP, privacy: .public) httpsIP=\(httpsIP ?? "nil", privacy: .public) -> inactive")
         return .inactive
     }
 }
@@ -76,12 +81,14 @@ public struct HTTPIPFetcher: Sendable {
         self.session = session; self.deadline = deadlineSeconds
     }
     public func fetch() async -> String? {
-        try? await withHardDeadline(seconds: deadline) { [session] in
+        let s = try? await withHardDeadline(seconds: deadline) { [session] in
             let (data, resp) = try await session.data(from: Self.url)
             guard (resp as? HTTPURLResponse)?.statusCode == 200,
                   let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   RelayRanges.ipv4ToUInt32(s) != nil else { throw BadResponse() }
             return s
         }
+        Log.relay.debug("HTTPIPFetcher: httpIP=\(s ?? "nil", privacy: .public)")
+        return s
     }
 }

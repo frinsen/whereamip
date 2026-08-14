@@ -8,7 +8,7 @@ struct WhereAmIP: AsyncParsableCommand {
         commandName: "whereamip",
         abstract: "Where am I(P)? Exit IP, geolocation, VPN route, and Private Relay status.",
         version: whereamipVersion,
-        subcommands: [Status.self, Watch.self, Config.self],
+        subcommands: [Status.self, Watch.self, Config.self, Debug.self],
         defaultSubcommand: Status.self)
 }
 
@@ -58,6 +58,22 @@ struct Watch: AsyncParsableCommand {
         for await state in stream {
             print(json ? StateRenderer.json(state) : StateRenderer.human(state))
         }
+    }
+}
+
+struct Debug: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Live-stream WhereAmIP's diagnostic log (nothing is written to disk).")
+    func run() async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
+        process.arguments = ["stream", "--level", "debug",
+                              "--predicate", "subsystem == \"io.github.frinsen.whereamip\"",
+                              "--style", "compact"]
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        process.waitUntilExit()
     }
 }
 
