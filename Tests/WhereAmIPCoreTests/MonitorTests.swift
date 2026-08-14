@@ -26,6 +26,16 @@ struct MockRoute: RouteSnapshotting {
     var info = RouteInfo(defaultInterface: "en0")
     func snapshot() -> RouteInfo { info }
 }
+/// A `RouteSnapshotting` whose snapshot can be changed mid-test (e.g. to simulate a VPN
+/// coming up between two calls) — plain `MockRoute` is an immutable value type, so tests that
+/// need to flip the route after a baseline refresh need this instead.
+final class MutableMockRoute: RouteSnapshotting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var info: RouteInfo
+    init(_ info: RouteInfo) { self.info = info }
+    func snapshot() -> RouteInfo { lock.lock(); defer { lock.unlock() }; return info }
+    func set(_ newInfo: RouteInfo) { lock.lock(); info = newInfo; lock.unlock() }
+}
 struct MockHTTPIP: HTTPIPFetching {
     let counter: Counter
     var ip: String?
@@ -205,6 +215,79 @@ final class MonitorTests: XCTestCase {
         let events = box.all().flatMap { $0 }
         XCTAssertEqual(events, [.countryChanged(from: "DE", to: "FR", vpnName: nil)],
                        "exactly one forward countryChanged; no flip-flop from orphaned duplicate runs")
+    }
+    func testProbeTickEscalatesOnRouteChangeSoNoStaleLeakEvent() async {
+        let c = Counter()
+        let box = EventBox()
+        let route = MutableMockRoute(RouteInfo(defaultInterface: "en0", isVPN: false))
+        let preInfo = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                               provider: "mock", fetchedAt: Date())
+        let postInfo = ExitInfo(ip: "5.6.7.8", countryCode: "DE", city: "Bucharest", org: "PureVPN",
+                                provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: SequencedGeo(counter: c, index: CallIndex(), responses: [preInfo, postInfo]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: route,
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        // Baseline: pre-VPN, en0, IP 1.2.3.4 (consumes geo response #0).
+        await m.fullRefresh()
+        let baseline = await m.currentState()
+        XCTAssertEqual(baseline.exit?.ip, "1.2.3.4")
+        XCTAssertEqual(baseline.route.defaultInterface, "en0")
+        XCTAssertFalse(baseline.route.isVPN)
+
+        // VPN takes the default route right before a probe tick lands.
+        route.set(RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN"))
+        await m.probeTick()
+
+        // The route changed, so the tick must have escalated to a full refresh and fetched
+        // fresh geo data (response #1) instead of applying the stale pre-VPN exit alongside
+        // the new route.
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 2, "route flip must escalate the tick into a full refresh")
+
+        let s = await m.currentState()
+        XCTAssertEqual(s.exit?.ip, "5.6.7.8")
+        XCTAssertEqual(s.route.defaultInterface, "utun4")
+        XCTAssertTrue(s.route.isVPN)
+
+        let events = box.all().flatMap { $0 }
+        XCTAssertFalse(events.contains { if case .leakSuspected = $0 { return true }; return false },
+                       "exit info was refreshed through the new route, so no leak was actually observed")
+        XCTAssertTrue(events.contains { if case .vpnRouteChanged = $0 { return true }; return false },
+                      "the route change itself must still be reported")
+        XCTAssertTrue(events.contains { if case .ipChanged = $0 { return true }; return false }
+                      || events.contains { if case .countryChanged = $0 { return true }; return false },
+                      "the fresh exit change must still be reported")
+    }
+    func testGenuineLeakStillDetected() async {
+        let c = Counter()
+        let box = EventBox()
+        let route = MutableMockRoute(RouteInfo(defaultInterface: "en0", isVPN: false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date())
+        // Same IP on both fetches: the tunnel does not actually change the exit — a real leak.
+        let m = Monitor(geo: SequencedGeo(counter: c, index: CallIndex(), responses: [info, info]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: route,
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        route.set(RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN"))
+        await m.probeTick()
+
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 2, "route flip must still escalate to a full refresh")
+
+        let events = box.all().flatMap { $0 }
+        XCTAssertTrue(events.contains { if case .leakSuspected = $0 { return true }; return false },
+                      "a tunnel that genuinely returns the same exit IP must still be flagged")
     }
 }
 

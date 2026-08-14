@@ -154,6 +154,17 @@ public actor Monitor {
             await runFullRefresh()
             return
         }
+        if new.route.defaultInterface != state.route.defaultInterface || new.route.isVPN != state.route.isVPN {
+            // The default route just changed (e.g. a VPN took over). Applying this partial
+            // tick would pair the new route with `exit`, which is still whatever the last
+            // full refresh fetched over the OLD route — the Reducer's leakSuspected rule
+            // can't tell that apart from a genuine leak. Never let a route change reach state
+            // without exit info fetched fresh through it: escalate to a full refresh instead,
+            // same as the offline→online case above.
+            inFlightKind = .full
+            await runFullRefresh()
+            return
+        }
         apply(new)
     }
 
