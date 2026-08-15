@@ -25,12 +25,35 @@ public struct RouteInfo: Equatable, Codable, Sendable {
     public var isVPN: Bool
     public var vpnName: String?
     public var hijackRoutePresent: Bool
+    // Additive (Phase 1 of the IPv6 leak detector): which interface owns the IPv6 default
+    // route, and whether that interface is itself a VPN tunnel. Both default to nil/false so
+    // JSON produced by pre-existing versions of this app still decodes cleanly below.
+    public var v6DefaultInterface: String?
+    public var v6IsVPN: Bool
     public init(defaultInterface: String? = nil, isVPN: Bool = false,
-                vpnName: String? = nil, hijackRoutePresent: Bool = false) {
+                vpnName: String? = nil, hijackRoutePresent: Bool = false,
+                v6DefaultInterface: String? = nil, v6IsVPN: Bool = false) {
         self.defaultInterface = defaultInterface
         self.isVPN = isVPN
         self.vpnName = vpnName
         self.hijackRoutePresent = hijackRoutePresent
+        self.v6DefaultInterface = v6DefaultInterface
+        self.v6IsVPN = v6IsVPN
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultInterface, isVPN, vpnName, hijackRoutePresent, v6DefaultInterface, v6IsVPN
+    }
+    // Manual init(from:) so older JSON (missing the two v6 keys) still decodes; encode(to:)
+    // is left to synthesis using the same CodingKeys, which always writes the full struct.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        defaultInterface = try c.decodeIfPresent(String.self, forKey: .defaultInterface)
+        isVPN = try c.decodeIfPresent(Bool.self, forKey: .isVPN) ?? false
+        vpnName = try c.decodeIfPresent(String.self, forKey: .vpnName)
+        hijackRoutePresent = try c.decodeIfPresent(Bool.self, forKey: .hijackRoutePresent) ?? false
+        v6DefaultInterface = try c.decodeIfPresent(String.self, forKey: .v6DefaultInterface)
+        v6IsVPN = try c.decodeIfPresent(Bool.self, forKey: .v6IsVPN) ?? false
     }
 }
 
@@ -67,17 +90,39 @@ extension PrivateRelay {
 public struct ExitState: Equatable, Codable, Sendable {
     public var connectivity: Connectivity
     public var exit: ExitInfo?
+    // Additive (Phase 1 of the IPv6 leak detector): the IPv6-stack-pinned exit, measured
+    // independently from `exit` (which stays IPv4-primary, falling back to the geo chain
+    // when a v4-pinned measurement fails). Both new fields default so pre-existing JSON
+    // still decodes cleanly — see the manual init(from:) below.
+    public var exit6: ExitInfo?
     public var route: RouteInfo
     public var privateRelay: PrivateRelay
+    public var ipv6Leak: Bool
     public var since: Date
-    public init(connectivity: Connectivity = .checking, exit: ExitInfo? = nil,
+    public init(connectivity: Connectivity = .checking, exit: ExitInfo? = nil, exit6: ExitInfo? = nil,
                 route: RouteInfo = RouteInfo(), privateRelay: PrivateRelay = .unknown,
-                since: Date = Date()) {
+                ipv6Leak: Bool = false, since: Date = Date()) {
         self.connectivity = connectivity
         self.exit = exit
+        self.exit6 = exit6
         self.route = route
         self.privateRelay = privateRelay
+        self.ipv6Leak = ipv6Leak
         self.since = since
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case connectivity, exit, exit6, route, privateRelay, ipv6Leak, since
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        connectivity = try c.decode(Connectivity.self, forKey: .connectivity)
+        exit = try c.decodeIfPresent(ExitInfo.self, forKey: .exit)
+        exit6 = try c.decodeIfPresent(ExitInfo.self, forKey: .exit6)
+        route = try c.decode(RouteInfo.self, forKey: .route)
+        privateRelay = try c.decode(PrivateRelay.self, forKey: .privateRelay)
+        ipv6Leak = try c.decodeIfPresent(Bool.self, forKey: .ipv6Leak) ?? false
+        since = try c.decode(Date.self, forKey: .since)
     }
 }
 

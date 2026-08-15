@@ -27,6 +27,21 @@ public enum StateRenderer {
         if case .active(let ip, let country) = state.privateRelay {
             lines.append("Private Relay: ON — relay egress \(ip ?? "?")\(country.map { " (\($0))" } ?? "")")
         }
+        // Confirmed leak line supersedes the plain split pair below; a leak already implies
+        // the two stacks differ, so showing both would be redundant.
+        if state.ipv6Leak {
+            let org = state.exit6?.org ?? "your ISP"
+            let cc = state.exit6?.countryCode ?? "?"
+            lines.append("⚠️ IPv6 leak: v6 exits via \(org) (\(cc))")
+        } else if let exit = state.exit, let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
+            lines.append(ipLine("IPv4", exit))
+            lines.append(ipLine("IPv6", exit6))
+        }
         return lines.joined(separator: "\n")
+    }
+
+    private static func ipLine(_ label: String, _ e: ExitInfo) -> String {
+        let place = [e.city, e.countryCode].compactMap { $0 }.joined(separator: ", ")
+        return "\(label): \(e.ip)" + (place.isEmpty ? "" : " (\(place))")
     }
 }

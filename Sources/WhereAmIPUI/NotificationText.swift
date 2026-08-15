@@ -25,6 +25,9 @@ public enum NotificationText {
                     active ? "Safari traffic exits via Apple's relay" : "Safari traffic follows the system route")
         case .vpnRouteChanged:
             return nil   // route changes alone are visible in the flag; don't notify
+        case .ipv6Leak(_, let org):
+            return ("⚠️ IPv6 leak detected",
+                    "IPv6 traffic exits via \(org ?? "your ISP") — your VPN only tunnels IPv4")
         }
     }
 }

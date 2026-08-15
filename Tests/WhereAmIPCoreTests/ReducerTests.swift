@@ -4,11 +4,15 @@ import XCTest
 final class ReducerTests: XCTestCase {
     func state(_ c: Connectivity, ip: String?, iso: String?, org: String? = nil,
                iface: String? = "en0", vpn: Bool = false, vpnName: String? = nil,
-               hijack: Bool = false, relay: PrivateRelay = .inactive) -> ExitState {
-        ExitState(connectivity: c,
+               hijack: Bool = false, relay: PrivateRelay = .inactive,
+               ipv6Leak: Bool = false, exit6CC: String? = nil, exit6Org: String? = nil) -> ExitState {
+        var s = ExitState(connectivity: c,
                   exit: ip.map { ExitInfo(ip: $0, countryCode: iso, city: nil, org: org, provider: "t", fetchedAt: Date(timeIntervalSince1970: 0)) },
                   route: RouteInfo(defaultInterface: iface, isVPN: vpn, vpnName: vpnName, hijackRoutePresent: hijack),
                   privateRelay: relay, since: Date(timeIntervalSince1970: 0))
+        s.ipv6Leak = ipv6Leak
+        s.exit6 = exit6CC.map { ExitInfo(ip: "::1", countryCode: $0, org: exit6Org, provider: "t", fetchedAt: Date(timeIntervalSince1970: 0)) }
+        return s
     }
     func testCountryChange() {
         let ev = Reducer.events(old: state(.online, ip: "1.1.1.1", iso: "DE"),
@@ -58,5 +62,24 @@ final class ReducerTests: XCTestCase {
     func testNoChangesNoEvents() {
         let s = state(.online, ip: "1.1.1.1", iso: "DE")
         XCTAssertEqual(Reducer.events(old: s, new: s), [])
+    }
+    func testIPv6LeakFiresOnceOnFalseToTrue() {
+        let ev = Reducer.events(old: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: false),
+                                new: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: true,
+                                           exit6CC: "DE", exit6Org: "Telekom"))
+        XCTAssertTrue(ev.contains(.ipv6Leak(country: "DE", org: "Telekom")))
+    }
+    func testIPv6LeakTrueToTrueIsSilent() {
+        let ev = Reducer.events(old: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: true,
+                                           exit6CC: "DE", exit6Org: "Telekom"),
+                                new: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: true,
+                                           exit6CC: "DE", exit6Org: "Telekom"))
+        XCTAssertFalse(ev.contains { if case .ipv6Leak = $0 { return true }; return false })
+    }
+    func testIPv6LeakTrueToFalseIsSilent() {
+        let ev = Reducer.events(old: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: true,
+                                           exit6CC: "DE", exit6Org: "Telekom"),
+                                new: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: false))
+        XCTAssertFalse(ev.contains { if case .ipv6Leak = $0 { return true }; return false })
     }
 }

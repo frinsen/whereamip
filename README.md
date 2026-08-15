@@ -13,6 +13,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Real-reachability probe, not interface status — catches the "connected but blackholed" state
 - Dropdown: public IP (click to copy), city/country, ISP/org, which VPN interface owns the default route, last-change timestamp
 - iCloud Private Relay awareness — knows Safari may exit somewhere your apps don't
+- Dual-stack IPv6 leak detection — probes your IPv4 and IPv6 exits independently (stack-pinned lookups, not a single dual-stack host); when a VPN owns the v4 route but IPv6 still exits natively and the two genuinely differ, a confirmed ⚠️ IPv6 leak warning shows up everywhere (menu bar badge, dropdown row, notification, CLI). Found in the field: PureVPN profiles that tunnel only IPv4 while native IPv6 keeps leaking via the home ISP
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications on exit/connectivity change (off by default), launch at login
@@ -83,7 +84,7 @@ Run `whereamip debug`, reproduce the issue, and paste the output into your bug r
 
 ## Privacy — your data stays yours
 
-WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, and the Private Relay check) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
+WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, the Private Relay check, and — for the dual-stack IPv6 leak detector — stack-pinned lookups to `api4.ipify.org`/`api6.ipify.org` over HTTPS) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
 
 WhereAmIP also checks `api.github.com/repos/frinsen/whereamip/releases/latest` once a day (and whenever you hit Refresh) to see if a newer release exists — this is a passive version check only, it never downloads or installs anything, it just shows a dropdown row that copies `brew upgrade whereamip` for you to run yourself. This check is on by default; turn it off with `whereamip config set updates false` (or the "Check for Updates" toggle in Settings) and no such request is ever made.
 
@@ -91,9 +92,8 @@ WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), b
 
 ## Roadmap
 
-- **IPv6 leak detector** (priority): probe IPv4 and IPv6 exits separately; when the route says VPN but one stack exits natively, show ⚠️ "IPv6 leak — v6 traffic exits via your ISP". Found in the wild: PureVPN profiles that tunnel only IPv4 while native IPv6 keeps leaking.
+- **IPv6 hijack detection** (Phase 2 of the IPv6 leak detector): the v6 hijack pair (`::/1` + `8000::/1`), analogous to the existing OpenVPN IPv4 hijack detection; re-add IPv6 relay egress ranges.
 - Faster far-end detection: a VPN server switch inside the same tunnel produces no local route event, so today the geo backstop (5 min) is the only trigger.
-- IPv6 route awareness: v6 default-route inspection and the v6 hijack pair (`::/1` + `8000::/1`); re-add IPv6 relay egress ranges.
 - Optional history: `whereamip watch --json >> file` already works as a manual log; consider last-N transitions in the dropdown.
 
 ## Credits

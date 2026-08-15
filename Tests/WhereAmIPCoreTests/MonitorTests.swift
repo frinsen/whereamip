@@ -3,9 +3,11 @@ import XCTest
 
 actor Counter {
     var geoCalls = 0; var probeCalls = 0; var lookupCalls = 0; var httpIPCalls = 0
+    var stack4Calls = 0; var stack6Calls = 0
     func bumpGeo() { geoCalls += 1 }
     @discardableResult func bumpProbe() -> Int { probeCalls += 1; return probeCalls }
     func bumpLookup() { lookupCalls += 1 }; func bumpHTTP() { httpIPCalls += 1 }
+    func bumpStack4() { stack4Calls += 1 }; func bumpStack6() { stack6Calls += 1 }
 }
 
 struct MockGeo: GeoFetching {
@@ -41,9 +43,32 @@ struct MockHTTPIP: HTTPIPFetching {
     var ip: String?
     func fetch() async -> String? { await counter.bumpHTTP(); return ip }
 }
+/// Defaults to (nil, nil) so any existing test that doesn't care about the stack-pinned
+/// measurement behaves exactly as before this feature: `ip4` nil means `runFullRefresh`
+/// falls back to `geo.fetch()`, same call count as pre-IPv6-leak-detector code.
+struct MockStackIP: StackIPFetching {
+    let counter: Counter
+    var ip4: String?
+    var ip6: String?
+    func fetch4() async -> String? { await counter.bumpStack4(); return ip4 }
+    func fetch6() async -> String? { await counter.bumpStack6(); return ip6 }
+}
+/// Distinguishes exit4 vs exit6 lookups by IP, unlike `MockGeo.lookup` which always returns a
+/// fixed country — needed to simulate genuinely differing per-stack geo results.
+struct StackTestGeo: GeoFetching {
+    let counter: Counter
+    var chainFallback: ExitInfo?
+    var lookups: [String: ExitInfo]
+    func fetch() async -> ExitInfo? { await counter.bumpGeo(); return chainFallback }
+    func lookup(ip: String) async -> ExitInfo? {
+        await counter.bumpLookup()
+        return lookups[ip]
+    }
+}
 
 final class MonitorTests: XCTestCase {
     func makeMonitor(counter: Counter, probeOK: Bool = true, httpIP: String? = nil,
+                     ip4: String? = nil, ip6: String? = nil,
                      onEvents: @escaping @Sendable ([Event]) -> Void = { _ in }) -> Monitor {
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
                             provider: "mock", fetchedAt: Date())
@@ -51,6 +76,7 @@ final class MonitorTests: XCTestCase {
                        probe: MockProbe(counter: counter, results: { probeOK }),
                        route: MockRoute(),
                        httpIP: MockHTTPIP(counter: counter, ip: httpIP),
+                       stackIP: MockStackIP(counter: counter, ip4: ip4, ip6: ip6),
                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                        debounceSeconds: 0.05,
                        onChange: { _ in }, onEvents: onEvents)
@@ -128,6 +154,7 @@ final class MonitorTests: XCTestCase {
                         probe: SlowSecondProbe(counter: c, started: started, release: release),
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -179,6 +206,7 @@ final class MonitorTests: XCTestCase {
                         probe: SlowSecondProbe(counter: c, started: started, release: release),
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -228,6 +256,7 @@ final class MonitorTests: XCTestCase {
                         probe: MockProbe(counter: c, results: { true }),
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -274,6 +303,7 @@ final class MonitorTests: XCTestCase {
                         probe: MockProbe(counter: c, results: { true }),
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -288,6 +318,103 @@ final class MonitorTests: XCTestCase {
         let events = box.all().flatMap { $0 }
         XCTAssertTrue(events.contains { if case .leakSuspected = $0 { return true }; return false },
                       "a tunnel that genuinely returns the same exit IP must still be flagged")
+    }
+
+    // MARK: - IPv6 leak detection (Phase 1)
+
+    func testIPv6LeakConfirmedWhenStacksDifferAndV4RouteIsVPN() async {
+        let c = Counter()
+        let box = EventBox()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: "en0", v6IsVPN: false)),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertTrue(s.ipv6Leak)
+        XCTAssertEqual(s.exit?.countryCode, "NL")
+        XCTAssertEqual(s.exit6?.countryCode, "DE")
+
+        let events = box.all().flatMap { $0 }
+        XCTAssertEqual(events.filter { if case .ipv6Leak = $0 { return true }; return false }.count, 1,
+                       "exactly one .ipv6Leak event on the false->true transition")
+    }
+    func testNoV6RouteMeansNoLeak() async {
+        // The "Serbia case": a VPN owns the v4 default route but there simply is no IPv6
+        // default route at all (nil, not "present but not a tunnel") -- suspicion can never
+        // even arise, regardless of what the v6 stack-pinned measurement returns.
+        let c = Counter()
+        let box = EventBox()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: nil, v6IsVPN: false)),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertFalse(s.ipv6Leak)
+    }
+    func testV6MeasurementFailureNeverConfirmsLeak() async {
+        // Suspicion alone (VPN owns v4, a v6 route exists and isn't itself a tunnel) is never
+        // enough on its own -- if the v6 stack-pinned measurement fails this refresh, there is
+        // no fresh exit6 to compare against, so the leak must stay unconfirmed.
+        let c = Counter()
+        let box = EventBox()
+        let ip4 = "1.2.3.4"
+        let info4 = ExitInfo(ip: ip4, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: "en0", v6IsVPN: false)),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: nil),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertFalse(s.ipv6Leak)
+        XCTAssertNil(s.exit6)
+    }
+    func testStacksAgreeMeansNoLeak() async {
+        let c = Counter()
+        let box = EventBox()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: "en0", v6IsVPN: false)),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertFalse(s.ipv6Leak)
+        XCTAssertEqual(s.exit?.ip, ip4)
+        XCTAssertEqual(s.exit6?.ip, ip6)
     }
 }
 

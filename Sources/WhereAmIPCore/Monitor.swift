@@ -7,6 +7,10 @@ public protocol GeoFetching: Sendable {
 public protocol ProbeRunning: Sendable { func check() async -> Bool }
 public protocol RouteSnapshotting: Sendable { func snapshot() -> RouteInfo }
 public protocol HTTPIPFetching: Sendable { func fetch() async -> String? }
+public protocol StackIPFetching: Sendable {
+    func fetch4() async -> String?
+    func fetch6() async -> String?
+}
 
 extension GeoProviderChain: GeoFetching {
     public func fetch() async -> ExitInfo? { await fetch(now: Date()) }
@@ -14,12 +18,14 @@ extension GeoProviderChain: GeoFetching {
 }
 extension ConnectivityProbe: ProbeRunning {}
 extension HTTPIPFetcher: HTTPIPFetching {}
+extension StackPinnedIP: StackIPFetching {}
 
 public actor Monitor {
     let geo: any GeoFetching
     let probe: any ProbeRunning
     let route: any RouteSnapshotting
     let httpIP: any HTTPIPFetching
+    let stackIP: any StackIPFetching
     let relayRanges: RelayRanges
     let debounce: Double
     let onChange: @Sendable (ExitState) -> Void
@@ -45,11 +51,12 @@ public actor Monitor {
     private var inFlightGeneration = 0
 
     public init(geo: any GeoFetching, probe: any ProbeRunning, route: any RouteSnapshotting,
-                httpIP: any HTTPIPFetching, relayRanges: RelayRanges,
+                httpIP: any HTTPIPFetching, stackIP: any StackIPFetching = StackPinnedIP(),
+                relayRanges: RelayRanges,
                 debounceSeconds: Double = 1.5,
                 onChange: @escaping @Sendable (ExitState) -> Void,
                 onEvents: @escaping @Sendable ([Event]) -> Void) {
-        self.geo = geo; self.probe = probe; self.route = route; self.httpIP = httpIP
+        self.geo = geo; self.probe = probe; self.route = route; self.httpIP = httpIP; self.stackIP = stackIP
         self.relayRanges = relayRanges; self.debounce = debounceSeconds
         self.onChange = onChange; self.onEvents = onEvents
         // Seed the initial route synchronously so the first refresh doesn't report a
@@ -107,7 +114,43 @@ public actor Monitor {
         new.connectivity = gate.record(success: await probe.check())
         new.route = route.snapshot()
         if new.connectivity != .offline {
-            if let info = await geo.fetch() { new.exit = info }
+            // Stack-pinned dual-stack measurement (IPv6 leak detector, Phase 1): api4/api6
+            // force the request over each protocol family independently. Both are under
+            // their own hard deadlines, so a v4-only or v6-only network just yields nil for
+            // the missing side rather than blocking the refresh.
+            let ip4 = await stackIP.fetch4()
+            let ip6 = await stackIP.fetch6()
+            Log.monitor.debug("runFullRefresh: stack ip4=\(ip4 ?? "nil", privacy: .public) ip6=\(ip6 ?? "nil", privacy: .public)")
+
+            var resolved: [String: ExitInfo] = [:]
+            for ip in Set([ip4, ip6].compactMap { $0 }) {
+                if let info = await geo.lookup(ip: ip) { resolved[ip] = info }
+            }
+            if let ip4, let info = resolved[ip4] {
+                new.exit = info
+            } else if let info = await geo.fetch() {
+                // v4-pinned discovery failed (or its geo lookup did) — fall back to the
+                // existing multi-provider chain, same as before this feature existed.
+                new.exit = info
+            }
+            new.exit6 = ip6.flatMap { resolved[$0] }
+
+            // Two-tier leak rule. `suspicion` alone is never enough to warn — this codebase
+            // already had one false-alarm lesson (see the route-change escalation comments in
+            // probeTick/runFullRefresh below): a leak is only *confirmed* when both stacks were
+            // freshly measured in THIS refresh and genuinely differ, while the v4 default route
+            // is owned by a VPN and the v6 default route still exits natively (not itself a
+            // tunnel). Anything less — no v6 route at all, a failed v6 measurement, or stacks
+            // that agree — must never set ipv6Leak from stale or partial data.
+            let suspicion = new.route.isVPN && new.route.v6DefaultInterface != nil && !new.route.v6IsVPN
+            if suspicion, let e6 = new.exit6, let e4 = new.exit,
+               (e6.countryCode != e4.countryCode || e6.org != e4.org) {
+                new.ipv6Leak = true
+            } else {
+                new.ipv6Leak = false
+            }
+            Log.monitor.debug("runFullRefresh: suspicion=\(suspicion, privacy: .public) ipv6Leak=\(new.ipv6Leak, privacy: .public)")
+
             let httpsIP = new.exit?.ip
             var relay = PrivateRelayDetector.decide(httpsIP: httpsIP, httpIP: await httpIP.fetch(), ranges: relayRanges)
             if case .active(let egressIP, nil) = relay, let ip = egressIP {

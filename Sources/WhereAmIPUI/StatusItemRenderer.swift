@@ -36,7 +36,17 @@ private let flagAssetBundle: Bundle = {
 private final class BundleToken {}
 
 public enum StatusItemRenderer {
-    public static func render(_ glyph: Glyph) -> (title: String?, image: NSImage?) {
+    /// `ipv6Leak` appends a "⚠️" badge to the title, working uniformly across all three menu
+    /// bar styles: for emoji/code (text titles) it's appended after a space; for the SF
+    /// Symbol/flag-image styles (nil title, image set) it becomes the whole title, which
+    /// NSStatusItem renders alongside the image.
+    public static func render(_ glyph: Glyph, ipv6Leak: Bool = false) -> (title: String?, image: NSImage?) {
+        let (title, image) = renderGlyph(glyph)
+        guard ipv6Leak else { return (title, image) }
+        return (title.map { "\($0) ⚠️" } ?? "⚠️", image)
+    }
+
+    private static func renderGlyph(_ glyph: Glyph) -> (title: String?, image: NSImage?) {
         switch glyph {
         case .text(let s): return (s, nil)
         case .symbol(let name):

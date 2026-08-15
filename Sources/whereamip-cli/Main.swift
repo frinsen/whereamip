@@ -15,7 +15,7 @@ struct WhereAmIP: AsyncParsableCommand {
 func makeMonitor(onChange: @escaping @Sendable (ExitState) -> Void = { _ in },
                  onEvents: @escaping @Sendable ([Event]) -> Void = { _ in }) -> Monitor {
     Monitor(geo: GeoProviderChain(), probe: ConnectivityProbe(),
-            route: LiveRoute(), httpIP: HTTPIPFetcher(),
+            route: LiveRoute(), httpIP: HTTPIPFetcher(), stackIP: StackPinnedIP(),
             relayRanges: RelayRanges.bundled(),
             onChange: onChange, onEvents: onEvents)
 }

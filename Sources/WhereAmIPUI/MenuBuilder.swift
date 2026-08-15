@@ -81,6 +81,13 @@ public enum MenuBuilder {
             let flag = state.exit?.countryCode.flatMap { Flags.emoji(countryCode: $0) } ?? "❓"
             menu.addItem(info("\(flag)  WhereAmIP"))
             menu.addItem(.separator())
+            // Warning row goes first in the info area — before the IP row — so it's
+            // impossible to miss when a leak is confirmed.
+            if state.ipv6Leak {
+                let org = state.exit6?.org ?? "your ISP"
+                let cc = state.exit6?.countryCode ?? "?"
+                menu.addItem(info("⚠️ IPv6 leak — v6 exits via \(org) (\(cc))"))
+            }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }
                 ipItem.keyEquivalentModifierMask = [.command]
@@ -88,6 +95,10 @@ public enum MenuBuilder {
                 let place = [exit.city, countryName(exit.countryCode)].compactMap { $0 }.joined(separator: ", ")
                 if !place.isEmpty { menu.addItem(info(place)) }
                 if let org = exit.org { menu.addItem(info(org)) }
+                if let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
+                    menu.addItem(info(ipLine("IPv4", exit)))
+                    menu.addItem(info(ipLine("IPv6", exit6)))
+                }
             }
             menu.addItem(info("Since \(timeFormatter.string(from: state.since))"))
         }
@@ -142,6 +153,11 @@ public enum MenuBuilder {
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
         return menu
+    }
+
+    static func ipLine(_ label: String, _ e: ExitInfo) -> String {
+        let place = [e.city, e.countryCode].compactMap { $0 }.joined(separator: ", ")
+        return "\(label): \(e.ip)" + (place.isEmpty ? "" : " (\(place))")
     }
 
     static func countryName(_ iso: String?) -> String? {

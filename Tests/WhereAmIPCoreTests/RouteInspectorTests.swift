@@ -24,4 +24,21 @@ final class RouteInspectorTests: XCTestCase {
             XCTAssertFalse(info.isVPN)
         }
     }
+    func testLiveDefaultRouteV6SmokeTest() {
+        // Same nil-safety contract as the v4 smoke test above: on a dual-stack online dev
+        // machine this returns an interface; on a v4-only network (or offline) nil is
+        // expected and fine — must never crash either way.
+        if let r = RouteInspector.defaultRouteInterface6() {
+            XCTAssertFalse(r.interface.isEmpty)
+            XCTAssertFalse(r.localAddress.isEmpty)
+        }
+    }
+    func testSnapshotComposesV6() {
+        let info = RouteInspector.snapshot()
+        if let iface6 = info.v6DefaultInterface {
+            XCTAssertEqual(info.v6IsVPN, RouteInspector.isTunnelInterface(iface6))
+        } else {
+            XCTAssertFalse(info.v6IsVPN)
+        }
+    }
 }

@@ -18,4 +18,14 @@ final class NotificationTextTests: XCTestCase {
     func testRouteChangeAloneIsSilent() {
         XCTAssertNil(NotificationText.text(for: .vpnRouteChanged(vpnName: "Tailscale", interface: "utun0")))
     }
+    func testIPv6Leak() {
+        let t = NotificationText.text(for: .ipv6Leak(country: "DE", org: "Deutsche Telekom"))!
+        XCTAssertEqual(t.title, "⚠️ IPv6 leak detected")
+        XCTAssertTrue(t.body.contains("Deutsche Telekom"))
+        XCTAssertTrue(t.body.contains("only tunnels IPv4"))
+    }
+    func testIPv6LeakFallsBackToYourISP() {
+        let t = NotificationText.text(for: .ipv6Leak(country: nil, org: nil))!
+        XCTAssertTrue(t.body.contains("your ISP"))
+    }
 }

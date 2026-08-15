@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         monitor = Monitor(
             geo: GeoProviderChain(), probe: ConnectivityProbe(),
-            route: AppRoute(), httpIP: HTTPIPFetcher(),
+            route: AppRoute(), httpIP: HTTPIPFetcher(), stackIP: StackPinnedIP(),
             relayRanges: RelayRanges.bundled(),
             onChange: { [weak self] state in
                 DispatchQueue.main.async { self?.stateChanged(state) }
@@ -72,7 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func stateChanged(_ state: ExitState) {
         lastState = state
-        let (title, image) = StatusItemRenderer.render(state.glyph(style: settings.menuBarStyle))
+        let (title, image) = StatusItemRenderer.render(state.glyph(style: settings.menuBarStyle),
+                                                        ipv6Leak: state.ipv6Leak)
         statusItem.button?.title = title ?? ""
         statusItem.button?.image = image
     }

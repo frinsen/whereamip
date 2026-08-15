@@ -6,6 +6,7 @@ public enum Event: Equatable, Sendable {
     case vpnRouteChanged(vpnName: String?, interface: String?)
     case privateRelayToggled(active: Bool)
     case leakSuspected(org: String?)
+    case ipv6Leak(country: String?, org: String?)
 }
 
 public enum Reducer {
@@ -35,6 +36,11 @@ public enum Reducer {
         if !old.route.isVPN, new.route.isVPN,
            let oip = old.exit?.ip, let nip = new.exit?.ip, oip == nip {
             out.append(.leakSuspected(org: new.exit?.org))
+        }
+        // Only fire on the false->true transition — the row disappearing from the menu is
+        // enough signal for true->false, and true->true would just be repeat noise.
+        if !old.ipv6Leak, new.ipv6Leak {
+            out.append(.ipv6Leak(country: new.exit6?.countryCode, org: new.exit6?.org))
         }
         return out
     }

@@ -126,4 +126,67 @@ final class MenuBuilderTests: XCTestCase {
         let fallback = StatusItemRenderer.render(.flagImage(iso: "zz"))
         XCTAssertNotNil(fallback.title)       // unknown asset → emoji/text fallback, never nil+nil
     }
+
+    // MARK: - IPv6 leak
+
+    func leakState() -> ExitState {
+        var s = vpnState()
+        s.exit6 = ExitInfo(ip: "2001:db8::1", countryCode: "DE", city: "Berlin", org: "Deutsche Telekom",
+                           provider: "ipwho.is", fetchedAt: Date())
+        s.ipv6Leak = true
+        return s
+    }
+    func testIPv6LeakWarningRowIsFirstInInfoArea() {
+        let menu = MenuBuilder.build(state: leakState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let warningIndex = menu.items.firstIndex { $0.title.contains("⚠️ IPv6 leak") }
+        XCTAssertNotNil(warningIndex)
+        let ipIndex = menu.items.firstIndex { $0.title.contains("185.107.56.123") }
+        XCTAssertNotNil(ipIndex)
+        XCTAssertLessThan(warningIndex!, ipIndex!)
+        let warningItem = menu.items[warningIndex!]
+        XCTAssertFalse(warningItem.isEnabled)
+        XCTAssertTrue(warningItem.title.contains("Deutsche Telekom"))
+        XCTAssertTrue(warningItem.title.contains("DE"))
+    }
+    func testNoLeakWarningRowWhenNotLeaking() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains { $0.contains("IPv6 leak") })
+    }
+    func testIPv4IPv6SplitLinesWhenCountriesDiffer() {
+        var s = vpnState()
+        s.exit6 = ExitInfo(ip: "2001:db8::1", countryCode: "DE", city: "Berlin", org: "Deutsche Telekom",
+                           provider: "ipwho.is", fetchedAt: Date())
+        // countries differ (NL vs DE) but not flagged as a confirmed leak here
+        let menu = MenuBuilder.build(state: s, style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu).joined(separator: "|")
+        XCTAssertTrue(all.contains("IPv4: 185.107.56.123"))
+        XCTAssertTrue(all.contains("IPv6: 2001:db8::1"))
+    }
+    func testNoSplitLinesWhenSameCountry() {
+        var s = vpnState()
+        s.exit6 = ExitInfo(ip: "2001:db8::1", countryCode: s.exit!.countryCode, city: "Amsterdam",
+                           org: "M247 Europe SRL", provider: "ipwho.is", fetchedAt: Date())
+        let menu = MenuBuilder.build(state: s, style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu).joined(separator: "|")
+        XCTAssertFalse(all.contains("IPv4:"))
+        XCTAssertFalse(all.contains("IPv6:"))
+    }
+    func testStatusRendererAppendsBadgeForTextGlyph() {
+        let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: true)
+        XCTAssertEqual(r.title, "🇩🇪 ⚠️")
+        XCTAssertNil(r.image)
+    }
+    func testStatusRendererAppendsBadgeForFlagImage() {
+        let r = StatusItemRenderer.render(.flagImage(iso: "de"), ipv6Leak: true)
+        XCTAssertNotNil(r.image)
+        XCTAssertEqual(r.title, "⚠️")
+    }
+    func testStatusRendererNoBadgeWhenNotLeaking() {
+        let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: false)
+        XCTAssertEqual(r.title, "🇩🇪")
+    }
 }
