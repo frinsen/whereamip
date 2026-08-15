@@ -22,12 +22,30 @@ jobs:
           open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"
           ```
 
-          No prebuilt binaries here by design: locally built apps need no Apple
+          Homebrew is the recommended path: locally built apps need no Apple
           notarization and trigger no Gatekeeper warnings. Requires Xcode Command Line Tools.
+
+          ## Direct download (for the impatient)
+
+          `WhereAmIP.app.zip` below is a prebuilt, **unsigned** app (we don't pay Apple's
+          notarization toll). macOS will refuse to open it normally — after unzipping,
+          either right-click the app → Open → Open, or clear the quarantine flag:
+
+          ```bash
+          xattr -d com.apple.quarantine WhereAmIP.app
+          ```
+
+          Updates are manual on this path — `brew upgrade` only serves Homebrew installs.
 
           ---
           NOTES
           gh release create "$GITHUB_REF_NAME" --generate-notes --notes-file /tmp/install-notes.md
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Build and attach app bundle
+        run: |
+          scripts/make-app-bundle.sh dist
+          ditto -c -k --keepParent dist/WhereAmIP.app "dist/WhereAmIP.app.zip"
+          gh release upload "$GITHUB_REF_NAME" "dist/WhereAmIP.app.zip"
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - name: Bump Homebrew formula
         env: { TAP_TOKEN: "${{ secrets.TAP_PUSH_TOKEN }}" }
