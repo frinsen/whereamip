@@ -126,12 +126,19 @@ public actor Monitor {
             for ip in Set([ip4, ip6].compactMap { $0 }) {
                 if let info = await geo.lookup(ip: ip) { resolved[ip] = info }
             }
+            // `new.exit` starts as a copy of `state.exit` (possibly stale, from a previous
+            // refresh) and is only overwritten below when a fresh v4 source actually succeeds.
+            // Track that explicitly — `new.exit != nil` alone can't tell fresh from stale,
+            // since a stale value is also non-nil.
+            var exitFreshThisTick = false
             if let ip4, let info = resolved[ip4] {
                 new.exit = info
+                exitFreshThisTick = true
             } else if let info = await geo.fetch() {
                 // v4-pinned discovery failed (or its geo lookup did) — fall back to the
                 // existing multi-provider chain, same as before this feature existed.
                 new.exit = info
+                exitFreshThisTick = true
             }
             new.exit6 = ip6.flatMap { resolved[$0] }
 
@@ -140,16 +147,20 @@ public actor Monitor {
             // probeTick/runFullRefresh below): a leak is only *confirmed* when both stacks were
             // freshly measured in THIS refresh and genuinely differ, while the v4 default route
             // is owned by a VPN and the v6 default route still exits natively (not itself a
-            // tunnel). Anything less — no v6 route at all, a failed v6 measurement, or stacks
-            // that agree — must never set ipv6Leak from stale or partial data.
+            // tunnel). Anything less — no v6 route at all, a failed v6 measurement, a v4 exit
+            // that fell back to a stale baseline because BOTH the v4-pinned fetch and the chain
+            // fallback failed this tick, or stacks that agree — must never set ipv6Leak from
+            // stale or partial data. `exitFreshThisTick` is the guard for that last case:
+            // exit6 is always fresh-or-nil by construction, but `new.exit` alone doesn't carry
+            // that guarantee, so it needs an explicit conjunct here.
             let suspicion = new.route.isVPN && new.route.v6DefaultInterface != nil && !new.route.v6IsVPN
-            if suspicion, let e6 = new.exit6, let e4 = new.exit,
+            if suspicion, exitFreshThisTick, let e6 = new.exit6, let e4 = new.exit,
                (e6.countryCode != e4.countryCode || e6.org != e4.org) {
                 new.ipv6Leak = true
             } else {
                 new.ipv6Leak = false
             }
-            Log.monitor.debug("runFullRefresh: suspicion=\(suspicion, privacy: .public) ipv6Leak=\(new.ipv6Leak, privacy: .public)")
+            Log.monitor.debug("runFullRefresh: suspicion=\(suspicion, privacy: .public) exitFresh=\(exitFreshThisTick, privacy: .public) ipv6Leak=\(new.ipv6Leak, privacy: .public)")
 
             let httpsIP = new.exit?.ip
             var relay = PrivateRelayDetector.decide(httpsIP: httpsIP, httpIP: await httpIP.fetch(), ranges: relayRanges)

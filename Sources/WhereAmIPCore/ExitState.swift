@@ -57,6 +57,17 @@ public struct RouteInfo: Equatable, Codable, Sendable {
     }
 }
 
+public extension ExitInfo {
+    /// "IPv4: 1.2.3.4 (Berlin, DE)" — shared dual-stack split-line formatting, used by both the
+    /// CLI (`StateRenderer.human`) and the menu bar dropdown (`MenuBuilder`) so the two frontends
+    /// never drift on this string. Hoisted here (rather than duplicated in each UI layer) since
+    /// WhereAmIPUI already depends on WhereAmIPCore, not the other way around.
+    func splitLine(label: String) -> String {
+        let place = [city, countryCode].compactMap { $0 }.joined(separator: ", ")
+        return "\(label): \(ip)" + (place.isEmpty ? "" : " (\(place))")
+    }
+}
+
 public enum PrivateRelay: Equatable, Codable, Sendable {
     case active(egressIP: String?, egressCountry: String?)
     case inactive

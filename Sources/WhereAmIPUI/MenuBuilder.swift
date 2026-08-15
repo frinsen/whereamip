@@ -96,8 +96,8 @@ public enum MenuBuilder {
                 if !place.isEmpty { menu.addItem(info(place)) }
                 if let org = exit.org { menu.addItem(info(org)) }
                 if let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
-                    menu.addItem(info(ipLine("IPv4", exit)))
-                    menu.addItem(info(ipLine("IPv6", exit6)))
+                    menu.addItem(info(exit.splitLine(label: "IPv4")))
+                    menu.addItem(info(exit6.splitLine(label: "IPv6")))
                 }
             }
             menu.addItem(info("Since \(timeFormatter.string(from: state.since))"))
@@ -153,11 +153,6 @@ public enum MenuBuilder {
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
         return menu
-    }
-
-    static func ipLine(_ label: String, _ e: ExitInfo) -> String {
-        let place = [e.city, e.countryCode].compactMap { $0 }.joined(separator: ", ")
-        return "\(label): \(e.ip)" + (place.isEmpty ? "" : " (\(place))")
     }
 
     static func countryName(_ iso: String?) -> String? {

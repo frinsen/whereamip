@@ -65,6 +65,44 @@ struct StackTestGeo: GeoFetching {
         return lookups[ip]
     }
 }
+/// Mutable variant of `MockStackIP` — lets a test flip what fetch4()/fetch6() return between
+/// two `fullRefresh()` calls (e.g. a baseline that succeeds, then a tick where the v4-pinned
+/// fetch fails), which a plain immutable struct mock can't do.
+final class MutableStackIP: StackIPFetching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var ip4: String?
+    private var ip6: String?
+    init(ip4: String?, ip6: String?) { self.ip4 = ip4; self.ip6 = ip6 }
+    func set(ip4: String?, ip6: String?) { lock.lock(); self.ip4 = ip4; self.ip6 = ip6; lock.unlock() }
+    // Locking happens in a plain synchronous helper (not directly in the async fetch4/fetch6
+    // bodies) so NSLock's lock/unlock — unavailable from async contexts — stay outside any
+    // suspension point.
+    private func snapshot() -> (ip4: String?, ip6: String?) {
+        lock.lock(); defer { lock.unlock() }; return (ip4, ip6)
+    }
+    func fetch4() async -> String? { snapshot().ip4 }
+    func fetch6() async -> String? { snapshot().ip6 }
+}
+/// Mutable variant of `StackTestGeo` — same rationale as `MutableStackIP`, needed so a test can
+/// make both the v4-pinned lookup AND the chain fallback fail on a later refresh while still
+/// resolving exit6.
+final class MutableStackTestGeo: GeoFetching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var chainFallback: ExitInfo?
+    private var lookups: [String: ExitInfo]
+    init(chainFallback: ExitInfo?, lookups: [String: ExitInfo]) {
+        self.chainFallback = chainFallback; self.lookups = lookups
+    }
+    func set(chainFallback: ExitInfo?, lookups: [String: ExitInfo]) {
+        lock.lock(); self.chainFallback = chainFallback; self.lookups = lookups; lock.unlock()
+    }
+    // Same rationale as MutableStackIP.snapshot(): keep NSLock's lock/unlock inside a
+    // synchronous helper, never directly in the async fetch()/lookup(ip:) bodies.
+    private func snapshotFallback() -> ExitInfo? { lock.lock(); defer { lock.unlock() }; return chainFallback }
+    private func snapshotLookup(_ ip: String) -> ExitInfo? { lock.lock(); defer { lock.unlock() }; return lookups[ip] }
+    func fetch() async -> ExitInfo? { snapshotFallback() }
+    func lookup(ip: String) async -> ExitInfo? { snapshotLookup(ip) }
+}
 
 final class MonitorTests: XCTestCase {
     func makeMonitor(counter: Counter, probeOK: Bool = true, httpIP: String? = nil,
@@ -415,6 +453,48 @@ final class MonitorTests: XCTestCase {
         XCTAssertFalse(s.ipv6Leak)
         XCTAssertEqual(s.exit?.ip, ip4)
         XCTAssertEqual(s.exit6?.ip, ip6)
+    }
+    func testStaleV4BaselineNeverConfirmsLeakWhenBothV4SourcesFail() async {
+        // Code review finding: `new.exit` starts as a copy of `state` and is only reassigned
+        // when the v4-pinned lookup OR the chain fallback succeeds. If BOTH fail on a given
+        // refresh while connectivity is otherwise online, `new.exit` is whatever the LAST
+        // successful refresh saw -- stale, not measured this tick. exit6 freshness is
+        // guaranteed by construction (it's only ever set from this tick's lookup, or nil), but
+        // without a freshness guard on the v4 side, a stale v4 baseline that happens to mismatch
+        // a genuinely fresh exit6 would wrongly confirm a leak. Must never happen.
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "NL", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                              v6DefaultInterface: "en0", v6IsVPN: false)
+        let stackIP = MutableStackIP(ip4: ip4, ip6: ip6)
+        let geo = MutableStackTestGeo(chainFallback: info4, lookups: [ip4: info4, ip6: info6])
+        let m = Monitor(geo: geo,
+                        probe: MockProbe(counter: Counter(), results: { true }),
+                        route: MockRoute(info: route),
+                        httpIP: MockHTTPIP(counter: Counter(), ip: nil),
+                        stackIP: stackIP,
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        // Baseline refresh: v4 resolves fine (NL), seeding state.exit with a real value that
+        // is about to become stale.
+        await m.fullRefresh()
+        let baseline = await m.currentState()
+        XCTAssertEqual(baseline.exit?.countryCode, "NL")
+
+        // This tick: BOTH the v4-pinned fetch AND the chain fallback fail. Only v6 resolves
+        // fresh (DE) -- a genuine mismatch against the now-stale NL baseline, but that stale
+        // baseline must never be allowed to confirm a leak.
+        stackIP.set(ip4: nil, ip6: ip6)
+        geo.set(chainFallback: nil, lookups: [ip6: info6])
+        await m.fullRefresh()
+
+        let s = await m.currentState()
+        XCTAssertEqual(s.exit?.countryCode, "NL", "exit falls back to the stale baseline when nothing fresh resolves")
+        XCTAssertEqual(s.exit6?.countryCode, "DE")
+        XCTAssertFalse(s.ipv6Leak, "a stale v4 baseline must never confirm a leak, even if it happens to mismatch a fresh exit6")
     }
 }
 

@@ -34,14 +34,9 @@ public enum StateRenderer {
             let cc = state.exit6?.countryCode ?? "?"
             lines.append("⚠️ IPv6 leak: v6 exits via \(org) (\(cc))")
         } else if let exit = state.exit, let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
-            lines.append(ipLine("IPv4", exit))
-            lines.append(ipLine("IPv6", exit6))
+            lines.append(exit.splitLine(label: "IPv4"))
+            lines.append(exit6.splitLine(label: "IPv6"))
         }
         return lines.joined(separator: "\n")
-    }
-
-    private static func ipLine(_ label: String, _ e: ExitInfo) -> String {
-        let place = [e.city, e.countryCode].compactMap { $0 }.joined(separator: ", ")
-        return "\(label): \(e.ip)" + (place.isEmpty ? "" : " (\(place))")
     }
 }
