@@ -98,6 +98,40 @@ extension PrivateRelay {
     }
 }
 
+public struct DNSResolver: Equatable, Codable, Sendable {
+    public var address: String       // zone ID already stripped: "fe80::1", never "fe80::1%en0"
+    public var isIPv6: Bool
+    public var interface: String?    // scoped resolver's interface; nil = global
+    public init(address: String, isIPv6: Bool, interface: String? = nil) {
+        self.address = address; self.isIPv6 = isIPv6; self.interface = interface
+    }
+}
+
+public enum DNSEncryption: String, Equatable, Codable, Sendable { case plaintext, doh, dot, unknown }
+
+public enum DNSLeak: String, Equatable, Codable, Sendable {
+    case unknown      // no measurement — NOT a leak, NOT a clear
+    case none
+    case suspected    // one observed mismatch
+    case confirmed    // mismatch survived a second consecutive full refresh
+}
+
+public struct DNSInfo: Equatable, Codable, Sendable {
+    public var resolvers: [DNSResolver]
+    public var encryption: DNSEncryption
+    public var egressIP: String?          // resolver's own exit IP, or an ECS prefix like "1.2.3.0/24"
+    public var egressIsIPv6: Bool
+    public var measuredAt: Date?
+    public var leak: DNSLeak
+    public init(resolvers: [DNSResolver] = [], encryption: DNSEncryption = .unknown,
+                egressIP: String? = nil, egressIsIPv6: Bool = false,
+                measuredAt: Date? = nil, leak: DNSLeak = .unknown) {
+        self.resolvers = resolvers; self.encryption = encryption
+        self.egressIP = egressIP; self.egressIsIPv6 = egressIsIPv6
+        self.measuredAt = measuredAt; self.leak = leak
+    }
+}
+
 public struct ExitState: Equatable, Codable, Sendable {
     public var connectivity: Connectivity
     public var exit: ExitInfo?
@@ -109,21 +143,23 @@ public struct ExitState: Equatable, Codable, Sendable {
     public var route: RouteInfo
     public var privateRelay: PrivateRelay
     public var ipv6Leak: Bool
+    public var dns: DNSInfo
     public var since: Date
     public init(connectivity: Connectivity = .checking, exit: ExitInfo? = nil, exit6: ExitInfo? = nil,
                 route: RouteInfo = RouteInfo(), privateRelay: PrivateRelay = .unknown,
-                ipv6Leak: Bool = false, since: Date = Date()) {
+                ipv6Leak: Bool = false, dns: DNSInfo = DNSInfo(), since: Date = Date()) {
         self.connectivity = connectivity
         self.exit = exit
         self.exit6 = exit6
         self.route = route
         self.privateRelay = privateRelay
         self.ipv6Leak = ipv6Leak
+        self.dns = dns
         self.since = since
     }
 
     private enum CodingKeys: String, CodingKey {
-        case connectivity, exit, exit6, route, privateRelay, ipv6Leak, since
+        case connectivity, exit, exit6, route, privateRelay, ipv6Leak, dns, since
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -133,6 +169,7 @@ public struct ExitState: Equatable, Codable, Sendable {
         route = try c.decode(RouteInfo.self, forKey: .route)
         privateRelay = try c.decode(PrivateRelay.self, forKey: .privateRelay)
         ipv6Leak = try c.decodeIfPresent(Bool.self, forKey: .ipv6Leak) ?? false
+        dns = try c.decodeIfPresent(DNSInfo.self, forKey: .dns) ?? DNSInfo()
         since = try c.decode(Date.self, forKey: .since)
     }
 }
