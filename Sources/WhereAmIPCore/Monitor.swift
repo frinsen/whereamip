@@ -24,6 +24,7 @@ public protocol StackIPFetching: Sendable {
 public protocol DNSConfigReading: Sendable {
     func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption)
 }
+public protocol DNSEgressProbing: Sendable { func fetch() async -> (ip: String, isIPv6: Bool)? }
 
 extension GeoProviderChain: GeoFetching {
     public func fetch() async -> ExitInfo? { await fetch(now: Date()) }
@@ -33,6 +34,7 @@ extension ConnectivityProbe: ProbeRunning {}
 extension HTTPIPFetcher: HTTPIPFetching {}
 extension StackPinnedIP: StackIPFetching {}
 extension LiveDNSConfigReader: DNSConfigReading {}
+extension DNSEgressProbe: DNSEgressProbing {}
 
 public actor Monitor {
     let geo: any GeoFetching
@@ -41,6 +43,8 @@ public actor Monitor {
     let httpIP: any HTTPIPFetching
     let stackIP: any StackIPFetching
     let dnsConfig: any DNSConfigReading
+    let dnsProbe: any DNSEgressProbing
+    let dnsProbeEnabled: @Sendable () -> Bool
     let relayRanges: RelayRanges
     let debounce: Double
     let onChange: @Sendable (ExitState) -> Void
@@ -68,12 +72,15 @@ public actor Monitor {
     public init(geo: any GeoFetching, probe: any ProbeRunning, route: any RouteSnapshotting,
                 httpIP: any HTTPIPFetching, stackIP: any StackIPFetching = StackPinnedIP(),
                 dnsConfig: any DNSConfigReading = LiveDNSConfigReader(),
+                dnsProbe: any DNSEgressProbing = DNSEgressProbe(),
+                dnsProbeEnabled: @escaping @Sendable () -> Bool = { Settings().dnsProbeEnabled },
                 relayRanges: RelayRanges,
                 debounceSeconds: Double = 1.5,
                 onChange: @escaping @Sendable (ExitState) -> Void,
                 onEvents: @escaping @Sendable ([Event]) -> Void) {
         self.geo = geo; self.probe = probe; self.route = route; self.httpIP = httpIP; self.stackIP = stackIP
         self.dnsConfig = dnsConfig
+        self.dnsProbe = dnsProbe; self.dnsProbeEnabled = dnsProbeEnabled
         self.relayRanges = relayRanges; self.debounce = debounceSeconds
         self.onChange = onChange; self.onEvents = onEvents
         // Seed the initial route synchronously so the first refresh doesn't report a
@@ -198,6 +205,27 @@ public actor Monitor {
             }
             Log.monitor.debug("runFullRefresh: suspicion=\(suspicion, privacy: .public) exitFresh=\(exitFreshThisTick, privacy: .public) ipv6Leak=\(new.ipv6Leak, privacy: .public)")
 
+            // DNS egress verdict — only full refreshes may judge (ticks update observations only).
+            // Consent gate: when the probe is disabled, no DNS query is EVER sent and the verdict is
+            // deliberately .unknown, not a preserved alarm (an explicit opt-out clears state; a mere
+            // probe FAILURE preserves .confirmed inside decide() — different cases, both intentional).
+            if dnsProbeEnabled() {
+                let egress = await dnsProbe.fetch()
+                new.dns.leak = DNSLeakDetector.decide(egress: egress,
+                                                      exit4: exitFreshThisTick ? new.exit : nil,
+                                                      exit6: new.exit6,
+                                                      route: new.route,
+                                                      previous: state.dns.leak)
+                new.dns.egressIP = egress?.ip
+                new.dns.egressIsIPv6 = egress?.isIPv6 ?? false
+                new.dns.measuredAt = egress != nil ? Date() : state.dns.measuredAt
+                Log.dns.debug("verdict: egress=\(egress?.ip ?? "nil", privacy: .public) leak=\(new.dns.leak.rawValue, privacy: .public)")
+            } else {
+                new.dns.leak = .unknown
+                new.dns.egressIP = nil
+                new.dns.measuredAt = nil
+            }
+
             let httpsIP = new.exit?.ip
             var relay = PrivateRelayDetector.decide(httpsIP: httpsIP, httpIP: await httpIP.fetch(), ranges: relayRanges)
             if case .active(let egressIP, nil) = relay, let ip = egressIP {
@@ -260,6 +288,16 @@ public actor Monitor {
             // without exit info fetched fresh through it: escalate to a full refresh instead,
             // same as the offline→online case above.
             Log.monitor.debug("probeTick escalating to fullRefresh: route changed \(self.state.route.defaultInterface ?? "nil", privacy: .public) -> \(new.route.defaultInterface ?? "nil", privacy: .public)")
+            inFlightKind = .full
+            await runFullRefresh()
+            return
+        }
+        // Third escalation trigger (same pattern as offline→online and route-change above): a
+        // changed resolver set means the last egress verdict was measured under a DNS config
+        // that no longer exists — never let the two coexist in state. The full refresh re-reads
+        // config and re-judges with fresh measurements.
+        if new.dns.resolvers != state.dns.resolvers {
+            Log.monitor.debug("probeTick escalating to fullRefresh: DNS resolver set changed")
             inFlightKind = .full
             await runFullRefresh()
             return

@@ -120,10 +120,22 @@ final class MockDNSConfig: DNSConfigReading, @unchecked Sendable {
     func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption) { (resolvers, encryption) }
 }
 
+/// Stand-in for `DNSEgressProbe` — hands back a fixed egress tuple (or nil, simulating a failed
+/// probe) without touching real DNS/dnssd, and counts invocations so tests can assert the probe
+/// was (or was not) actually called.
+final class MockDNSProbe: DNSEgressProbing, @unchecked Sendable {
+    var result: (ip: String, isIPv6: Bool)?
+    var callCount = 0
+    init(result: (ip: String, isIPv6: Bool)?) { self.result = result }
+    func fetch() async -> (ip: String, isIPv6: Bool)? { callCount += 1; return result }
+}
+
 final class MonitorTests: XCTestCase {
     func makeMonitor(counter: Counter, probeOK: Bool = true, httpIP: String? = nil,
                      ip4: String? = nil, ip6: String? = nil,
                      dnsConfig: any DNSConfigReading = MockDNSConfig(resolvers: []),
+                     dnsProbe: any DNSEgressProbing = MockDNSProbe(result: nil),
+                     dnsProbeEnabled: @escaping @Sendable () -> Bool = { true },
                      onEvents: @escaping @Sendable ([Event]) -> Void = { _ in }) -> Monitor {
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
                             provider: "mock", fetchedAt: Date())
@@ -133,6 +145,8 @@ final class MonitorTests: XCTestCase {
                        httpIP: MockHTTPIP(counter: counter, ip: httpIP),
                        stackIP: MockStackIP(counter: counter, ip4: ip4, ip6: ip6),
                        dnsConfig: dnsConfig,
+                       dnsProbe: dnsProbe,
+                       dnsProbeEnabled: dnsProbeEnabled,
                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                        debounceSeconds: 0.05,
                        onChange: { _ in }, onEvents: onEvents)
@@ -364,6 +378,116 @@ final class MonitorTests: XCTestCase {
                       || events.contains { if case .countryChanged = $0 { return true }; return false },
                       "the fresh exit change must still be reported")
     }
+
+    // MARK: - DNS egress verdict (Phase B)
+
+    func testResolverSetChangeEscalatesTickToFullRefresh() async {
+        let c = Counter()
+        let dns = MockDNSConfig(resolvers: [DNSResolver(address: "192.168.1.1", isIPv6: false)])
+        let m = makeMonitor(counter: c, dnsConfig: dns)
+
+        // Baseline: state carries resolver A, seeded by a full refresh (consumes geo call #1 and
+        // stack4 call #1).
+        await m.fullRefresh()
+        let baseline = await m.currentState()
+        XCTAssertEqual(baseline.dns.resolvers.map(\.address), ["192.168.1.1"])
+
+        // The DNS config mock now reports a different resolver set (resolver B) right before a
+        // probe tick lands — simulating the OS switching resolvers between ticks.
+        dns.resolvers = [DNSResolver(address: "8.8.8.8", isIPv6: false)]
+        await m.probeTick()
+
+        // The resolver set changed, so the tick must have escalated to a full refresh and
+        // touched the geo/stack mocks again, mirroring how the route-change escalation test
+        // asserts escalation via the geo call count.
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 2, "resolver-set change must escalate the tick into a full refresh")
+        let stack4 = await c.stack4Calls
+        XCTAssertEqual(stack4, 2, "the escalated run is a genuine full refresh, not a partial tick")
+
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.resolvers.map(\.address), ["8.8.8.8"])
+    }
+
+    func testTickNeverChangesVerdict() async {
+        let c = Counter()
+        let dnsConfig = MockDNSConfig(resolvers: [DNSResolver(address: "1.1.1.1", isIPv6: false)])
+        let dnsProbe = MockDNSProbe(result: ("9.9.9.9", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: MockGeo(counter: c, info: info),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: dnsConfig,
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        // Seed .confirmed via two full refreshes with a mismatching probe (exit "1.2.3.4" vs.
+        // egress "9.9.9.9" over a VPN-owned v4 route): first mismatch is only .suspected, the
+        // second consecutive one confirms it.
+        await m.fullRefresh()
+        let afterFirst = await m.currentState()
+        XCTAssertEqual(afterFirst.dns.leak, .suspected)
+
+        await m.fullRefresh()
+        let afterSecond = await m.currentState()
+        XCTAssertEqual(afterSecond.dns.leak, .confirmed)
+        XCTAssertEqual(dnsProbe.callCount, 2)
+
+        // Now run a tick with resolvers unchanged — it must never touch the DNS probe or alter
+        // the confirmed verdict; only full refreshes are allowed to judge.
+        await m.probeTick()
+        let afterTick = await m.currentState()
+        XCTAssertEqual(afterTick.dns.leak, .confirmed, "a tick must never change the DNS verdict")
+        XCTAssertEqual(dnsProbe.callCount, 2, "probeTick must not invoke the DNS egress probe")
+    }
+
+    func testTwoMismatchedFullRefreshesConfirm() async {
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: MockGeo(counter: c, info: info),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        // Route is VPN-owned on v4; geo/stack mocks give a fresh v4 exit ("1.2.3.4") that
+        // differs from the probe's reported egress ("203.0.113.7") on every refresh.
+        await m.fullRefresh()
+        let afterOne = await m.currentState()
+        XCTAssertEqual(afterOne.dns.leak, .suspected, "a single mismatch is only suspected")
+
+        await m.fullRefresh()
+        let afterTwo = await m.currentState()
+        XCTAssertEqual(afterTwo.dns.leak, .confirmed, "a second consecutive mismatch confirms the leak")
+    }
+
+    func testDisabledProbeNeverCalledAndVerdictUnknown() async {
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let m = makeMonitor(counter: c, dnsProbe: dnsProbe, dnsProbeEnabled: { false })
+
+        await m.fullRefresh()
+
+        XCTAssertEqual(dnsProbe.callCount, 0, "a disabled probe must never send a DNS query")
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.leak, .unknown, "an explicit opt-out clears the verdict rather than preserving an alarm")
+        XCTAssertNil(s.dns.egressIP)
+    }
+
     func testGenuineLeakStillDetected() async {
         let c = Counter()
         let box = EventBox()
