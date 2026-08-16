@@ -95,7 +95,7 @@ public enum MenuBuilder {
                 let place = [exit.city, countryName(exit.countryCode)].compactMap { $0 }.joined(separator: ", ")
                 if !place.isEmpty { menu.addItem(info(place)) }
                 if let org = exit.org { menu.addItem(info(org)) }
-                if let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
+                if let exit6 = state.exit6 {
                     menu.addItem(info(exit.splitLine(label: "IPv4")))
                     menu.addItem(info(exit6.splitLine(label: "IPv6")))
                 }

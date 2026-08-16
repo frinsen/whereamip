@@ -65,4 +65,17 @@ final class RenderJSONTests: XCTestCase {
         XCTAssertTrue(h.contains("IPv6: 2001:db8::1"))
         XCTAssertFalse(h.contains("⚠️ IPv6 leak"))
     }
+
+    func testHumanShowsIPv6LineWhenCountriesMatch() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.exit6 = ExitInfo(ip: "2a00::1", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        XCTAssertTrue(StateRenderer.human(state).contains("IPv6: 2a00::1"))
+    }
+
+    func testHumanOmitsIPv6LineWhenNoV6Measurement() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        XCTAssertFalse(StateRenderer.human(state).contains("IPv6:"))
+    }
 }

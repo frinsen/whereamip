@@ -33,7 +33,9 @@ public enum StateRenderer {
             let org = state.exit6?.org ?? "your ISP"
             let cc = state.exit6?.countryCode ?? "?"
             lines.append("⚠️ IPv6 leak: v6 exits via \(org) (\(cc))")
-        } else if let exit = state.exit, let exit6 = state.exit6, exit6.countryCode != exit.countryCode {
+        } else if let exit = state.exit, let exit6 = state.exit6 {
+            // The leak line above supersedes this pair when a leak is confirmed. Otherwise,
+            // show the split pair whenever both stacks were measured (v6 is a first-class fact).
             lines.append(exit.splitLine(label: "IPv4"))
             lines.append(exit6.splitLine(label: "IPv6"))
         }

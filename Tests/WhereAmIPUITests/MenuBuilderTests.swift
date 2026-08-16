@@ -165,15 +165,16 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(all.contains("IPv4: 185.107.56.123"))
         XCTAssertTrue(all.contains("IPv6: 2001:db8::1"))
     }
-    func testNoSplitLinesWhenSameCountry() {
+    func testSplitLinesShownWhenSameCountry() {
         var s = vpnState()
         s.exit6 = ExitInfo(ip: "2001:db8::1", countryCode: s.exit!.countryCode, city: "Amsterdam",
                            org: "M247 Europe SRL", provider: "ipwho.is", fetchedAt: Date())
         let menu = MenuBuilder.build(state: s, style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         let all = titles(menu).joined(separator: "|")
-        XCTAssertFalse(all.contains("IPv4:"))
-        XCTAssertFalse(all.contains("IPv6:"))
+        // IPv6 is now a first-class fact shown whenever measured, even if countries match
+        XCTAssertTrue(all.contains("IPv4:"))
+        XCTAssertTrue(all.contains("IPv6:"))
     }
     func testStatusRendererAppendsBadgeForTextGlyph() {
         let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: true)
@@ -188,5 +189,16 @@ final class MenuBuilderTests: XCTestCase {
     func testStatusRendererNoBadgeWhenNotLeaking() {
         let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: false)
         XCTAssertEqual(r.title, "🇩🇪")
+    }
+
+    func testIPv6SplitLinesShownEvenWhenCountriesMatch() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.exit6 = ExitInfo(ip: "2a00::1", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let titles = menu.items.map(\.title)
+        XCTAssertTrue(titles.contains("IPv4: 1.2.3.4 (CZ)"), "got: \(titles)")
+        XCTAssertTrue(titles.contains("IPv6: 2a00::1 (CZ)"))
     }
 }
