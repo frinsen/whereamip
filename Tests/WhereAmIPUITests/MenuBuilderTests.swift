@@ -201,4 +201,12 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(titles.contains("IPv4: 1.2.3.4 (CZ)"), "got: \(titles)")
         XCTAssertTrue(titles.contains("IPv6: 2a00::1 (CZ)"))
     }
+
+    func testSettingsSubmenuShowsVersion() {
+        let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let settings = menu.items.first { $0.title == "Settings" }?.submenu
+        XCTAssertEqual(settings?.items.first?.title, "WhereAmIP v\(whereamipVersion)")
+        XCTAssertEqual(settings?.items.first?.isEnabled, false)
+    }
 }

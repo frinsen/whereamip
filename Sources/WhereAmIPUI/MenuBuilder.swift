@@ -126,6 +126,11 @@ public enum MenuBuilder {
         let settings = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
         let settingsMenu = NSMenu()
         settingsMenu.autoenablesItems = false
+        // There is no persistent "debug mode" to show here — diagnostics exist only while
+        // `whereamip debug` streams (nothing on disk, by design). Version + the checkmark
+        // rows below are the app's complete visible state.
+        settingsMenu.addItem(info("WhereAmIP v\(whereamipVersion)"))
+        settingsMenu.addItem(.separator())
         let styleItem = NSMenuItem(title: "Menu Bar Style", action: nil, keyEquivalent: "")
         let styleMenu = NSMenu()
         styleMenu.autoenablesItems = false
