@@ -56,22 +56,32 @@ run_backend_scenario() {  # NAME
     e2e_log "SKIP $name: $reason"; echo -e "SKIP\t$name\t$reason" >> "$E2E_LOG_DIR/scenarios.tsv"; return 0
   fi
   e2e_log "=== scenario: $name — $(e2e_describe)"
-  local base="$E2E_LOG_DIR/$name-baseline.json"; e2e_status_json "$base"
+  local base="$E2E_LOG_DIR/$name-baseline.json"
+  if ! e2e_status_json "$base"; then
+    e2e_log "FAIL $name: baseline status capture failed"
+    echo -e "ERROR\t$name\tbaseline-status-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    return 0
+  fi
   if ! watch_start "$name"; then
     echo -e "ERROR\t$name\twatch-start-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    watch_stop
     return 0
   fi
 
+  E2E_ACTIVE_BACKEND="$name"
   if ! e2e_up; then
     e2e_log "FAIL $name: up failed"; echo -e "ERROR\t$name\tup-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
-    watch_stop; e2e_down 2>/dev/null || true; return 0
+    watch_stop
+    if e2e_down 2>/dev/null; then E2E_ACTIVE_BACKEND=""; fi
+    return 0
   fi
   if ! e2e_poll_until "$name route settled" 45 route_changed_vs "$base"; then
     [ "$E2E_EXPECTS_VPN" = 1 ] && { echo -e "ERROR\t$name\tno-route-change" >> "$E2E_LOG_DIR/scenarios.tsv"; }
   fi
   sleep 2   # let the app's escalated full refresh land in the watch stream
 
-  local up="$E2E_LOG_DIR/$name-up.json"; e2e_status_json "$up"
+  local up="$E2E_LOG_DIR/$name-up.json"
+  e2e_status_json "$up" || e2e_log "WARN: $name up-state status capture failed (dependent assertions will FAIL via missing-file jq-guard)"
   if [ "$E2E_EXPECTS_VPN" = 1 ]; then
     a_json_eq "$up" '.route.isVPN' true "$name-route-isvpn"
     [ -n "$E2E_EXPECTED_VPN_NAME" ] && a_json_contains "$up" '.route.vpnName' "$E2E_EXPECTED_VPN_NAME" "$name-vpnname"
@@ -109,10 +119,12 @@ run_backend_scenario() {  # NAME
     && _a_result PASS "$name-layer2" "WhereAmIPE2ETests" \
     || _a_result FAIL "$name-layer2" "see $name-xctest.log"
 
-  e2e_down || e2e_log "WARN: $name down failed (restore trap will retry)"
+  if e2e_down; then E2E_ACTIVE_BACKEND=""; else e2e_log "WARN: $name down failed (restore trap will retry)"; fi
   e2e_poll_until "$name route restored" 45 sh -c \
-    "'$WHEREAMIP_BIN' status --json | jq -e '.route.isVPN == $(jq -r .route.isVPN "$base")' >/dev/null"
-  local down="$E2E_LOG_DIR/$name-down.json"; e2e_status_json "$down"
+    "'$WHEREAMIP_BIN' status --json | jq -e '.route.isVPN == $(jq -r .route.isVPN "$base")' >/dev/null" \
+    || e2e_log "WARN: $name route not restored within 45s (continuing; restore trap is the backstop)"
+  local down="$E2E_LOG_DIR/$name-down.json"
+  e2e_status_json "$down" || e2e_log "WARN: $name down-state status capture failed (dependent assertions will FAIL via missing-file jq-guard)"
   a_json_eq "$down" '.route.isVPN' "$(jq -r .route.isVPN "$base")" "$name-restored"
   watch_stop
   echo -e "DONE\t$name" >> "$E2E_LOG_DIR/scenarios.tsv"
@@ -133,29 +145,44 @@ run_cross_dnsswap_under_vpn() {
   source "./backends/$vpn.sh";      e2e_available >/dev/null || { e2e_log "SKIP cross (no $vpn)"; return 0; }
   source "./backends/dns-swap.sh";  e2e_available >/dev/null || { e2e_log "SKIP cross (no sudo)"; return 0; }
   e2e_log "=== cross-scenario: dns-swap under $vpn"
-  local base="$E2E_LOG_DIR/cross-baseline.json"; e2e_status_json "$base"
+  local base="$E2E_LOG_DIR/cross-baseline.json"
+  if ! e2e_status_json "$base"; then
+    e2e_log "FAIL cross: baseline status capture failed"
+    echo -e "ERROR\tcross-dnsswap-under-vpn\tbaseline-status-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    return 0
+  fi
 
   # Unconditional cleanup path — called from every exit route below so a
   # failure partway through never leaves the VPN, resolver swap, or watch
-  # process stuck. Only tears down what was actually brought up.
+  # process stuck. Tears down (via E2E_ACTIVE_BACKEND, which may include a
+  # backend whose e2e_up failed but could have partially connected) in
+  # reverse bring-up order, re-sourcing each named backend immediately before
+  # calling ITS e2e_down since sourcing the next backend overwrites functions.
   cross_teardown() {
-    if [ "$dns_up" = 1 ]; then
-      source "./backends/dns-swap.sh"
-      e2e_down || e2e_log "WARN: cross dns-swap down failed (restore trap will retry)"
-    fi
-    if [ "$vpn_up" = 1 ]; then
-      source "./backends/$vpn.sh"
-      e2e_down || e2e_log "WARN: cross $vpn down failed (restore trap will retry)"
-    fi
+    local _cross_reversed="" _b
+    for _b in $E2E_ACTIVE_BACKEND; do _cross_reversed="$_b $_cross_reversed"; done
+    for _b in $_cross_reversed; do
+      source "./backends/$_b.sh"
+      if e2e_down; then
+        [ "$_b" = "dns-swap" ] && dns_up=0
+        [ "$_b" = "$vpn" ] && vpn_up=0
+        E2E_ACTIVE_BACKEND="${E2E_ACTIVE_BACKEND% $_b}"
+        [ "$E2E_ACTIVE_BACKEND" = "$_b" ] && E2E_ACTIVE_BACKEND=""
+      else
+        e2e_log "WARN: cross $_b down failed (restore trap will retry)"
+      fi
+    done
     watch_stop
   }
 
   if ! watch_start cross; then
     echo -e "ERROR\tcross-dnsswap-under-vpn\twatch-start-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    watch_stop
     return 0
   fi
 
   source "./backends/$vpn.sh"
+  E2E_ACTIVE_BACKEND="$vpn"
   if ! e2e_up; then
     e2e_log "FAIL cross: $vpn up failed"
     echo -e "ERROR\tcross-dnsswap-under-vpn\t$vpn-up-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
@@ -167,6 +194,7 @@ run_cross_dnsswap_under_vpn() {
   sleep 2
 
   source "./backends/dns-swap.sh"
+  E2E_ACTIVE_BACKEND="$vpn dns-swap"
   if ! e2e_up; then          # resolver change → escalation
     e2e_log "FAIL cross: dns-swap up failed"
     echo -e "ERROR\tcross-dnsswap-under-vpn\tdns-swap-up-failed" >> "$E2E_LOG_DIR/scenarios.tsv"

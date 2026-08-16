@@ -36,8 +36,8 @@ struct Status: AsyncParsableCommand {
 struct Watch: AsyncParsableCommand {
     @Flag var json = false
     func run() async throws {
-        setbuf(stdout, nil)   // line-latency output: watch is a streaming interface; when
-                              // piped/redirected (the documented `watch --json >> file` use
+        setvbuf(stdout, nil, _IOLBF, 0)   // line-buffered output: watch is a streaming interface;
+                              // when piped/redirected (the documented `watch --json >> file` use
                               // and the e2e suite's gate) block buffering delays lines by minutes.
         let stream = AsyncStream<ExitState> { continuation in
             let m = makeMonitor(onChange: { continuation.yield($0) })
