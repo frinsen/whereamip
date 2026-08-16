@@ -21,6 +21,9 @@ public protocol StackIPFetching: Sendable {
     func fetch4() async -> String?
     func fetch6() async -> String?
 }
+public protocol DNSConfigReading: Sendable {
+    func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption)
+}
 
 extension GeoProviderChain: GeoFetching {
     public func fetch() async -> ExitInfo? { await fetch(now: Date()) }
@@ -29,6 +32,7 @@ extension GeoProviderChain: GeoFetching {
 extension ConnectivityProbe: ProbeRunning {}
 extension HTTPIPFetcher: HTTPIPFetching {}
 extension StackPinnedIP: StackIPFetching {}
+extension LiveDNSConfigReader: DNSConfigReading {}
 
 public actor Monitor {
     let geo: any GeoFetching
@@ -36,6 +40,7 @@ public actor Monitor {
     let route: any RouteSnapshotting
     let httpIP: any HTTPIPFetching
     let stackIP: any StackIPFetching
+    let dnsConfig: any DNSConfigReading
     let relayRanges: RelayRanges
     let debounce: Double
     let onChange: @Sendable (ExitState) -> Void
@@ -62,11 +67,13 @@ public actor Monitor {
 
     public init(geo: any GeoFetching, probe: any ProbeRunning, route: any RouteSnapshotting,
                 httpIP: any HTTPIPFetching, stackIP: any StackIPFetching = StackPinnedIP(),
+                dnsConfig: any DNSConfigReading = LiveDNSConfigReader(),
                 relayRanges: RelayRanges,
                 debounceSeconds: Double = 1.5,
                 onChange: @escaping @Sendable (ExitState) -> Void,
                 onEvents: @escaping @Sendable ([Event]) -> Void) {
         self.geo = geo; self.probe = probe; self.route = route; self.httpIP = httpIP; self.stackIP = stackIP
+        self.dnsConfig = dnsConfig
         self.relayRanges = relayRanges; self.debounce = debounceSeconds
         self.onChange = onChange; self.onEvents = onEvents
         // Seed the initial route synchronously so the first refresh doesn't report a
@@ -123,6 +130,9 @@ public actor Monitor {
         var new = state
         new.connectivity = gate.record(success: await probe.check())
         new.route = route.snapshot()
+        let dnsCfg = dnsConfig.snapshot()
+        new.dns.resolvers = dnsCfg.resolvers
+        new.dns.encryption = dnsCfg.encryption
         if new.connectivity != .offline {
             // Stack-pinned dual-stack measurement (IPv6 leak detector, Phase 1): api4/api6
             // force the request over each protocol family independently. Both are under
@@ -228,6 +238,9 @@ public actor Monitor {
         var new = state
         new.connectivity = gate.record(success: await probe.check())
         new.route = route.snapshot()
+        let dnsCfg = dnsConfig.snapshot()
+        new.dns.resolvers = dnsCfg.resolvers
+        new.dns.encryption = dnsCfg.encryption
         if before == .offline, new.connectivity == .online {
             Log.monitor.debug("probeTick escalating to fullRefresh: offline -> online")
             apply(new)
@@ -274,7 +287,7 @@ public actor Monitor {
         }
         guard next != old else { return }
         state = next
-        Log.monitor.debug("apply: connectivity=\(next.connectivity.rawValue, privacy: .public) exit=\(next.exit?.ip ?? "nil", privacy: .public)/\(next.exit?.countryCode ?? "nil", privacy: .public) route=\(next.route.defaultInterface ?? "nil", privacy: .public)/vpn=\(next.route.vpnName ?? "nil", privacy: .public)")
+        Log.monitor.debug("apply: connectivity=\(next.connectivity.rawValue, privacy: .public) exit=\(next.exit?.ip ?? "nil", privacy: .public)/\(next.exit?.countryCode ?? "nil", privacy: .public) route=\(next.route.defaultInterface ?? "nil", privacy: .public)/vpn=\(next.route.vpnName ?? "nil", privacy: .public) dns=\(next.dns.leak.rawValue, privacy: .public)/\(next.dns.resolvers.count, privacy: .public)res")
         onChange(next)
         let events = Reducer.events(old: old, new: next)
         if !events.isEmpty {

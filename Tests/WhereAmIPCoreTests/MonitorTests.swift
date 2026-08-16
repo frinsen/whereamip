@@ -109,9 +109,21 @@ final class MutableStackTestGeo: GeoFetching, @unchecked Sendable {
     func lookup(ip: String) async -> ExitInfo? { snapshotLookup(ip) }
 }
 
+/// Configurable stand-in for `LiveDNSConfigReader` — tests hand it a fixed resolver list and/or
+/// encryption verdict without touching the real SCDynamicStore.
+final class MockDNSConfig: DNSConfigReading, @unchecked Sendable {
+    var resolvers: [DNSResolver]
+    var encryption: DNSEncryption
+    init(resolvers: [DNSResolver], encryption: DNSEncryption = .unknown) {
+        self.resolvers = resolvers; self.encryption = encryption
+    }
+    func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption) { (resolvers, encryption) }
+}
+
 final class MonitorTests: XCTestCase {
     func makeMonitor(counter: Counter, probeOK: Bool = true, httpIP: String? = nil,
                      ip4: String? = nil, ip6: String? = nil,
+                     dnsConfig: any DNSConfigReading = MockDNSConfig(resolvers: []),
                      onEvents: @escaping @Sendable ([Event]) -> Void = { _ in }) -> Monitor {
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
                             provider: "mock", fetchedAt: Date())
@@ -120,6 +132,7 @@ final class MonitorTests: XCTestCase {
                        route: MockRoute(),
                        httpIP: MockHTTPIP(counter: counter, ip: httpIP),
                        stackIP: MockStackIP(counter: counter, ip4: ip4, ip6: ip6),
+                       dnsConfig: dnsConfig,
                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                        debounceSeconds: 0.05,
                        onChange: { _ in }, onEvents: onEvents)
@@ -144,6 +157,22 @@ final class MonitorTests: XCTestCase {
         XCTAssertEqual(geo, 1)   // only the initial fullRefresh
         let probes = await c.probeCalls
         XCTAssertEqual(probes, 3)
+    }
+    func testProbeTickUpdatesDNSResolvers() async {
+        let c = Counter()
+        let dns = MockDNSConfig(resolvers: [DNSResolver(address: "192.168.1.1", isIPv6: false)])
+        let m = makeMonitor(counter: c, dnsConfig: dns)
+        await m.probeTick()
+        let state = await m.currentState()
+        XCTAssertEqual(state.dns.resolvers.map(\.address), ["192.168.1.1"])
+    }
+    func testFullRefreshUpdatesDNSEncryption() async {
+        let c = Counter()
+        let dns = MockDNSConfig(resolvers: [], encryption: .doh)
+        let m = makeMonitor(counter: c, dnsConfig: dns)
+        await m.fullRefresh()
+        let state = await m.currentState()
+        XCTAssertEqual(state.dns.encryption, .doh)
     }
     func testPathChangedDebounces() async throws {
         let c = Counter()

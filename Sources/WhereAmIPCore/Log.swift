@@ -8,4 +8,5 @@ enum Log {
     static let reducer = Logger(subsystem: subsystem, category: "reducer")
     static let relay   = Logger(subsystem: subsystem, category: "relay")
     static let update  = Logger(subsystem: subsystem, category: "update")
+    static let dns     = Logger(subsystem: subsystem, category: "dns")
 }
