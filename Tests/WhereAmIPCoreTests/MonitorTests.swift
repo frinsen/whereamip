@@ -241,6 +241,8 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -293,6 +295,8 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -343,6 +347,8 @@ final class MonitorTests: XCTestCase {
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -500,6 +506,8 @@ final class MonitorTests: XCTestCase {
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -530,6 +538,8 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -559,6 +569,8 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: nil, v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -581,6 +593,8 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: nil),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -602,6 +616,8 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -632,6 +648,8 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(info: route),
                         httpIP: MockHTTPIP(counter: Counter(), ip: nil),
                         stackIP: stackIP,
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { _ in })
@@ -677,6 +695,8 @@ final class MonitorTests: XCTestCase {
                                          holding: "en0"),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { box.append($0) })
@@ -705,6 +725,8 @@ final class MonitorTests: XCTestCase {
                                          holding: nil),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { _ in })
@@ -729,6 +751,8 @@ final class MonitorTests: XCTestCase {
                                          holding: "utun9"),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
                         onChange: { _ in }, onEvents: { _ in })
