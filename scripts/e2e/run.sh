@@ -108,3 +108,38 @@ run_backend_scenario() {  # NAME
 # specific subset without touching live VPN state.
 BACKENDS="${E2E_ONLY:-tailscale purevpn-scutil dns-swap warp windscribe purevpn-ovpn}"
 for b in $BACKENDS; do run_backend_scenario "$b"; done
+
+# --- cross-backend: resolver change UNDER a VPN → escalation → 2nd full
+# refresh → the two-refresh gate progression becomes observable in ONE watch.
+run_cross_dnsswap_under_vpn() {
+  local vpn=tailscale
+  source "./backends/$vpn.sh";      e2e_available >/dev/null || { e2e_log "SKIP cross (no $vpn)"; return 0; }
+  source "./backends/dns-swap.sh";  e2e_available >/dev/null || { e2e_log "SKIP cross (no sudo)"; return 0; }
+  e2e_log "=== cross-scenario: dns-swap under $vpn"
+  local base="$E2E_LOG_DIR/cross-baseline.json"; e2e_status_json "$base"
+  watch_start cross
+  source "./backends/$vpn.sh"; e2e_up
+  e2e_poll_until "cross: vpn up" 45 route_changed_vs "$base"
+  sleep 2
+  source "./backends/dns-swap.sh"; e2e_up          # resolver change → escalation
+  sleep 5                                           # escalated full refresh #2
+  local w="$E2E_LOG_DIR/cross-after-swap.json"; watch_last_json > "$w"
+  a_json_contains "$w" '.dns.resolvers[].address' 9.9.9.9 "cross-resolver-escalation-seen"
+  a_record "$w" '.dns.leak' "cross-leak-after-2-full-refreshes"
+  source "./backends/dns-swap.sh"; e2e_down
+  source "./backends/$vpn.sh"; e2e_down
+  watch_stop
+  echo -e "DONE\tcross-dnsswap-under-vpn" >> "$E2E_LOG_DIR/scenarios.tsv"
+}
+run_cross_dnsswap_under_vpn
+
+{
+  echo "# E2E run $(basename "$E2E_LOG_DIR")"
+  echo; echo "## Scenarios"; column -t -s$'\t' "$E2E_LOG_DIR/scenarios.tsv" 2>/dev/null
+  echo; echo "## Assertions"; column -t -s$'\t' "$E2E_LOG_DIR/assertions.tsv" 2>/dev/null
+  echo; echo "## Calibration data (recorded, not judged)"
+  column -t -s$'\t' "$E2E_LOG_DIR/calibration.tsv" 2>/dev/null
+} > "$E2E_LOG_DIR/summary.md"
+e2e_log "summary: $E2E_LOG_DIR/summary.md"
+[ "${E2E_FAILED:-0}" = 1 ] && { e2e_log "RESULT: FAILURES (see summary)"; exit 1; }
+e2e_log "RESULT: all assertions passed"
