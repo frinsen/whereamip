@@ -24,7 +24,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.notificationsEnabled)
         XCTAssertThrowsError(try settings.set(key: "style", value: "banana"))
         XCTAssertThrowsError(try settings.set(key: "nope", value: "x"))
-        XCTAssertEqual(settings.allValues().map(\.key), ["notify", "style", "updates"])
+        XCTAssertEqual(settings.allValues().map(\.key), ["notify", "style", "updates", "dns"])
     }
     func testUpdatesConfigSurface() throws {
         try settings.set(key: "updates", value: "false")
@@ -33,5 +33,20 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.updatesEnabled)
         XCTAssertThrowsError(try settings.set(key: "updates", value: "banana"))
         XCTAssertTrue(settings.allValues().map(\.key).contains("updates"))
+    }
+    func testDNSProbeEnabledDefaultsTrue() {
+        XCTAssertTrue(settings.dnsProbeEnabled)
+    }
+    func testDNSProbeEnabledPersistsFalse() {
+        settings.dnsProbeEnabled = false
+        XCTAssertFalse(settings.dnsProbeEnabled)
+    }
+    func testSetKeyDNS() throws {
+        try settings.set(key: "dns", value: "false")
+        XCTAssertFalse(settings.dnsProbeEnabled)
+        XCTAssertThrowsError(try settings.set(key: "dns", value: "maybe"))
+    }
+    func testAllValuesIncludesDNS() {
+        XCTAssertTrue(settings.allValues().contains { $0.key == "dns" })
     }
 }

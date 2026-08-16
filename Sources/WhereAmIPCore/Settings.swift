@@ -30,6 +30,10 @@ public final class Settings: @unchecked Sendable {
         get { d.object(forKey: "updatesEnabled") == nil ? true : d.bool(forKey: "updatesEnabled") }
         set { d.set(newValue, forKey: "updatesEnabled") }
     }
+    public var dnsProbeEnabled: Bool {
+        get { d.object(forKey: "dnsProbeEnabled") == nil ? true : d.bool(forKey: "dnsProbeEnabled") }
+        set { d.set(newValue, forKey: "dnsProbeEnabled") }
+    }
     public func set(key: String, value: String) throws {
         switch key {
         case "style":
@@ -41,10 +45,13 @@ public final class Settings: @unchecked Sendable {
         case "updates":
             guard value == "true" || value == "false" else { throw SettingsError.invalid("updates must be true|false") }
             updatesEnabled = (value == "true")
-        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates)")
+        case "dns":
+            guard value == "true" || value == "false" else { throw SettingsError.invalid("dns must be true|false") }
+            dnsProbeEnabled = (value == "true")
+        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates, dns)")
         }
     }
     public func allValues() -> [(key: String, value: String)] {
-        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled))]
+        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled)), ("dns", String(dnsProbeEnabled))]
     }
 }
