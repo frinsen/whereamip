@@ -9,6 +9,11 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
+- **E2E VPN test suite** (`scripts/e2e/run.sh`, local-only, opt-in): drives
+  real VPN transitions via tailscale/scutil/openvpn/warp-cli/windscribe-cli/networksetup,
+  asserts route+DNS behavior, records leak-verdict calibration data, and
+  always restores prior network state. Gated XCTest target WhereAmIPE2ETests
+  (skipped unless `WHEREAMIP_E2E=1`) checks the live detectors.
 - **DNS support**: the dropdown, `whereamip status`, and JSON now show the
   resolvers macOS actually uses (per interface) and whether encrypted DNS
   (DoH/DoT profile) is in force. An active, lightweight egress probe — a TXT
@@ -22,6 +27,11 @@ install-ready notes per version.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
 - Version row in Settings.
+
+### Fixed
+- `whereamip watch` output is now line-buffered when piped or redirected —
+  previously the documented `watch --json >> file` logging pattern could
+  delay lines by minutes.
 
 ## [0.3] — 2026-08-16
 
