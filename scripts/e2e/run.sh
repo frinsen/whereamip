@@ -21,7 +21,8 @@ fi
 command -v jq >/dev/null || e2e_die "jq is required (brew install jq)"
 
 e2e_snapshot_state
-trap e2e_restore_state EXIT INT TERM
+trap e2e_restore_state EXIT
+trap 'e2e_restore_state; trap - EXIT; exit 130' INT TERM
 
 e2e_log "log dir: $E2E_LOG_DIR"
 # Backends + scenarios appended by later tasks.

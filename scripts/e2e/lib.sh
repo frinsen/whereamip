@@ -22,9 +22,17 @@ e2e_snapshot_state() {
   scutil --nc status "PureVPN" 2>/dev/null | head -1 > "$E2E_SNAP_DIR/purevpn.state" || true
   /Applications/Tailscale.app/Contents/MacOS/Tailscale status --peers=false \
     > "$E2E_SNAP_DIR/tailscale.state" 2>&1 || true
-  # Primary network service (first enabled, non-VPN) for dns-swap restore.
-  networksetup -listallnetworkservices | sed -n '2p' > "$E2E_SNAP_DIR/primary-service.txt"
-  local svc; svc="$(cat "$E2E_SNAP_DIR/primary-service.txt")"
+  # Detect active network service from default route interface.
+  local iface; iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')"
+  local svc
+  if [ -n "$iface" ]; then
+    svc="$(networksetup -listallhardwareports | awk -v dev="$iface" '/^Hardware Port:/{port=substr($0,16)} /^Device:/{if ($2==dev) print port}')"
+  fi
+  if [ -z "${svc:-}" ]; then
+    e2e_log "warning: active interface detection failed, falling back to service list heuristic"
+    svc="$(networksetup -listallnetworkservices | sed -n '2p')"
+  fi
+  printf '%s\n' "$svc" > "$E2E_SNAP_DIR/primary-service.txt"
   networksetup -getdnsservers "$svc" > "$E2E_SNAP_DIR/dns-servers.txt" 2>&1 || true
   e2e_log "snapshot: purevpn=$(cat "$E2E_SNAP_DIR/purevpn.state" 2>/dev/null), service=$svc"
 }
