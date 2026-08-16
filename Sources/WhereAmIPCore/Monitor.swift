@@ -5,7 +5,17 @@ public protocol GeoFetching: Sendable {
     func lookup(ip: String) async -> ExitInfo?
 }
 public protocol ProbeRunning: Sendable { func check() async -> Bool }
-public protocol RouteSnapshotting: Sendable { func snapshot() -> RouteInfo }
+public protocol RouteSnapshotting: Sendable {
+    func snapshot() -> RouteInfo
+    /// Fallback v6 egress attribution by source-address match (see `RouteInspector
+    /// .interfaceHolding(ipv6:)` for the scoped-route rationale). Defaulted below so existing
+    /// conformers need no changes; test mocks override it to return a fixed interface name (or
+    /// nil) instead of touching the real network stack.
+    func interfaceHolding(ipv6: String) -> String?
+}
+public extension RouteSnapshotting {
+    func interfaceHolding(ipv6: String) -> String? { RouteInspector.interfaceHolding(ipv6: ipv6) }
+}
 public protocol HTTPIPFetching: Sendable { func fetch() async -> String? }
 public protocol StackIPFetching: Sendable {
     func fetch4() async -> String?
@@ -141,6 +151,22 @@ public actor Monitor {
                 exitFreshThisTick = true
             }
             new.exit6 = ip6.flatMap { resolved[$0] }
+
+            // Scoped-route fallback (field-verified against a live PureVPN AR profile): some
+            // VPNs demote the native v6 default route to an interface-SCOPED route instead of
+            // deleting it, so `defaultRouteInterface6()`'s unscoped lookup sees nothing even
+            // though URLSession (and thus our own stack-pinned v6 measurement) still leaks over
+            // it. `new.exit6` is fresh-or-nil by construction, so when it's present but the
+            // unscoped route lookup came up empty, ask `route.interfaceHolding(ipv6:)` which
+            // local interface actually holds that exact address — native v6 has no NAT, so a
+            // direct match recovers the true egress. No match (e.g. a NAT'd/tunneled v6 exit)
+            // correctly leaves the fields nil, same as "no v6 route found".
+            if new.route.v6DefaultInterface == nil, let e6 = new.exit6,
+               let iface = route.interfaceHolding(ipv6: e6.ip) {
+                new.route.v6DefaultInterface = iface
+                new.route.v6IsVPN = RouteInspector.isTunnelInterface(iface)
+                Log.route.debug("runFullRefresh: scoped-route fallback attributed v6 egress to \(iface, privacy: .public)")
+            }
 
             // Two-tier leak rule. `suspicion` alone is never enough to warn — this codebase
             // already had one false-alarm lesson (see the route-change escalation comments in

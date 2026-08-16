@@ -109,6 +109,44 @@ public enum RouteInspector {
         return nil
     }
 
+    /// Finds the local interface currently holding a specific IPv6 address (zone-id stripped,
+    /// case-insensitive compare) — a fallback v6 egress attribution for when
+    /// `defaultRouteInterface6()`'s unscoped-route lookup can't see the actual leaking
+    /// interface.
+    ///
+    /// Field-verified root cause: PureVPN (and presumably other VPNs with similar
+    /// "IPv4-only tunnel" behavior) doesn't delete the native v6 default route when its
+    /// tunnel comes up — it demotes it to an interface-SCOPED route (`netstat -rn -f inet6`
+    /// shows the RTF_IFSCOPE `I` flag, e.g. `default fe80::...%en0 UGcIg en0`, with no
+    /// unscoped default route left at all). Apple's URLSession still happily uses scoped
+    /// routes — that's exactly the app-level leak path this feature exists to catch — but our
+    /// own UDP-connect trick in `defaultRouteInterface6()` only consults the *unscoped* routing
+    /// table, so it comes back nil even though the leak is real.
+    ///
+    /// Native IPv6 has no NAT, though: whatever `exit6.ip` this refresh measured is literally
+    /// present on the leaking interface as a temporary/privacy address. So when the unscoped
+    /// lookup finds nothing, a direct getifaddrs address match recovers the same interface a
+    /// scoped-route-aware lookup would have found — without needing to parse scoped routes at
+    /// all. If the address matches no local interface (e.g. a NAT'd/tunneled v6 exit), that's
+    /// the correct "can't attribute this" signal too, and callers should leave the v6 fields
+    /// unset rather than guess.
+    public static func interfaceHolding(ipv6 target: String) -> String? {
+        let want = stripZoneID(target).lowercased()
+        var ifaddrPtr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddrPtr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddrPtr) }
+        var ptr = ifaddrPtr
+        while let cur = ptr {
+            defer { ptr = cur.pointee.ifa_next }
+            guard let sa = cur.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET6) else { continue }
+            var sin6 = UnsafeRawPointer(sa).assumingMemoryBound(to: sockaddr_in6.self).pointee
+            var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+            guard inet_ntop(AF_INET6, &sin6.sin6_addr, &buf, socklen_t(INET6_ADDRSTRLEN)) != nil else { continue }
+            if stripZoneID(String(cString: buf)).lowercased() == want { return String(cString: cur.pointee.ifa_name) }
+        }
+        return nil
+    }
+
     public static func snapshot(runningBundleIDs: [String] = []) -> RouteInfo {
         let hijack = RouteTable.liveDump().map { RouteTable.hijackPairPresent(dump: $0) } ?? false
         if hijack {

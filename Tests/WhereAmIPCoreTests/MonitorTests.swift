@@ -26,7 +26,12 @@ struct MockProbe: ProbeRunning {
 }
 struct MockRoute: RouteSnapshotting {
     var info = RouteInfo(defaultInterface: "en0")
+    // Fixed return for the scoped-route source-address-match fallback — deterministic and
+    // never touches the real network stack, unlike the protocol's default implementation
+    // (which defers to RouteInspector.interfaceHolding, a real getifaddrs walk).
+    var holding: String? = nil
     func snapshot() -> RouteInfo { info }
+    func interfaceHolding(ipv6: String) -> String? { holding }
 }
 /// A `RouteSnapshotting` whose snapshot can be changed mid-test (e.g. to simulate a VPN
 /// coming up between two calls) — plain `MockRoute` is an immutable value type, so tests that
@@ -495,6 +500,91 @@ final class MonitorTests: XCTestCase {
         XCTAssertEqual(s.exit?.countryCode, "NL", "exit falls back to the stale baseline when nothing fresh resolves")
         XCTAssertEqual(s.exit6?.countryCode, "DE")
         XCTAssertFalse(s.ipv6Leak, "a stale v4 baseline must never confirm a leak, even if it happens to mismatch a fresh exit6")
+    }
+
+    // MARK: - Scoped-route v6 egress attribution (field-verified PureVPN AR case)
+
+    func testScopedV6RouteAttributedViaSourceAddressMatch() async {
+        // Field root cause: PureVPN demotes (doesn't delete) the native v6 default route to an
+        // interface-SCOPED route when its tunnel comes up, so defaultRouteInterface6()'s
+        // unscoped lookup sees nothing (v6DefaultInterface nil) even though URLSession still
+        // leaks over it. When exit6 was freshly measured, Monitor must fall back to finding
+        // which local interface holds that exact address (mocked here as "en0", simulating
+        // RouteInspector.interfaceHolding finding it via getifaddrs) and treat that as the
+        // effective v6 egress — completing the leak rule's conditions.
+        let c = Counter()
+        let box = EventBox()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:9e8:a6e:100:c5af:613e:c5ba:e1e0"
+        let info4 = ExitInfo(ip: ip4, countryCode: "AR", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: nil, v6IsVPN: false),
+                                         holding: "en0"),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertTrue(s.ipv6Leak)
+        XCTAssertEqual(s.route.v6DefaultInterface, "en0", "effective v6 egress recovered via source-address match")
+        XCTAssertFalse(s.route.v6IsVPN)
+
+        let events = box.all().flatMap { $0 }
+        XCTAssertEqual(events.filter { if case .ipv6Leak = $0 { return true }; return false }.count, 1)
+    }
+    func testScopedV6RouteWithNoLocalAttributionStaysUnconfirmed() async {
+        // exit6's address matches no local interface at all (e.g. a NAT'd/tunneled v6 exit) --
+        // the fallback correctly finds nothing, fields stay nil, and the leak rule stays silent
+        // exactly as it would for "no v6 route found" today.
+        let c = Counter()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "AR", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: nil, v6IsVPN: false),
+                                         holding: nil),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertFalse(s.ipv6Leak)
+        XCTAssertNil(s.route.v6DefaultInterface)
+    }
+    func testScopedV6RouteAttributedToTunnelInterfaceStaysUnconfirmed() async {
+        // The source-address match lands on a utun (e.g. a dual-tunnel VPN that also tunnels
+        // v6, just via a scoped route for some reason) -- v6IsVPN must come out true, and the
+        // leak rule's `!v6IsVPN` conjunct correctly keeps it unconfirmed.
+        let c = Counter()
+        let ip4 = "1.2.3.4"; let ip6 = "2001:db8::1"
+        let info4 = ExitInfo(ip: ip4, countryCode: "AR", org: "PureVPN", provider: "mock", fetchedAt: Date())
+        let info6 = ExitInfo(ip: ip6, countryCode: "DE", org: "Deutsche Telekom", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: StackTestGeo(counter: c, chainFallback: nil, lookups: [ip4: info4, ip6: info6]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                                                          v6DefaultInterface: nil, v6IsVPN: false),
+                                         holding: "utun9"),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertFalse(s.ipv6Leak)
+        XCTAssertEqual(s.route.v6DefaultInterface, "utun9")
+        XCTAssertTrue(s.route.v6IsVPN)
     }
 }
 
