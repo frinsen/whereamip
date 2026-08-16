@@ -7,3 +7,5 @@ dist/
 .superpowers/
 .remember/
 .claude/
+scripts/e2e/secrets/
+scripts/e2e/logs/
