@@ -10,18 +10,21 @@ public struct MenuActions {
     public var quit: () -> Void
     public var copyUpdateCommand: () -> Void
     public var toggleUpdateChecks: () -> Void
+    public var toggleDNSProbe: () -> Void
     public init(copyIP: @escaping () -> Void = {}, refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping () -> Void = {},
-                toggleUpdateChecks: @escaping () -> Void = {}) {
+                toggleUpdateChecks: @escaping () -> Void = {},
+                toggleDNSProbe: @escaping () -> Void = {}) {
         self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
         self.copyUpdateCommand = copyUpdateCommand
         self.toggleUpdateChecks = toggleUpdateChecks
+        self.toggleDNSProbe = toggleDNSProbe
     }
 }
 
@@ -53,6 +56,7 @@ public enum MenuBuilder {
     public static func build(state: ExitState, style: MenuBarStyle,
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
+                             dnsProbeEnabled: Bool = true,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -87,6 +91,11 @@ public enum MenuBuilder {
                 let org = state.exit6?.org ?? "your ISP"
                 let cc = state.exit6?.countryCode ?? "?"
                 menu.addItem(info("⚠️ IPv6 leak — v6 exits via \(org) (\(cc))"))
+            }
+            if state.dns.leak == .confirmed {
+                menu.addItem(info("⚠️ DNS leak — queries answered via \(state.dns.egressIP ?? "?")"))
+            } else if state.dns.leak == .suspected {
+                menu.addItem(info("DNS leak suspected — verifying…"))
             }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }
@@ -163,6 +172,9 @@ public enum MenuBuilder {
         let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
         checkUpdates.state = updatesEnabled ? .on : .off
         settingsMenu.addItem(checkUpdates)
+        let dnsProbe = action("Check DNS egress") { actions.toggleDNSProbe() }
+        dnsProbe.state = dnsProbeEnabled ? .on : .off
+        settingsMenu.addItem(dnsProbe)
         settings.submenu = settingsMenu
         menu.addItem(settings)
 

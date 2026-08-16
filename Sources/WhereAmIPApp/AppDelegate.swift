@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func stateChanged(_ state: ExitState) {
         lastState = state
         let (title, image) = StatusItemRenderer.render(state.glyph(style: settings.menuBarStyle),
-                                                        ipv6Leak: state.ipv6Leak)
+                                                        warning: state.ipv6Leak || state.dns.leak == .confirmed)
         statusItem.button?.title = title ?? ""
         statusItem.button?.image = image
     }
@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             notificationsEnabled: settings.notificationsEnabled,
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
+            dnsProbeEnabled: settings.dnsProbeEnabled,
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -142,6 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         self.availableUpdate = nil
                     }
+                },
+                toggleDNSProbe: { [weak self] in
+                    guard let self else { return }
+                    self.settings.dnsProbeEnabled.toggle()
+                    Task { await self.monitor.fullRefresh() }
                 }))
         menu.removeAllItems()
         fresh.items.forEach { item in

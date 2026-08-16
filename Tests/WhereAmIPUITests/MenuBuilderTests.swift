@@ -177,17 +177,17 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(all.contains("IPv6:"))
     }
     func testStatusRendererAppendsBadgeForTextGlyph() {
-        let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: true)
+        let r = StatusItemRenderer.render(.text("🇩🇪"), warning: true)
         XCTAssertEqual(r.title, "🇩🇪 ⚠️")
         XCTAssertNil(r.image)
     }
     func testStatusRendererAppendsBadgeForFlagImage() {
-        let r = StatusItemRenderer.render(.flagImage(iso: "de"), ipv6Leak: true)
+        let r = StatusItemRenderer.render(.flagImage(iso: "de"), warning: true)
         XCTAssertNotNil(r.image)
         XCTAssertEqual(r.title, "⚠️")
     }
     func testStatusRendererNoBadgeWhenNotLeaking() {
-        let r = StatusItemRenderer.render(.text("🇩🇪"), ipv6Leak: false)
+        let r = StatusItemRenderer.render(.text("🇩🇪"), warning: false)
         XCTAssertEqual(r.title, "🇩🇪")
     }
 
@@ -220,5 +220,38 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
         XCTAssertTrue(menu.items.map(\.title).contains("DNS: 10.8.0.1 via utun13 · DoH  (+1 more)"))
+    }
+
+    func testDNSLeakWarningRowFirstAndBadgePredicate() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(menu.items.map(\.title).contains("⚠️ DNS leak — queries answered via 203.0.113.7"))
+        let (title, _) = StatusItemRenderer.render(.text("🇨🇿"), warning: true)
+        XCTAssertEqual(title, "🇨🇿 ⚠️")
+    }
+
+    func testDNSSuspectedRowIsQuieter() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.dns.leak = .suspected
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(menu.items.map(\.title).contains("DNS leak suspected — verifying…"))
+    }
+
+    func testDNSProbeToggleRow() {
+        var called = false
+        let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, dnsProbeEnabled: false,
+                                     actions: MenuActions(toggleDNSProbe: { called = true }))
+        let settings = menu.items.first { $0.title == "Settings" }?.submenu
+        let row = settings?.items.first { $0.title == "Check DNS egress" }
+        XCTAssertEqual(row?.state, .off)
+        (row?.representedObject as? AnyObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertTrue(called)
     }
 }
