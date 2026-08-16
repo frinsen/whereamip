@@ -7,7 +7,7 @@ e2e_describe() { echo "networksetup resolver swap to 9.9.9.9 on '$(_dns_service)
 e2e_available() {
   [ "${E2E_SUDO:-0}" = 1 ] || { echo "needs sudo"; return 1; }
 }
-e2e_up() { sudo -n networksetup -setdnsservers "$(_dns_service)" 9.9.9.9; }
+e2e_up() { E2E_DNS_SWAPPED=1; sudo -n networksetup -setdnsservers "$(_dns_service)" 9.9.9.9; }
 e2e_down() {
   if grep -q "There aren't any DNS Servers" "$E2E_SNAP_DIR/dns-servers.txt" 2>/dev/null; then
     sudo -n networksetup -setdnsservers "$(_dns_service)" "Empty"

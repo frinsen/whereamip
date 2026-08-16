@@ -23,6 +23,10 @@ E2E_SNAP_DIR="$E2E_LOG_DIR/snapshot"
 # bare call trips set -e) mid-scenario, e2e_restore_state below knows exactly
 # which backend(s) are still live and how to tear them down.
 E2E_ACTIVE_BACKEND=""
+# Set to 1 by dns-swap.sh's e2e_up the moment it actually mutates DNS servers,
+# so e2e_restore_state only attempts the DNS restore when there's something to
+# restore (never touched otherwise).
+E2E_DNS_SWAPPED=0
 
 e2e_snapshot_state() {
   mkdir -p "$E2E_SNAP_DIR"
@@ -71,15 +75,17 @@ e2e_restore_state() {
     done
   fi
 
-  local svc; svc="$(cat "$E2E_SNAP_DIR/primary-service.txt" 2>/dev/null)"
-  if [ -n "$svc" ] && [ -f "$E2E_SNAP_DIR/dns-servers.txt" ]; then
-    if grep -q "There aren't any DNS Servers" "$E2E_SNAP_DIR/dns-servers.txt"; then
-      sudo -n networksetup -setdnsservers "$svc" "Empty" 2>/dev/null \
-        || e2e_log "!!! DNS restore failed — run: sudo networksetup -setdnsservers '$svc' Empty"
-    else
-      # shellcheck disable=SC2046
-      sudo -n networksetup -setdnsservers "$svc" $(cat "$E2E_SNAP_DIR/dns-servers.txt") 2>/dev/null \
-        || e2e_log "!!! DNS restore failed — run: sudo networksetup -setdnsservers '$svc' <servers from $E2E_SNAP_DIR/dns-servers.txt>"
+  if [ "${E2E_DNS_SWAPPED:-0}" = 1 ]; then
+    local svc; svc="$(cat "$E2E_SNAP_DIR/primary-service.txt" 2>/dev/null)"
+    if [ -n "$svc" ] && [ -f "$E2E_SNAP_DIR/dns-servers.txt" ]; then
+      if grep -q "There aren't any DNS Servers" "$E2E_SNAP_DIR/dns-servers.txt"; then
+        sudo -n networksetup -setdnsservers "$svc" "Empty" 2>/dev/null \
+          || e2e_log "!!! DNS restore failed — run: sudo networksetup -setdnsservers '$svc' Empty"
+      else
+        # shellcheck disable=SC2046
+        sudo -n networksetup -setdnsservers "$svc" $(cat "$E2E_SNAP_DIR/dns-servers.txt") 2>/dev/null \
+          || e2e_log "!!! DNS restore failed — run: sudo networksetup -setdnsservers '$svc' <servers from $E2E_SNAP_DIR/dns-servers.txt>"
+      fi
     fi
   fi
   sudo -n pkill -f "openvpn --config $E2E_ROOT/secrets" 2>/dev/null \

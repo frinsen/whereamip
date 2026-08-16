@@ -46,6 +46,15 @@ route_changed_vs() {  # BASELINE_FILE — has the live route moved off the basel
   rm -f "$now"; return $rc
 }
 
+_e2e_active_remove() {  # NAME — rebuild E2E_ACTIVE_BACKEND excluding NAME (not a blanket clear;
+                         # other backends' tokens left by an earlier failed teardown must survive)
+  local _tok _out=""
+  for _tok in $E2E_ACTIVE_BACKEND; do
+    [ "$_tok" = "$1" ] || _out="$_out${_out:+ }$_tok"
+  done
+  E2E_ACTIVE_BACKEND="$_out"
+}
+
 run_backend_scenario() {  # NAME
   local name="$1" reason
   # Each backend sources fresh in a subshell-free context; unset optionals first.
@@ -68,11 +77,11 @@ run_backend_scenario() {  # NAME
     return 0
   fi
 
-  E2E_ACTIVE_BACKEND="$name"
+  E2E_ACTIVE_BACKEND="${E2E_ACTIVE_BACKEND:+$E2E_ACTIVE_BACKEND }$name"
   if ! e2e_up; then
     e2e_log "FAIL $name: up failed"; echo -e "ERROR\t$name\tup-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
     watch_stop
-    if e2e_down 2>/dev/null; then E2E_ACTIVE_BACKEND=""; fi
+    if e2e_down 2>/dev/null; then _e2e_active_remove "$name"; fi
     return 0
   fi
   if ! e2e_poll_until "$name route settled" 45 route_changed_vs "$base"; then
@@ -119,7 +128,7 @@ run_backend_scenario() {  # NAME
     && _a_result PASS "$name-layer2" "WhereAmIPE2ETests" \
     || _a_result FAIL "$name-layer2" "see $name-xctest.log"
 
-  if e2e_down; then E2E_ACTIVE_BACKEND=""; else e2e_log "WARN: $name down failed (restore trap will retry)"; fi
+  if e2e_down; then _e2e_active_remove "$name"; else e2e_log "WARN: $name down failed (restore trap will retry)"; fi
   e2e_poll_until "$name route restored" 45 sh -c \
     "'$WHEREAMIP_BIN' status --json | jq -e '.route.isVPN == $(jq -r .route.isVPN "$base")' >/dev/null" \
     || e2e_log "WARN: $name route not restored within 45s (continuing; restore trap is the backstop)"
@@ -182,7 +191,7 @@ run_cross_dnsswap_under_vpn() {
   fi
 
   source "./backends/$vpn.sh"
-  E2E_ACTIVE_BACKEND="$vpn"
+  E2E_ACTIVE_BACKEND="${E2E_ACTIVE_BACKEND:+$E2E_ACTIVE_BACKEND }$vpn"
   if ! e2e_up; then
     e2e_log "FAIL cross: $vpn up failed"
     echo -e "ERROR\tcross-dnsswap-under-vpn\t$vpn-up-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
