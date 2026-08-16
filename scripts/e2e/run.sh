@@ -99,6 +99,16 @@ run_backend_scenario() {  # NAME
     _a_result FAIL "$name-CONFIRMATION-GATE" "watch stream empty — gate unverifiable"
   fi
 
+  # Layer 2: real detectors against this live state.
+  local expect_vpn="$E2E_EXPECTS_VPN" iface_prefix=""
+  [ "$E2E_EXPECTS_VPN" = 1 ] && iface_prefix="utun"
+  (cd "$REPO_ROOT" && env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+      WHEREAMIP_E2E=1 E2E_EXPECT_VPN="$expect_vpn" E2E_EXPECT_IFACE_PREFIX="$iface_prefix" \
+      E2E_BACKEND="$name" E2E_DUMP_DIR="$E2E_LOG_DIR" \
+      swift test --filter WhereAmIPE2ETests >> "$E2E_LOG_DIR/$name-xctest.log" 2>&1) \
+    && _a_result PASS "$name-layer2" "WhereAmIPE2ETests" \
+    || _a_result FAIL "$name-layer2" "see $name-xctest.log"
+
   e2e_down || e2e_log "WARN: $name down failed (restore trap will retry)"
   e2e_poll_until "$name route restored" 45 sh -c \
     "'$WHEREAMIP_BIN' status --json | jq -e '.route.isVPN == $(jq -r .route.isVPN "$base")' >/dev/null"
