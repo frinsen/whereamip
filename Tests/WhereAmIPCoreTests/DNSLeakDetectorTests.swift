@@ -55,4 +55,28 @@ final class DNSLeakDetectorTests: XCTestCase {
         XCTAssertTrue(DNSLeakDetector.ipMatches("2a00:1450::5", prefixOrIP: "2a00:1450::5"))
         XCTAssertTrue(DNSLeakDetector.ipMatches("2a00:1450:0:0:0:0:0:5", prefixOrIP: "2a00:1450::5"))
     }
+    func testZeroScopePrefixIsNoMeasurement() {
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("0.0.0.0/0", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .confirmed), .confirmed)
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("0.0.0.0/0", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .none), .unknown)
+    }
+    func testUnparseableEgressIsNoMeasurement() {
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("1.2.3.0/999", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .none), .unknown)
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("not-an-ip", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .none), .unknown)
+    }
+    func testIsMeaningfulHelpers() {
+        XCTAssertTrue(DNSLeakDetector.isMeaningful("1.2.3.4"))
+        XCTAssertTrue(DNSLeakDetector.isMeaningful("2a00::1"))
+        XCTAssertTrue(DNSLeakDetector.isMeaningful("1.2.3.0/24"))
+        XCTAssertTrue(DNSLeakDetector.isMeaningful("2a00::/32"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful("0.0.0.0/0"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful("::/0"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful("1.2.3.0/999"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful("1.2.3.0/abc"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful("hello"))
+        XCTAssertFalse(DNSLeakDetector.isMeaningful(""))
+    }
 }
