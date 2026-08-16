@@ -11,12 +11,14 @@ install-ready notes per version.
 ### Added
 - **DNS support**: the dropdown, `whereamip status`, and JSON now show the
   resolvers macOS actually uses (per interface) and whether encrypted DNS
-  (DoH/DoT profile) is in force. A passive egress probe (TXT beacon via
-  mDNSResponder, so it sees exactly what real apps' lookups do) checks that DNS
-  queries actually exit through the VPN tunnel; a leak must survive two
-  consecutive checks before the ⚠️ badge and notification fire. `config set
-  dns false` disables the probe entirely (no query ever sent) — resolver
-  display stays, since it reads only local configuration.
+  (DoH/DoT profile) is in force. An active, lightweight egress probe — a TXT
+  lookup of a Google-operated beacon (`o-o.myaddr.l.google.com`) sent via
+  mDNSResponder on each full refresh, so it sees exactly what real apps'
+  lookups do — checks that DNS queries actually exit through the VPN tunnel;
+  a leak must survive two consecutive checks before the ⚠️ badge and
+  notification fire. `config set dns false` disables the probe entirely (no
+  query ever sent) — resolver display stays, since it reads only local
+  configuration.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
 - Version row in Settings.

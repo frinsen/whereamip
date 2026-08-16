@@ -84,4 +84,34 @@ final class RenderJSONTests: XCTestCase {
         state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false)]
         XCTAssertTrue(StateRenderer.human(state).contains("dns: 9.9.9.9"))
     }
+    func testHumanShowsDNSLeakConfirmedLine() {
+        var state = ExitState(connectivity: .online)
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        let h = StateRenderer.human(state)
+        XCTAssertTrue(h.contains("⚠️ DNS leak: queries answered via 203.0.113.7"))
+    }
+    func testHumanShowsDNSLeakConfirmedLineEvenWithoutResolvers() {
+        var state = ExitState(connectivity: .online)
+        XCTAssertTrue(state.dns.resolvers.isEmpty)
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        let h = StateRenderer.human(state)
+        XCTAssertTrue(h.contains("⚠️ DNS leak: queries answered via 203.0.113.7"))
+    }
+    func testHumanShowsDNSLeakSuspectedLine() {
+        var state = ExitState(connectivity: .online)
+        state.dns.leak = .suspected
+        let h = StateRenderer.human(state)
+        XCTAssertTrue(h.contains("DNS leak suspected — verifying…"))
+    }
+    func testHumanOmitsDNSLeakLineWhenNoneOrUnknown() {
+        var noneState = ExitState(connectivity: .online)
+        noneState.dns.leak = .none
+        XCTAssertFalse(StateRenderer.human(noneState).contains("DNS leak"))
+
+        var unknownState = ExitState(connectivity: .online)
+        unknownState.dns.leak = .unknown
+        XCTAssertFalse(StateRenderer.human(unknownState).contains("DNS leak"))
+    }
 }

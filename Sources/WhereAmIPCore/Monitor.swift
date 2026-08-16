@@ -216,13 +216,18 @@ public actor Monitor {
                                                       exit6: new.exit6,
                                                       route: new.route,
                                                       previous: state.dns.leak)
-                new.dns.egressIP = egress?.ip
-                new.dns.egressIsIPv6 = egress?.isIPv6 ?? false
+                // On a failed probe (egress nil), egressIP/egressIsIPv6/measuredAt describe the
+                // last SUCCESSFUL measurement together — preserve all three as a pair rather
+                // than nil-ing egressIP while keeping the old measuredAt (that mismatched pair
+                // is what degraded a confirmed row's "via ?" display below).
+                new.dns.egressIP = egress?.ip ?? state.dns.egressIP
+                new.dns.egressIsIPv6 = egress?.isIPv6 ?? state.dns.egressIsIPv6
                 new.dns.measuredAt = egress != nil ? Date() : state.dns.measuredAt
                 Log.dns.debug("verdict: egress=\(egress?.ip ?? "nil", privacy: .public) leak=\(new.dns.leak.rawValue, privacy: .public)")
             } else {
                 new.dns.leak = .unknown
                 new.dns.egressIP = nil
+                new.dns.egressIsIPv6 = false
                 new.dns.measuredAt = nil
             }
 

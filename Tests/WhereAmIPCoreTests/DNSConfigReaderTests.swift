@@ -52,4 +52,15 @@ final class DNSConfigReaderTests: XCTestCase {
                                serviceDNS: ["S": ["nonsense": true]])
         XCTAssertEqual(DNSConfigReader.parse(raw).resolvers, [])
     }
+
+    func testInterfaceNameFallsBackToDNSDictWhenNoMatchingIPv4Service() {
+        // Field-observed on a live utun VPN service: SCDynamicStore had no
+        // State:/Network/Service/<id>/IPv4 entry at all (so serviceIPv4[id] is absent), yet the
+        // DNS dict itself carried "InterfaceName": "utun6" alongside ServerAddresses. Without a
+        // fallback to that key, the resolver silently loses its interface attribution.
+        let raw = DNSRawConfig(
+            serviceDNS: ["BBBB-2222": ["ServerAddresses": ["10.64.0.1"], "InterfaceName": "utun6"]])
+        let (resolvers, _) = DNSConfigReader.parse(raw)
+        XCTAssertEqual(resolvers, [DNSResolver(address: "10.64.0.1", isIPv6: false, interface: "utun6")])
+    }
 }

@@ -56,7 +56,10 @@ public enum DNSConfigReader {
             add(addr, interface: nil)
         }
         for (id, dns) in raw.serviceDNS.sorted(by: { $0.key < $1.key }) {
-            let iface = raw.serviceIPv4[id]?["InterfaceName"] as? String
+            // Field-observed on a live utun VPN service: no matching State:/.../IPv4 entry
+            // existed at all, but the DNS dict itself carried "InterfaceName" alongside
+            // ServerAddresses — fall back to it rather than losing the attribution.
+            let iface = (raw.serviceIPv4[id]?["InterfaceName"] as? String) ?? (dns["InterfaceName"] as? String)
             for case let addr as String in (dns["ServerAddresses"] as? [Any]) ?? [] {
                 add(addr, interface: iface)
             }

@@ -31,6 +31,13 @@ public enum StateRenderer {
             if state.dns.encryption == .dot { d += " · DoT" }
             lines.append(d)
         }
+        // Leak surfacing matches the dropdown's warning-row spirit (MenuBuilder): visible even
+        // when the resolvers list itself is empty, so it never depends on the line above.
+        if state.dns.leak == .confirmed {
+            lines.append("⚠️ DNS leak: queries answered via \(state.dns.egressIP ?? "?")")
+        } else if state.dns.leak == .suspected {
+            lines.append("DNS leak suspected — verifying…")
+        }
         if state.route.hijackRoutePresent { lines.append("⚠ hijack routes (0/1 + 128/1) present") }
         if case .active(let ip, let country) = state.privateRelay {
             lines.append("Private Relay: ON — relay egress \(ip ?? "?")\(country.map { " (\($0))" } ?? "")")

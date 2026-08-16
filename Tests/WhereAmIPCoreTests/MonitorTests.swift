@@ -109,6 +109,17 @@ final class MutableStackTestGeo: GeoFetching, @unchecked Sendable {
     func lookup(ip: String) async -> ExitInfo? { snapshotLookup(ip) }
 }
 
+/// A lock-protected `Bool` that can be flipped mid-test (e.g. simulating the user toggling
+/// `dnsProbeEnabled` in Settings between two refreshes) — captured by `dnsProbeEnabled`'s
+/// closure, which plain `Bool` capture-by-value can't support.
+final class MutableFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool
+    init(_ value: Bool) { self.value = value }
+    func get() -> Bool { lock.lock(); defer { lock.unlock() }; return value }
+    func set(_ newValue: Bool) { lock.lock(); value = newValue; lock.unlock() }
+}
+
 /// Configurable stand-in for `LiveDNSConfigReader` — tests hand it a fixed resolver list and/or
 /// encryption verdict without touching the real SCDynamicStore.
 final class MockDNSConfig: DNSConfigReading, @unchecked Sendable {
@@ -241,6 +252,7 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
@@ -295,6 +307,7 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
@@ -347,6 +360,7 @@ final class MonitorTests: XCTestCase {
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
@@ -492,6 +506,50 @@ final class MonitorTests: XCTestCase {
         let s = await m.currentState()
         XCTAssertEqual(s.dns.leak, .unknown, "an explicit opt-out clears the verdict rather than preserving an alarm")
         XCTAssertNil(s.dns.egressIP)
+        XCTAssertFalse(s.dns.egressIsIPv6, "reset symmetry: the disabled branch must clear egressIsIPv6 too")
+    }
+
+    func testDisablingProbeAfterASuccessfulMeasurementResetsEgressIsIPv6() async {
+        // Reset symmetry (final-review fix): a prior successful v6 measurement must not leave
+        // egressIsIPv6 stuck true once the probe is turned off — every egress field resets
+        // together, not just egressIP/measuredAt.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("2001:db8::9", true))
+        let enabled = MutableFlag(true)
+        let m = makeMonitor(counter: c, dnsProbe: dnsProbe, dnsProbeEnabled: { enabled.get() })
+
+        await m.fullRefresh()
+        let afterEnabled = await m.currentState()
+        XCTAssertTrue(afterEnabled.dns.egressIsIPv6)
+
+        enabled.set(false)
+        await m.fullRefresh()
+        let afterDisabled = await m.currentState()
+        XCTAssertNil(afterDisabled.dns.egressIP)
+        XCTAssertFalse(afterDisabled.dns.egressIsIPv6)
+    }
+
+    func testFailedProbeAfterSuccessPreservesEgressIPAndMeasuredAtAsAPair() async {
+        // Final-review fix: a failed probe must never orphan egressIP from measuredAt — both
+        // describe the last SUCCESSFUL measurement together, or this is exactly the mismatched
+        // pair that degraded a confirmed row's "via ?" display.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let m = makeMonitor(counter: c, dnsProbe: dnsProbe)
+
+        await m.fullRefresh()
+        let afterSuccess = await m.currentState()
+        XCTAssertEqual(afterSuccess.dns.egressIP, "203.0.113.7")
+        XCTAssertNotNil(afterSuccess.dns.measuredAt)
+
+        dnsProbe.result = nil   // simulate a failed probe on the next refresh
+        await m.fullRefresh()
+        let afterFailure = await m.currentState()
+        XCTAssertEqual(afterFailure.dns.egressIP, afterSuccess.dns.egressIP,
+                       "egressIP must survive a failed probe, paired with the measuredAt below")
+        XCTAssertEqual(afterFailure.dns.measuredAt, afterSuccess.dns.measuredAt,
+                       "measuredAt must stay exactly the last SUCCESSFUL measurement's timestamp")
+        XCTAssertEqual(afterFailure.dns.egressIsIPv6, afterSuccess.dns.egressIsIPv6)
     }
 
     func testGenuineLeakStillDetected() async {
@@ -506,6 +564,7 @@ final class MonitorTests: XCTestCase {
                         route: route,
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
@@ -538,6 +597,7 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -569,6 +629,7 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: nil, v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -593,6 +654,7 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -616,6 +678,7 @@ final class MonitorTests: XCTestCase {
                                                           v6DefaultInterface: "en0", v6IsVPN: false)),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -648,6 +711,7 @@ final class MonitorTests: XCTestCase {
                         route: MockRoute(info: route),
                         httpIP: MockHTTPIP(counter: Counter(), ip: nil),
                         stackIP: stackIP,
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -695,6 +759,7 @@ final class MonitorTests: XCTestCase {
                                          holding: "en0"),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -725,6 +790,7 @@ final class MonitorTests: XCTestCase {
                                          holding: nil),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
@@ -751,6 +817,7 @@ final class MonitorTests: XCTestCase {
                                          holding: "utun9"),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
+                        dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
