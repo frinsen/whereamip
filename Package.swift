@@ -25,5 +25,6 @@ let package = Package(
         .executableTarget(name: "WhereAmIPApp", dependencies: ["WhereAmIPCore", "WhereAmIPUI"]),
         .testTarget(name: "WhereAmIPCoreTests", dependencies: ["WhereAmIPCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "WhereAmIPUITests", dependencies: ["WhereAmIPUI"]),
+        .testTarget(name: "WhereAmIPE2ETests", dependencies: ["WhereAmIPCore"]),
     ]
 )
