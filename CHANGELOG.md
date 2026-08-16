@@ -6,6 +6,21 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [Unreleased]
+
+### Added
+- **DNS support**: the dropdown, `whereamip status`, and JSON now show the
+  resolvers macOS actually uses (per interface) and whether encrypted DNS
+  (DoH/DoT profile) is in force. A passive egress probe (TXT beacon via
+  mDNSResponder, so it sees exactly what real apps' lookups do) checks that DNS
+  queries actually exit through the VPN tunnel; a leak must survive two
+  consecutive checks before the ⚠️ badge and notification fire. `config set
+  dns false` disables the probe entirely (no query ever sent) — resolver
+  display stays, since it reads only local configuration.
+- The IPv6 exit address is now always shown when measured (previously only
+  when its country differed from IPv4).
+- Version row in Settings.
+
 ## [0.3] — 2026-08-16
 
 ### Added

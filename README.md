@@ -14,6 +14,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Dropdown: public IP (click to copy), city/country, ISP/org, which VPN interface owns the default route, last-change timestamp
 - iCloud Private Relay awareness — knows Safari may exit somewhere your apps don't
 - Dual-stack IPv6 leak detection — probes your IPv4 and IPv6 exits independently (stack-pinned lookups, not a single dual-stack host); when a VPN owns the v4 route but IPv6 still exits natively and the two genuinely differ, a confirmed ⚠️ IPv6 leak warning shows up everywhere (menu bar badge, dropdown row, notification, CLI). Found in the field: PureVPN profiles that tunnel only IPv4 while native IPv6 keeps leaking via the home ISP
+- DNS resolver display and leak detection — shows which resolvers macOS uses (per interface) and whether encrypted DNS (DoH/DoT profile) is in force; optional passive probe via TXT beacon checks that queries exit through the VPN tunnel; `config set dns false` disables the probe
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications on exit/connectivity change (off by default), launch at login
@@ -56,10 +57,11 @@ $ whereamip status --json
 $ whereamip watch            # prints a new status line whenever exit IP, route, or connectivity changes
 $ whereamip watch --json
 
-$ whereamip config get       # notify=false / style=emoji / updates=true
+$ whereamip config get       # notify=false / style=emoji / updates=true / dns=true
 $ whereamip config set style code
 $ whereamip config set notify true
 $ whereamip config set updates false
+$ whereamip config set dns false
 ```
 
 ## FAQ
