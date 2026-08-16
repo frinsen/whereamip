@@ -1,1 +1,1 @@
-public let whereamipVersion = "0.2"
+public let whereamipVersion = "0.3"
