@@ -72,7 +72,7 @@ public enum RouteInspector {
     /// comparing two IPv6 address strings — link-local addresses carry a scope id that can
     /// differ in formatting between getsockname()'s result and getifaddrs()'s, even when they
     /// name the same interface.
-    private static func stripZoneID(_ s: String) -> String {
+    static func stripZoneID(_ s: String) -> String {
         s.split(separator: "%", maxSplits: 1).first.map(String.init) ?? s
     }
 
