@@ -50,7 +50,9 @@ public struct DNSEgressProbe: Sendable {
     /// then resumes; a queue-scheduled timeout resumes with whatever arrived (usually []).
     /// The DNSServiceRef is always deallocated on the same queue — never leaked, never raced.
     static func queryTXT(name: String, timeout: Double) async -> [String] {
-        final class Box {
+        // Confined to the single serial `queue` for its entire lifetime (assignment, mutation,
+        // and deallocation all happen there) — safe despite not being provably Sendable.
+        final class Box: @unchecked Sendable {
             var strings: [String] = []
             var cont: CheckedContinuation<[String], Never>?
             var sdRef: DNSServiceRef?
