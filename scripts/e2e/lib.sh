@@ -40,6 +40,10 @@ e2e_snapshot_state() {
 e2e_restore_state() {
   # Never let a failing restore step abort the remaining restores.
   set +e
+  # A run aborted mid-scenario (e.g. by set -e on an unguarded call) can leave
+  # the background `watch` process running; WATCH_PID is set by run.sh's
+  # watch_start and shared into this function via the sourced shell.
+  [ -n "${WATCH_PID:-}" ] && kill "$WATCH_PID" 2>/dev/null || true
   local svc; svc="$(cat "$E2E_SNAP_DIR/primary-service.txt" 2>/dev/null)"
   if [ -n "$svc" ] && [ -f "$E2E_SNAP_DIR/dns-servers.txt" ]; then
     if grep -q "There aren't any DNS Servers" "$E2E_SNAP_DIR/dns-servers.txt"; then

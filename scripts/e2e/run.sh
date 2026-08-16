@@ -40,9 +40,10 @@ watch_last_json() { tail -1 "$WATCH_OUT"; }
 watch_stop() { [ -n "$WATCH_PID" ] && kill "$WATCH_PID" 2>/dev/null || true; WATCH_PID=""; }
 
 route_changed_vs() {  # BASELINE_FILE — has the live route moved off the baseline?
-  local now; now="$(mktemp)"; e2e_status_json "$now"
-  [ "$(jq -r .route.defaultInterface "$now")" != "$(jq -r .route.defaultInterface "$1")" ] \
-    || [ "$(jq -r .route.isVPN "$now")" != "$(jq -r .route.isVPN "$1")" ]
+  local now rc=1; now="$(mktemp)"; e2e_status_json "$now" || { rm -f "$now"; return 1; }
+  if [ "$(jq -r .route.defaultInterface "$now")" != "$(jq -r .route.defaultInterface "$1")" ] \
+    || [ "$(jq -r .route.isVPN "$now")" != "$(jq -r .route.isVPN "$1")" ]; then rc=0; fi
+  rm -f "$now"; return $rc
 }
 
 run_backend_scenario() {  # NAME
@@ -56,7 +57,10 @@ run_backend_scenario() {  # NAME
   fi
   e2e_log "=== scenario: $name — $(e2e_describe)"
   local base="$E2E_LOG_DIR/$name-baseline.json"; e2e_status_json "$base"
-  watch_start "$name"
+  if ! watch_start "$name"; then
+    echo -e "ERROR\t$name\twatch-start-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    return 0
+  fi
 
   if ! e2e_up; then
     e2e_log "FAIL $name: up failed"; echo -e "ERROR\t$name\tup-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
@@ -91,6 +95,8 @@ run_backend_scenario() {  # NAME
   if [ -n "$wjson" ]; then
     echo "$wjson" > "$E2E_LOG_DIR/$name-watch-after-up.json"
     a_json_in "$E2E_LOG_DIR/$name-watch-after-up.json" '.dns.leak' 'unknown|none|suspected' "$name-CONFIRMATION-GATE"
+  else
+    _a_result FAIL "$name-CONFIRMATION-GATE" "watch stream empty — gate unverifiable"
   fi
 
   e2e_down || e2e_log "WARN: $name down failed (restore trap will retry)"
@@ -113,32 +119,66 @@ for b in $BACKENDS; do run_backend_scenario "$b"; done
 # refresh → the two-refresh gate progression becomes observable in ONE watch.
 run_cross_dnsswap_under_vpn() {
   local vpn=tailscale
+  local vpn_up=0 dns_up=0
   source "./backends/$vpn.sh";      e2e_available >/dev/null || { e2e_log "SKIP cross (no $vpn)"; return 0; }
   source "./backends/dns-swap.sh";  e2e_available >/dev/null || { e2e_log "SKIP cross (no sudo)"; return 0; }
   e2e_log "=== cross-scenario: dns-swap under $vpn"
   local base="$E2E_LOG_DIR/cross-baseline.json"; e2e_status_json "$base"
-  watch_start cross
-  source "./backends/$vpn.sh"; e2e_up
-  e2e_poll_until "cross: vpn up" 45 route_changed_vs "$base"
+
+  # Unconditional cleanup path — called from every exit route below so a
+  # failure partway through never leaves the VPN, resolver swap, or watch
+  # process stuck. Only tears down what was actually brought up.
+  cross_teardown() {
+    if [ "$dns_up" = 1 ]; then
+      source "./backends/dns-swap.sh"
+      e2e_down || e2e_log "WARN: cross dns-swap down failed (restore trap will retry)"
+    fi
+    if [ "$vpn_up" = 1 ]; then
+      source "./backends/$vpn.sh"
+      e2e_down || e2e_log "WARN: cross $vpn down failed (restore trap will retry)"
+    fi
+    watch_stop
+  }
+
+  if ! watch_start cross; then
+    echo -e "ERROR\tcross-dnsswap-under-vpn\twatch-start-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    return 0
+  fi
+
+  source "./backends/$vpn.sh"
+  if ! e2e_up; then
+    e2e_log "FAIL cross: $vpn up failed"
+    echo -e "ERROR\tcross-dnsswap-under-vpn\t$vpn-up-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    cross_teardown; return 0
+  fi
+  vpn_up=1
+  e2e_poll_until "cross: vpn up" 45 route_changed_vs "$base" \
+    || e2e_log "WARN: cross $vpn route did not settle within timeout"
   sleep 2
-  source "./backends/dns-swap.sh"; e2e_up          # resolver change → escalation
+
+  source "./backends/dns-swap.sh"
+  if ! e2e_up; then          # resolver change → escalation
+    e2e_log "FAIL cross: dns-swap up failed"
+    echo -e "ERROR\tcross-dnsswap-under-vpn\tdns-swap-up-failed" >> "$E2E_LOG_DIR/scenarios.tsv"
+    cross_teardown; return 0
+  fi
+  dns_up=1
   sleep 5                                           # escalated full refresh #2
   local w="$E2E_LOG_DIR/cross-after-swap.json"; watch_last_json > "$w"
   a_json_contains "$w" '.dns.resolvers[].address' 9.9.9.9 "cross-resolver-escalation-seen"
   a_record "$w" '.dns.leak' "cross-leak-after-2-full-refreshes"
-  source "./backends/dns-swap.sh"; e2e_down
-  source "./backends/$vpn.sh"; e2e_down
-  watch_stop
+
+  cross_teardown
   echo -e "DONE\tcross-dnsswap-under-vpn" >> "$E2E_LOG_DIR/scenarios.tsv"
 }
 run_cross_dnsswap_under_vpn
 
 {
   echo "# E2E run $(basename "$E2E_LOG_DIR")"
-  echo; echo "## Scenarios"; column -t -s$'\t' "$E2E_LOG_DIR/scenarios.tsv" 2>/dev/null
-  echo; echo "## Assertions"; column -t -s$'\t' "$E2E_LOG_DIR/assertions.tsv" 2>/dev/null
+  echo; echo "## Scenarios"; column -t -s$'\t' "$E2E_LOG_DIR/scenarios.tsv" 2>/dev/null || true
+  echo; echo "## Assertions"; column -t -s$'\t' "$E2E_LOG_DIR/assertions.tsv" 2>/dev/null || true
   echo; echo "## Calibration data (recorded, not judged)"
-  column -t -s$'\t' "$E2E_LOG_DIR/calibration.tsv" 2>/dev/null
+  column -t -s$'\t' "$E2E_LOG_DIR/calibration.tsv" 2>/dev/null || true
 } > "$E2E_LOG_DIR/summary.md"
 e2e_log "summary: $E2E_LOG_DIR/summary.md"
 [ "${E2E_FAILED:-0}" = 1 ] && { e2e_log "RESULT: FAILURES (see summary)"; exit 1; }
