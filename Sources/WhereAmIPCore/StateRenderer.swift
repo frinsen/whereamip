@@ -23,6 +23,14 @@ public enum StateRenderer {
             if let vpn = state.route.vpnName { r += " (\(vpn))" }
             lines.append(r)
         }
+        if let first = state.dns.resolvers.first {
+            var d = "dns: \(first.address)"
+            if let iface = first.interface { d += " (\(iface))" }
+            if state.dns.resolvers.count > 1 { d += " +\(state.dns.resolvers.count - 1)" }
+            if state.dns.encryption == .doh { d += " · DoH" }
+            if state.dns.encryption == .dot { d += " · DoT" }
+            lines.append(d)
+        }
         if state.route.hijackRoutePresent { lines.append("⚠ hijack routes (0/1 + 128/1) present") }
         if case .active(let ip, let country) = state.privateRelay {
             lines.append("Private Relay: ON — relay egress \(ip ?? "?")\(country.map { " (\($0))" } ?? "")")

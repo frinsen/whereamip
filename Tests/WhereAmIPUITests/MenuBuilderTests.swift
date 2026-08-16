@@ -209,4 +209,16 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(settings?.items.first?.title, "WhereAmIP v\(whereamipVersion)")
         XCTAssertEqual(settings?.items.first?.isEnabled, false)
     }
+
+    // MARK: - DNS
+
+    func testHealthyDNSRowShown() {
+        var state = ExitState(connectivity: .online)
+        state.dns.resolvers = [DNSResolver(address: "10.8.0.1", isIPv6: false, interface: "utun13"),
+                               DNSResolver(address: "9.9.9.9", isIPv6: false)]
+        state.dns.encryption = .doh
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(menu.items.map(\.title).contains("DNS: 10.8.0.1 via utun13 · DoH  (+1 more)"))
+    }
 }

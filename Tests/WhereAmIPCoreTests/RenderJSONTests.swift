@@ -78,4 +78,10 @@ final class RenderJSONTests: XCTestCase {
         state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
         XCTAssertFalse(StateRenderer.human(state).contains("IPv6:"))
     }
+
+    func testHumanShowsDNSLine() {
+        var state = ExitState(connectivity: .online)
+        state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false)]
+        XCTAssertTrue(StateRenderer.human(state).contains("dns: 9.9.9.9"))
+    }
 }

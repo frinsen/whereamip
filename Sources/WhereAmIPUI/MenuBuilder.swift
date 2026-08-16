@@ -112,6 +112,18 @@ public enum MenuBuilder {
             let via = country.flatMap { Flags.emoji(countryCode: $0) }.map { " via \($0)" } ?? ""
             block.append(info("Private Relay: ON — Safari exits\(via) elsewhere"))
         }
+        if let first = state.dns.resolvers.first {
+            var line = "DNS: \(first.address)"
+            if let iface = first.interface { line += " via \(iface)" }
+            switch state.dns.encryption {
+            case .doh: line += " · DoH"
+            case .dot: line += " · DoT"
+            case .plaintext: line += " · plaintext"
+            case .unknown: break
+            }
+            if state.dns.resolvers.count > 1 { line += "  (+\(state.dns.resolvers.count - 1) more)" }
+            block.append(info(line))
+        }
         if !block.isEmpty {
             menu.addItem(.separator())
             block.forEach { menu.addItem($0) }
