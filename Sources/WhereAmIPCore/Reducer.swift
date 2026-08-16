@@ -7,6 +7,7 @@ public enum Event: Equatable, Sendable {
     case privateRelayToggled(active: Bool)
     case leakSuspected(org: String?)
     case ipv6Leak(country: String?, org: String?)
+    case dnsLeakConfirmed(egressIP: String?, resolver: String?)
 }
 
 public enum Reducer {
@@ -41,6 +42,11 @@ public enum Reducer {
         // enough signal for true->false, and true->true would just be repeat noise.
         if !old.ipv6Leak, new.ipv6Leak {
             out.append(.ipv6Leak(country: new.exit6?.countryCode, org: new.exit6?.org))
+        }
+        // Only the transition INTO .confirmed notifies — .suspected is dropdown-only by design
+        // (confirmation-before-accusation), and confirmed→confirmed would be repeat noise.
+        if old.dns.leak != .confirmed, new.dns.leak == .confirmed {
+            out.append(.dnsLeakConfirmed(egressIP: new.dns.egressIP, resolver: new.dns.resolvers.first?.address))
         }
         return out
     }

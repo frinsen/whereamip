@@ -28,6 +28,10 @@ public enum NotificationText {
         case .ipv6Leak(_, let org):
             return ("⚠️ IPv6 leak detected",
                     "IPv6 traffic exits via \(org ?? "your ISP") — your VPN only tunnels IPv4")
+        case .dnsLeakConfirmed(let egressIP, _):
+            return ("⚠️ DNS leak detected",
+                    "DNS queries are answered outside your VPN tunnel"
+                    + (egressIP.map { " — resolver egress \($0)" } ?? ""))
         }
     }
 }

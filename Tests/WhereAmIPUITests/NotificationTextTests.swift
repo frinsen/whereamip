@@ -28,4 +28,9 @@ final class NotificationTextTests: XCTestCase {
         let t = NotificationText.text(for: .ipv6Leak(country: nil, org: nil))!
         XCTAssertTrue(t.body.contains("your ISP"))
     }
+    func testDNSLeakNotificationText() {
+        let t = NotificationText.text(for: .dnsLeakConfirmed(egressIP: "203.0.113.7", resolver: "192.168.1.1"))
+        XCTAssertEqual(t?.title, "⚠️ DNS leak detected")
+        XCTAssertTrue(t?.body.contains("203.0.113.7") ?? false)
+    }
 }

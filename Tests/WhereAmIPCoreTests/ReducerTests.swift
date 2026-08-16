@@ -82,4 +82,21 @@ final class ReducerTests: XCTestCase {
                                 new: state(.online, ip: "1.1.1.1", iso: "NL", ipv6Leak: false))
         XCTAssertFalse(ev.contains { if case .ipv6Leak = $0 { return true }; return false })
     }
+    func testDNSLeakConfirmedFiresOnlyOnTheEdge() {
+        var old = ExitState(); var new = ExitState()
+        new.dns.leak = .confirmed
+        new.dns.egressIP = "203.0.113.7"
+        new.dns.resolvers = [DNSResolver(address: "192.168.1.1", isIPv6: false)]
+        XCTAssertTrue(Reducer.events(old: old, new: new)
+            .contains(.dnsLeakConfirmed(egressIP: "203.0.113.7", resolver: "192.168.1.1")))
+        old.dns.leak = .confirmed   // persisting confirmed → no repeat event
+        XCTAssertFalse(Reducer.events(old: old, new: new)
+            .contains(.dnsLeakConfirmed(egressIP: "203.0.113.7", resolver: "192.168.1.1")))
+    }
+    func testSuspectedDoesNotFireEvent() {
+        var new = ExitState(); new.dns.leak = .suspected
+        XCTAssertTrue(Reducer.events(old: ExitState(), new: new).allSatisfy {
+            if case .dnsLeakConfirmed = $0 { return false } else { return true }
+        })
+    }
 }
