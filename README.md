@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon-source.svg" width="140" alt="WhereAmIP icon — a mesh flag with a location pin and network route lines">
+</p>
+
 # WhereAmIP
 
 > Where am I(P)? — a native macOS menu bar app that shows the country flag of your current internet exit point, tells you when your connection is *actually* dead, and untangles what your VPNs and iCloud Private Relay are really doing to your traffic.

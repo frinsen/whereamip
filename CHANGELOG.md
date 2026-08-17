@@ -6,6 +6,14 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [0.3.1] — 2026-08-17
+
+### Added
+- App icon: a mesh flag with a location pin and network route lines. Vector
+  source lives in `docs/icon-source.svg`; every `.icns` size is rendered
+  straight from the vector for crisp small sizes. Shown in Dock, Finder,
+  Cmd-Tab, and the README.
+
 ## [0.3] — 2026-08-16
 
 ### Added
