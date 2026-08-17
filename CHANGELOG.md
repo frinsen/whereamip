@@ -6,6 +6,33 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [Unreleased]
+
+### Fixed
+- **Restart/relaunch could silently drop the new instance.** Field bug from
+  the first real 0.3.2→0.4 upgrade: clicking "↻ Restart to finish update" (or
+  plain "Restart WhereAmIP") terminated the running process but the new one
+  sometimes never launched — zero `whereamip` processes left afterward. The
+  old mechanism fired `open -n <path>` and then called `NSApp.terminate`
+  after a fixed 0.5s delay; that delay was a race, not a synchronization —
+  if this process (same bundle ID as the one being launched) died while
+  Launch Services was still mid-handshake on the pending launch, LS could
+  coalesce/abort it. Replaced with a detached waiter that polls for this
+  process's PID to actually disappear before running `open`, then terminates
+  immediately with no arbitrary delay — closing the race window entirely.
+- **Welcome window's Show Notifications checkbox could disagree with
+  Settings.** Reopening the welcome window (Settings ▸ Show Welcome Window)
+  with notifications already enabled showed the checkbox unchecked, directly
+  under a header claiming "reflects current settings". The original
+  "never pre-checked" rule was written for first-run only (where the setting
+  is always off anyway) and stopped being true the moment the window became
+  reopenable. Now mirrors `notificationsEnabled` like its two sibling
+  checkboxes, with one refinement: if the OS-level permission has actually
+  been denied, it shows unchecked regardless of the stored setting (an
+  enabled setting that can't deliver anything is honestly "off"), alongside
+  the existing denied-hint. The permission dialog still only ever appears as
+  a direct result of actively checking the box from off.
+
 ## [0.4] — 2026-08-17
 
 ### Added

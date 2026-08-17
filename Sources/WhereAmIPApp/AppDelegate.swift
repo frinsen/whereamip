@@ -165,18 +165,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // the newer opt-path bundle) and the plain "Restart WhereAmIP" row (which
     // targets our own running bundle). `open -n` — rather than exec'ing the
     // binary directly — properly re-registers the new instance with Launch
-    // Services; terminating only after a short delay avoids racing that
-    // handoff. The new instance recreates its own status item, so a brief
+    // Services. The new instance recreates its own status item, so a brief
     // moment with no (or two) menu bar icons during the switch is expected
     // and acceptable.
+    //
+    // Field bug (first real 0.3.2→0.4 upgrade): the previous version fired
+    // `open -n <path>` immediately, then called `NSApp.terminate` after a
+    // fixed 0.5s delay. That delay was a race, not a synchronization — when
+    // this process (same bundle ID as the one being launched) dies while
+    // Launch Services is still mid-handshake on the pending launch, LS
+    // coalesces/aborts it and the new instance never appears. Controller
+    // verified zero whereamip processes running after a real restart.
+    //
+    // Fix: spawn a detached waiter that *polls for our PID to actually
+    // disappear* (`kill -0` merely tests whether a process exists — no
+    // signal sent, not a kill) before running `open`, then terminate
+    // ourselves immediately with no arbitrary delay at all. The waiter can
+    // only reach `open` after we are provably gone, closing the exact race
+    // window LS was hitting. Process children are never tied to the
+    // spawning app's lifecycle in a way `NSApp.terminate()` could kill —
+    // POSIX reparents orphaned children to survive their parent's exit —
+    // so the waiter genuinely outlives us; verified this empirically too
+    // (see the manual relaunch smoke test in the commit for this fix).
     func relaunch(from path: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-n", path]
-        try? process.run()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NSApp.terminate(nil)
+        let pid = ProcessInfo.processInfo.processIdentifier
+        // Path travels via environment rather than shell string
+        // interpolation, sidestepping shell quoting/escaping entirely —
+        // today's paths never contain quotes, but this doesn't rely on that
+        // staying true forever.
+        let script = "while /bin/kill -0 \(pid) 2>/dev/null; do /bin/sleep 0.1; done; /usr/bin/open \"$RELAUNCH_PATH\""
+        let waiter = Process()
+        waiter.executableURL = URL(fileURLWithPath: "/bin/sh")
+        waiter.arguments = ["-c", script]
+        waiter.environment = ["RELAUNCH_PATH": path]
+        do {
+            try waiter.run()
+        } catch {
+            // A swallowed spawn failure was part of why the field bug was
+            // silent: if the waiter never launches, terminating anyway would
+            // leave the user with no app running at all and no clue why.
+            // Log it and bail out instead — doing nothing is strictly better
+            // than vanishing with nothing to show for it.
+            Log.monitor.error("relaunch: failed to spawn waiter for \(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            return
         }
+        NSApp.terminate(nil)   // waiter fires only once our PID is truly gone — no race
     }
 
     func eventsHappened(_ events: [Event]) {

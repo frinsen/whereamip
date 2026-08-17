@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import UserNotifications
 import WhereAmIPCore
 
 /// Welcome window: shown once on first launch, and again on a
@@ -111,6 +112,11 @@ final class WelcomeWindowController: NSWindowController {
         super.init(window: window)
         buildContent(headingText: headingText)
         window.center()
+        // Async, read-only correction on top of the synchronous
+        // settings.notificationsEnabled guess above — see
+        // refreshNotifyCheckboxFromTruth()'s doc for why this can't just
+        // run synchronously during buildContent().
+        refreshNotifyCheckboxFromTruth()
     }
 
     @available(*, unavailable)
@@ -184,13 +190,18 @@ final class WelcomeWindowController: NSWindowController {
         // to the caption below instead of living in the checkbox label.
         notifyCheckbox = NSButton(checkboxWithTitle: "Show Notifications",
                                    target: self, action: #selector(toggleNotify))
-        // Never pre-checked, regardless of the actual current setting — the
-        // system permission dialog may only ever appear as a *direct* result
-        // of the user clicking this checkbox (or the Settings menu toggle),
-        // never just from this window opening. On the launches where this
-        // window shows (first run / milestone re-trigger), notifications
-        // default to off anyway, so this rarely disagrees with reality.
-        notifyCheckbox.state = .off
+        // Reflects live state, like its two siblings (Launch at Login, Add
+        // to Applications folder) — NOT hardcoded off. Field bug: the
+        // original "never pre-checked" rule was written for first-run only,
+        // where notificationsEnabled is always false anyway, so it silently
+        // disagreed with reality the moment this window could be reopened
+        // later (Settings ▸ Show Welcome Window) with the setting already
+        // on — screenshot showed Settings ✓ checked, welcome window
+        // unchecked, right under a header literally claiming "reflects
+        // current settings". Refined further once the real system
+        // authorization is known — see refreshNotifyCheckboxFromTruth(),
+        // called from init() after buildContent() returns.
+        notifyCheckbox.state = settings.notificationsEnabled ? .on : .off
 
         // Single-line (not wrapping) label, so it must fit the caption's
         // available width (372 - checkboxTextIndent = 353pt) at this 10pt
@@ -368,6 +379,33 @@ final class WelcomeWindowController: NSWindowController {
                 self.settings.notificationsEnabled = granted
                 self.notifyCheckbox.state = granted ? .on : .off
                 self.notifyHintActive = false
+            }
+        }
+    }
+
+    // Corrects the checkbox's synchronous settings.notificationsEnabled
+    // guess (set in buildContent()) against the *real* OS-level
+    // authorization, once known. Deliberately calls
+    // `UNUserNotificationCenter.getNotificationSettings` directly rather
+    // than going through `NotificationPermissionFlow.requestEnable` — that
+    // helper's `.notDetermined` branch calls `requestAuthorization`, which
+    // would pop the system permission dialog just from this window opening.
+    // This only ever *reads* the current status; the invariant that the
+    // dialog may only appear as a direct result of the user actively
+    // checking the box from off (toggleNotify()) is unchanged.
+    //
+    // An enabled setting the OS has since denied is honestly "off": showing
+    // it checked would just be a second copy of the exact bug this fixes
+    // (Settings said on, reality said no) — so denied always wins, and also
+    // surfaces the same denied-hint toggleNotify() shows on a live attempt,
+    // via the shared status slot.
+    private func refreshNotifyCheckboxFromTruth() {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] notifSettings in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let denied = notifSettings.authorizationStatus == .denied
+                self.notifyCheckbox.state = (self.settings.notificationsEnabled && !denied) ? .on : .off
+                self.notifyHintActive = denied
             }
         }
     }
