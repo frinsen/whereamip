@@ -1,0 +1,182 @@
+import AppKit
+import WhereAmIPCore
+
+/// The welcome window's prose: which heading it shows, and the Markdown body that
+/// goes under it.
+///
+/// Body copy is bundled Markdown (`Resources/welcome/*.md`) rather than strings,
+/// because it is per-release prose with structure — the first-run pitch in
+/// `intro.md`, and one `<milestone>.md` per release that earns a re-show. Adding a
+/// milestone's highlights is therefore a new file plus a `welcomeMilestone` bump,
+/// with no Swift involved.
+///
+/// Lives in WhereAmIPUI, not in the App target, for one blunt reason: the App
+/// target is an executable with no test target, and this decision (first-run pitch
+/// vs. which release's highlights, and the fallback when a file is missing) is
+/// exactly the part that must not regress silently.
+public enum WelcomeContent {
+    /// Heading + body markdown for a given stored `welcomedMilestone`.
+    public struct Copy: Equatable {
+        public let heading: String
+        public let markdown: String
+    }
+
+    /// Last resort when the resource bundle itself can't be found — the same
+    /// never-crash convention as the flag assets falling back to emoji. It is the
+    /// only user-facing sentence still living in Swift, and it exists so a broken
+    /// bundle shows a true (if terse) window rather than a blank one or a raw path.
+    static let fallbackPitch =
+        "WhereAmIP shows the country flag of your real internet exit in the menu bar."
+
+    /// First run (nothing acknowledged yet) gets the plain welcome heading and the
+    /// intro pitch. A milestone re-trigger gets "what's new" — titled with the
+    /// MILESTONE version, not the running one: the window re-opened because that
+    /// release earned it, and the running build may already be several patch
+    /// releases past it. A milestone with no bundled highlights falls back to the
+    /// intro copy rather than showing an empty window (or, worse, a file path).
+    public static func copy(for storedMilestone: String) -> Copy {
+        guard !storedMilestone.isEmpty else {
+            return Copy(heading: L10n.string(.welcomeHeadingFirst, whereamipVersion),
+                        markdown: markdown(milestone: nil))
+        }
+        return Copy(heading: L10n.string(.welcomeHeadingMilestone, welcomeMilestone),
+                    markdown: markdown(milestone: welcomeMilestone))
+    }
+
+    /// Bundled Markdown for `milestone`, or the intro pitch (nil milestone, missing
+    /// file, empty file).
+    public static func markdown(milestone: String?) -> String {
+        if let milestone, isSafeFileStem(milestone), let text = load(milestone) { return text }
+        return load("intro") ?? fallbackPitch
+    }
+
+    private static func load(_ name: String) -> String? {
+        guard let url = uiResourceBundle.url(forResource: "welcome/\(name)", withExtension: "md"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// `welcomeMilestone` is a maintainer-set constant, not user input — this is
+    /// belt-and-suspenders so a typo can never turn into a path that escapes the
+    /// bundle's welcome/ directory.
+    private static func isSafeFileStem(_ name: String) -> Bool {
+        !name.isEmpty && name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }
+            && !name.contains("..")
+    }
+
+    // MARK: - rendering
+
+    private struct Block {
+        var text: String
+        var isBullet: Bool
+    }
+
+    /// Renders the small Markdown subset the welcome copy uses — paragraphs,
+    /// `- ` bullets, and inline `**bold**`/`*italic*` — for an AppKit label.
+    /// Deliberately not a Markdown engine and deliberately dependency-free:
+    /// anything richer belongs in a document, not in a 420pt-wide dialog.
+    ///
+    /// Bullets are always left-aligned with a hanging indent (a centered list is
+    /// unreadable); plain paragraphs follow `alignment`, which keeps the
+    /// first-run pitch centered exactly as it has always been. Colors are set
+    /// explicitly because an attributed string ignores the label's own textColor,
+    /// which would render black-on-black in dark mode.
+    public static func rendered(_ markdown: String, font: NSFont,
+                                alignment: NSTextAlignment = .center,
+                                color: NSColor = .labelColor) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        let blocks = parse(markdown)
+        for (index, block) in blocks.enumerated() {
+            if index > 0 { out.append(NSAttributedString(string: "\n")) }
+            let style = NSMutableParagraphStyle()
+            style.alignment = block.isBullet ? .left : alignment
+            style.lineBreakMode = .byWordWrapping
+            // Space between items, not blank lines: a blank line is a full line
+            // box tall and would make the window grow noticeably per bullet.
+            if index < blocks.count - 1 { style.paragraphSpacing = 5 }
+            if block.isBullet {
+                style.headIndent = bulletIndent
+                style.firstLineHeadIndent = 0
+            }
+            let text = block.isBullet ? bulletPrefix + block.text : block.text
+            let rendered = NSMutableAttributedString(attributedString: inline(text, font: font))
+            let range = NSRange(location: 0, length: rendered.length)
+            rendered.addAttributes([.paragraphStyle: style, .foregroundColor: color], range: range)
+            out.append(rendered)
+        }
+        return out
+    }
+
+    static let bulletPrefix = "• "
+    private static let bulletIndent: CGFloat = 11
+
+    /// Groups hard-wrapped source lines into blocks: a blank line ends one, a
+    /// `- `/`* ` line starts a bullet, `#` headings lose their hashes, and every
+    /// other line continues the block it follows (which is what lets the .md files
+    /// stay wrapped at a readable width in an editor).
+    private static func parse(_ markdown: String) -> [Block] {
+        var blocks: [Block] = []
+        var current: Block?
+        func flush() {
+            if let current, !current.text.isEmpty { blocks.append(current) }
+            current = nil
+        }
+        for rawLine in markdown.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty {
+                flush()
+            } else if let item = bulletBody(line) {
+                flush()
+                current = Block(text: item, isBullet: true)
+            } else if line.hasPrefix("#") {
+                flush()
+                current = Block(text: line.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces),
+                                isBullet: false)
+                flush()
+            } else if current != nil {
+                current?.text += " " + line
+            } else {
+                current = Block(text: line, isBullet: false)
+            }
+        }
+        flush()
+        return blocks
+    }
+
+    private static func bulletBody(_ line: String) -> String? {
+        for marker in ["- ", "* "] where line.hasPrefix(marker) {
+            return String(line.dropFirst(marker.count))
+        }
+        return nil
+    }
+
+    /// Inline Markdown only. `AttributedString(markdown:)` records emphasis as an
+    /// `inlinePresentationIntent` *attribute* rather than as a bold/italic font, so
+    /// the intents are mapped onto real fonts here — without that step `**bold**`
+    /// parses away to nothing visible.
+    private static func inline(_ text: String, font: NSFont) -> NSAttributedString {
+        guard let parsed = try? AttributedString(
+            markdown: text,
+            options: .init(allowsExtendedAttributes: false,
+                           interpretedSyntax: .inlineOnlyPreservingWhitespace,
+                           failurePolicy: .returnPartiallyParsedIfPossible)) else {
+            // Unparseable markdown shows as its own source rather than vanishing.
+            return NSAttributedString(string: text, attributes: [.font: font])
+        }
+        let result = NSMutableAttributedString(attributedString: NSAttributedString(parsed))
+        let whole = NSRange(location: 0, length: result.length)
+        result.addAttribute(.font, value: font, range: whole)
+        result.enumerateAttribute(.inlinePresentationIntent, in: whole) { value, range, _ in
+            guard let raw = (value as? NSNumber)?.uintValue else { return }
+            let intent = InlinePresentationIntent(rawValue: raw)
+            var traits: NSFontTraitMask = []
+            if intent.contains(.stronglyEmphasized) { traits.insert(.boldFontMask) }
+            if intent.contains(.emphasized) { traits.insert(.italicFontMask) }
+            guard !traits.isEmpty else { return }
+            result.addAttribute(.font, value: NSFontManager.shared.convert(font, toHaveTrait: traits),
+                                range: range)
+        }
+        return result
+    }
+}
