@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "whereamip",
+    defaultLocalization: "en",
     platforms: [.macOS(.v13)],
     products: [
         .library(name: "WhereAmIPCore", targets: ["WhereAmIPCore"]),
@@ -15,7 +16,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "WhereAmIPCore", resources: [.copy("Resources")]),
-        .target(name: "WhereAmIPUI", dependencies: ["WhereAmIPCore"], resources: [.copy("Resources/flags")]),
+        .target(name: "WhereAmIPUI", dependencies: ["WhereAmIPCore"], resources: [.copy("Resources/flags"), .copy("Resources/welcome"),
+                                       .process("Resources/en.lproj")]),
         .executableTarget(name: "whereamip-cli",
                           dependencies: ["WhereAmIPCore",
                                          .product(name: "ArgumentParser", package: "swift-argument-parser")],

@@ -2,6 +2,7 @@ import AppKit
 import ServiceManagement
 import UserNotifications
 import WhereAmIPCore
+import WhereAmIPUI
 
 /// Welcome window: shown once on first launch, and again on a
 /// maintainer-bumped `welcomeMilestone` (see `shouldShowWelcome(stored:)` in
@@ -78,15 +79,14 @@ final class WelcomeWindowController: NSWindowController {
     init(settings: Settings) {
         self.settings = settings
         // First run (never acknowledged anything yet) gets the plain welcome
-        // copy; a milestone re-trigger (welcomedMilestone non-empty, but
-        // older than the current welcomeMilestone) gets "what's new" framing
-        // instead — same body/toggles either way, just the in-content
-        // heading differs. The window's own titlebar title stays a plain
-        // "WhereAmIP" (see buildContent) so the version isn't shown twice.
-        let isFirstRun = settings.welcomedMilestone.isEmpty
-        let headingText = isFirstRun
-            ? "Welcome to WhereAmIP v\(whereamipVersion)"
-            : "WhereAmIP v\(whereamipVersion) — what's new"
+        // heading and the intro pitch; a milestone re-trigger (welcomedMilestone
+        // non-empty, but older than the current welcomeMilestone) gets "what's
+        // new" framing and that milestone's bundled highlights instead. Both
+        // the decision and the copy live in WhereAmIPUI's WelcomeContent (pure,
+        // unit-tested there) — this window only lays out whatever it hands
+        // back. The window's own titlebar title stays a plain "WhereAmIP" (see
+        // buildContent) so the version isn't shown twice.
+        let copy = WelcomeContent.copy(for: settings.welcomedMilestone)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             // No .resizable — this is a small fixed-size informational window.
@@ -97,7 +97,7 @@ final class WelcomeWindowController: NSWindowController {
             backing: .buffered, defer: false)
         // Plain, not the versioned heading text: avoids showing "Welcome to
         // WhereAmIP vX" twice (titlebar + in-content heading, ~240px apart).
-        window.title = "WhereAmIP"
+        window.title = L10n.string(.welcomeWindowTitle)
         // Close-only dialog: no miniaturize (nothing to restore to), no zoom
         // (layout is fixed-size, stretching it would just break it). The
         // style mask already omits .resizable/.miniaturizable, but the
@@ -110,7 +110,7 @@ final class WelcomeWindowController: NSWindowController {
         // and callers may re-show it — keep it alive for the app's lifetime.
         window.isReleasedWhenClosed = false
         super.init(window: window)
-        buildContent(headingText: headingText)
+        buildContent(copy: copy)
         window.center()
         // Async, read-only correction on top of the synchronous
         // settings.notificationsEnabled guess above — see
@@ -122,7 +122,7 @@ final class WelcomeWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 
-    private func buildContent(headingText: String) {
+    private func buildContent(copy: WelcomeContent.Copy) {
         guard let window else { return }
 
         let iconView: NSView
@@ -144,28 +144,30 @@ final class WelcomeWindowController: NSWindowController {
             iconView = label
         }
 
-        let heading = NSTextField(labelWithString: headingText)
+        let heading = NSTextField(labelWithString: copy.heading)
         heading.font = .boldSystemFont(ofSize: 15)
         heading.alignment = .center
 
-        let body = NSTextField(wrappingLabelWithString:
-            "WhereAmIP lives in your menu bar and shows the country flag of your real internet " +
-            "exit. The flag flips the moment a VPN takes over your default route, and warns you " +
-            "about IPv6 leaks and connections that claim to be online but aren't.")
-        body.alignment = .center
-        body.font = .systemFont(ofSize: 12)
+        // Bundled Markdown, rendered once here, before the window is ever shown —
+        // so a longer "what's new" body resolves into a taller window at open
+        // (the stack's fitting size, see the bottom constraint below) and never
+        // resizes afterwards. Nothing re-renders this label at runtime.
+        let bodyFont = NSFont.systemFont(ofSize: 12)
+        let body = NSTextField(wrappingLabelWithString: "")
+        body.font = bodyFont
+        body.attributedStringValue = WelcomeContent.rendered(copy.markdown, font: bodyFont,
+                                                             alignment: .center)
 
-        let hint = NSTextField(wrappingLabelWithString:
-            "Can't see the flag? A crowded menu bar may hide it behind the notch.")
+        let hint = NSTextField(wrappingLabelWithString: L10n.string(.welcomeHint))
         hint.alignment = .center
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
 
         // MARK: setup band — header + the three live-state toggles
 
-        let setupHeader = NSTextField(labelWithString: "Your setup")
+        let setupHeader = NSTextField(labelWithString: L10n.string(.welcomeSetupHeader))
         setupHeader.font = .systemFont(ofSize: 11, weight: .semibold)
-        let setupHeaderCaption = NSTextField(labelWithString: "(reflects current settings)")
+        let setupHeaderCaption = NSTextField(labelWithString: L10n.string(.welcomeSetupCaption))
         setupHeaderCaption.font = .systemFont(ofSize: 10)
         setupHeaderCaption.textColor = .secondaryLabelColor
         // So pre-checked boxes below (e.g. Launch at Login already on) read
@@ -175,11 +177,11 @@ final class WelcomeWindowController: NSWindowController {
         setupHeaderRow.alignment = .firstBaseline
         setupHeaderRow.spacing = 4
 
-        launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at Login",
+        launchAtLoginCheckbox = NSButton(checkboxWithTitle: L10n.string(.settingsLaunchAtLogin),
                                           target: self, action: #selector(toggleLaunchAtLogin))
         launchAtLoginCheckbox.state = SMAppService.mainApp.status == .enabled ? .on : .off
 
-        applicationsCheckbox = NSButton(checkboxWithTitle: "Add to Applications folder",
+        applicationsCheckbox = NSButton(checkboxWithTitle: L10n.string(.settingsApplicationsLink),
                                          target: self, action: #selector(toggleApplications))
         applicationsCheckbox.state = ApplicationsLink.isLinked() ? .on : .off
 
@@ -188,7 +190,7 @@ final class WelcomeWindowController: NSWindowController {
         // Applications folder, Check for Updates), matching System Settings'
         // "Notifications" vocabulary for the noun itself; the detail moves
         // to the caption below instead of living in the checkbox label.
-        notifyCheckbox = NSButton(checkboxWithTitle: "Show Notifications",
+        notifyCheckbox = NSButton(checkboxWithTitle: L10n.string(.settingsNotifications),
                                    target: self, action: #selector(toggleNotify))
         // Reflects live state, like its two siblings (Launch at Login, Add
         // to Applications folder) — NOT hardcoded off. Field bug: the
@@ -211,7 +213,7 @@ final class WelcomeWindowController: NSWindowController {
         // or connectivity changes. Asks for macOS permission when enabled.",
         // 465pt) and its proposed fallback (410pt) both overflowed, so this
         // is trimmed further (341pt) to actually fit.
-        let notifyCaption = NSTextField(labelWithString: "Alerts on exit, route, or connectivity changes. Asks macOS permission.")
+        let notifyCaption = NSTextField(labelWithString: L10n.string(.welcomeNotifyCaption))
         notifyCaption.font = .systemFont(ofSize: 10)
         notifyCaption.textColor = .secondaryLabelColor
         notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent
@@ -274,12 +276,12 @@ final class WelcomeWindowController: NSWindowController {
 
         // MARK: commit band — privacy note + Done
 
-        let privacy = NSTextField(wrappingLabelWithString: "No tracking, no history, no logs.")
+        let privacy = NSTextField(wrappingLabelWithString: L10n.string(.welcomePrivacy))
         privacy.font = .systemFont(ofSize: 10)
         privacy.textColor = .secondaryLabelColor
         privacy.alignment = .center
 
-        let doneButton = NSButton(title: "Done", target: self, action: #selector(done))
+        let doneButton = NSButton(title: L10n.string(.welcomeDone), target: self, action: #selector(done))
         doneButton.bezelStyle = .rounded
         doneButton.keyEquivalent = "\r"   // Return triggers Done
         // Belt-and-suspenders for the filled/blue default-button look on top
@@ -424,7 +426,7 @@ final class WelcomeWindowController: NSWindowController {
             mergedStatusView.title = error
             mergedStatusView.contentTintColor = .systemRed
         } else if notifyHintActive {
-            mergedStatusView.title = "Notifications are disabled in System Settings — open Notifications settings"
+            mergedStatusView.title = L10n.string(.welcomeNotifyHint)
             mergedStatusView.contentTintColor = .linkColor
         } else {
             mergedStatusView.title = ""

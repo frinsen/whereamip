@@ -107,7 +107,7 @@ public enum MenuBuilder {
         // "run brew upgrade" again would just tell the user to redo what
         // they've already done. Only one of these two rows is ever shown.
         if let restartUpdate {
-            menu.addItem(action("↻ Restart to finish update (v\(restartUpdate))") {
+            menu.addItem(action(L10n.string(.menuUpdateRestart, restartUpdate)) {
                 actions.restartAction()
             })
             menu.addItem(.separator())
@@ -115,7 +115,7 @@ public enum MenuBuilder {
             // Quiet update hint — never a popup or badge, just the first row when
             // a newer release exists. Clicking copies the brew command; the app
             // itself never downloads or modifies anything.
-            menu.addItem(action("⬆︎ Update v\(availableUpdate) available (brew upgrade whereamip)") {
+            menu.addItem(action(L10n.string(.menuUpdateAvailable, availableUpdate)) {
                 actions.copyUpdateCommand()
             })
             menu.addItem(.separator())
@@ -123,38 +123,39 @@ public enum MenuBuilder {
 
         // Header + warnings
         if state.connectivity == .offline {
-            menu.addItem(info("No internet connection"))
+            menu.addItem(info(L10n.string(.menuOffline)))
             if state.route.hijackRoutePresent {
-                menu.addItem(info("⚠️ OpenVPN hijack routes present — tunnel likely dead"))
+                menu.addItem(info(L10n.string(.menuOfflineHijack)))
             }
             if let exit = state.exit {
                 let flag = exit.countryCode.flatMap { Flags.emoji(countryCode: $0) } ?? ""
-                menu.addItem(info("Last seen online: \(timeFormatter.string(from: exit.fetchedAt)) via \(flag) \(exit.org ?? "")"))
+                menu.addItem(info(L10n.string(.menuOfflineLastSeen,
+                                              timeFormatter.string(from: exit.fetchedAt), flag, exit.org ?? "")))
             }
         } else {
             // App icon, not the exit-country flag: the flag is already the
             // menu *bar* glyph directly above this dropdown, so repeating it
             // here was redundant. The icon instead identifies which app this
             // dropdown belongs to.
-            let header = info("WhereAmIP v\(whereamipVersion)")
+            let header = info(L10n.string(.menuHeader, whereamipVersion))
             header.image = appIconImage()
             menu.addItem(header)
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
             if state.ipv6Leak {
-                let org = state.exit6?.org ?? "your ISP"
+                let org = state.exit6?.org ?? L10n.string(.menuOrgUnknown)
                 let cc = state.exit6?.countryCode ?? "?"
-                menu.addItem(info("⚠️ IPv6 leak — v6 exits via \(org) (\(cc))"))
+                menu.addItem(info(L10n.string(.menuLeakIPv6, org, cc)))
             }
             if state.dns.leak == .confirmed {
                 if let org = state.dns.egressOrg, !org.isEmpty {
-                    menu.addItem(info("⚠️ DNS leak — queries answered via \(org) (\(state.dns.egressIP ?? "?"))"))
+                    menu.addItem(info(L10n.string(.menuLeakDNSWithOperator, org, state.dns.egressIP ?? "?")))
                 } else {
-                    menu.addItem(info("⚠️ DNS leak — queries answered via \(state.dns.egressIP ?? "?")"))
+                    menu.addItem(info(L10n.string(.menuLeakDNS, state.dns.egressIP ?? "?")))
                 }
             } else if state.dns.leak == .suspected {
-                menu.addItem(info("DNS leak suspected — resolver exits outside the tunnel"))
+                menu.addItem(info(L10n.string(.menuLeakDNSSuspected)))
             }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }
@@ -168,7 +169,7 @@ public enum MenuBuilder {
                     menu.addItem(info(exit6.splitLine(label: "IPv6")))
                 }
             }
-            menu.addItem(info("Since \(timeFormatter.string(from: state.since))"))
+            menu.addItem(info(L10n.string(.menuSince, timeFormatter.string(from: state.since))))
             // Proof of freshness even when nothing changed: "Since" only moves
             // when the exit/connectivity/route actually differs (see Monitor
             // .apply), so a manual Refresh that confirms "still the same"
@@ -176,32 +177,33 @@ public enum MenuBuilder {
             // Same formatter as Since — one source of truth, not a second
             // date-format decision to keep in sync.
             if let lastChecked {
-                menu.addItem(info("Checked: \(timeFormatter.string(from: lastChecked))"))
+                menu.addItem(info(L10n.string(.menuChecked, timeFormatter.string(from: lastChecked))))
             }
         }
 
         // VPN / relay block — only applicable lines
         var block: [NSMenuItem] = []
         if state.route.isVPN, let iface = state.route.defaultInterface {
-            block.append(info("VPN: \(state.route.vpnName ?? "unknown") (\(iface)) owns default route"))
+            block.append(info(L10n.string(.menuRouteVPN,
+                              state.route.vpnName ?? L10n.string(.menuRouteVPNUnknown), iface)))
         } else if let iface = state.route.defaultInterface, let kind = state.route.linkKind {
-            block.append(info("Route: \(kind) (\(iface))"))
+            block.append(info(L10n.string(.menuRouteLink, kind, iface)))
         }
         if case .active(_, let country) = state.privateRelay {
-            let via = country.flatMap { Flags.emoji(countryCode: $0) }.map { " via \($0)" } ?? ""
-            block.append(info("Private Relay: ON — Safari exits\(via) elsewhere"))
+            let via = country.flatMap { Flags.emoji(countryCode: $0) }.map { L10n.string(.menuPrivateRelayVia, $0) } ?? ""
+            block.append(info(L10n.string(.menuPrivateRelay, via)))
         }
         if let first = state.dns.resolvers.first {
-            var line = "DNS: \(first.address)"
-            if let iface = first.interface { line += " via \(iface)" }
+            var line = L10n.string(.dnsRow, first.address)
+            if let iface = first.interface { line += L10n.string(.dnsRowInterface, iface) }
             switch state.dns.encryption {
-            case .doh: line += " · DoH"
-            case .dot: line += " · DoT"
-            case .plaintext: line += " · plaintext"
+            case .doh: line += L10n.string(.dnsRowDoH)
+            case .dot: line += L10n.string(.dnsRowDoT)
+            case .plaintext: line += L10n.string(.dnsRowPlaintext)
             case .unknown: break
             }
             let uniqueCount = state.dns.uniqueAddressCount
-            if uniqueCount > 1 { line += "  (+\(uniqueCount - 1) more)" }
+            if uniqueCount > 1 { line += L10n.string(.dnsRowMore, uniqueCount - 1) }
             // Same summary the flat row always showed, now the title of a submenu holding the
             // full picture: every configured resolver, and every egress the probe round found.
             // NOT an `info` row — a disabled item can't be opened, so this one stays enabled
@@ -217,54 +219,55 @@ public enum MenuBuilder {
 
         // Controls
         menu.addItem(.separator())
-        let refresh = action("Refresh", key: "r") { actions.refresh() }
+        let refresh = action(L10n.string(.menuRefresh), key: "r") { actions.refresh() }
         refresh.keyEquivalentModifierMask = [.command]
         menu.addItem(refresh)
 
-        let settings = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        let settings = NSMenuItem(title: L10n.string(.menuSettings), action: nil, keyEquivalent: "")
         let settingsMenu = NSMenu()
         settingsMenu.autoenablesItems = false
         // There is no persistent "debug mode" to show here — diagnostics exist only while
         // `whereamip debug` streams (nothing on disk, by design). The checkmark rows below
         // are the app's complete visible state. No version row here: the main dropdown
         // header already shows "WhereAmIP v<version>" — a submenu doesn't re-brand itself.
-        let styleItem = NSMenuItem(title: "Menu Bar Style", action: nil, keyEquivalent: "")
+        let styleItem = NSMenuItem(title: L10n.string(.settingsStyle), action: nil, keyEquivalent: "")
         let styleMenu = NSMenu()
         styleMenu.autoenablesItems = false
-        for (title, value) in [("Emoji flag", MenuBarStyle.emoji), ("ISO country code", .code), ("Flag image", .image)] {
-            let i = action(title) { actions.setStyle(value) }
+        for (key, value) in [(L10nKey.settingsStyleEmoji, MenuBarStyle.emoji),
+                             (.settingsStyleCode, .code), (.settingsStyleImage, .image)] {
+            let i = action(L10n.string(key)) { actions.setStyle(value) }
             i.state = (style == value) ? .on : .off
             styleMenu.addItem(i)
         }
         styleItem.submenu = styleMenu
         settingsMenu.addItem(styleItem)
         settingsMenu.addItem(.separator())
-        let notify = action("Show Notifications") { actions.toggleNotifications() }
+        let notify = action(L10n.string(.settingsNotifications)) { actions.toggleNotifications() }
         notify.state = notificationsEnabled ? .on : .off
         settingsMenu.addItem(notify)
-        let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }
+        let login = action(L10n.string(.settingsLaunchAtLogin)) { actions.toggleLaunchAtLogin() }
         login.state = launchAtLogin ? .on : .off
         settingsMenu.addItem(login)
-        let appsLink = action("Add to Applications folder") { actions.toggleApplicationsLink() }
+        let appsLink = action(L10n.string(.settingsApplicationsLink)) { actions.toggleApplicationsLink() }
         appsLink.state = applicationsLinked ? .on : .off
         settingsMenu.addItem(appsLink)
-        let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
+        let checkUpdates = action(L10n.string(.settingsUpdates)) { actions.toggleUpdateChecks() }
         checkUpdates.state = updatesEnabled ? .on : .off
         settingsMenu.addItem(checkUpdates)
-        let dnsProbe = action("Check for DNS Leaks") { actions.toggleDNSProbe() }
+        let dnsProbe = action(L10n.string(.settingsDNSProbe)) { actions.toggleDNSProbe() }
         dnsProbe.state = dnsProbeEnabled ? .on : .off
         settingsMenu.addItem(dnsProbe)
         settingsMenu.addItem(.separator())
         // Plain action (no checkmark, unlike the toggles above) — re-opens
         // the first-run window on demand, independent of whether it's
         // already been acknowledged.
-        settingsMenu.addItem(action("Show Welcome Window") { actions.showWelcomeWindow() })
+        settingsMenu.addItem(action(L10n.string(.settingsWelcome)) { actions.showWelcomeWindow() })
         settings.submenu = settingsMenu
         menu.addItem(settings)
 
-        menu.addItem(action("Restart WhereAmIP") { actions.restartApp() })
+        menu.addItem(action(L10n.string(.menuRestart)) { actions.restartApp() })
 
-        let quit = action("Quit WhereAmIP", key: "q") { actions.quit() }
+        let quit = action(L10n.string(.menuQuit), key: "q") { actions.quit() }
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
         return menu
@@ -278,7 +281,7 @@ public enum MenuBuilder {
     static func dnsSubmenu(state: ExitState, dnsProbeEnabled: Bool) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(info("Configured resolvers"))
+        menu.addItem(info(L10n.string(.dnsSectionConfigured)))
         // One row per unique ADDRESS: DNSConfigReader deliberately emits the same address once
         // globally and once per service, which is right for leak attribution and pure noise in
         // a list. The interfaces it was scoped to are collected onto that single row instead.
@@ -288,7 +291,9 @@ public enum MenuBuilder {
                 .filter { $0.address == resolver.address }
                 .compactMap(\.interface)
             var row = resolver.address
-            if !interfaces.isEmpty { row += " — \(interfaces.joined(separator: ", "))" }
+            if !interfaces.isEmpty {
+                row = L10n.string(.dnsResolverInterfaces, row, interfaces.joined(separator: ", "))
+            }
             menu.addItem(info(row))
         }
 
@@ -296,7 +301,7 @@ public enum MenuBuilder {
         if !dnsProbeEnabled {
             // The opt-out is a fact worth stating here, where its absence would otherwise read
             // as "nothing answered". Never shows a stale measurement next to it.
-            egressRows = ["DNS check disabled"]
+            egressRows = [L10n.string(.dnsDisabled)]
         } else if !state.dns.egressResolvers.isEmpty {
             egressRows = state.dns.egressResolvers.map(\.displayLine)
         } else if let egressIP = state.dns.egressIP {
@@ -311,11 +316,11 @@ public enum MenuBuilder {
         // measurement. Accepted: the enumeration is the normal path, the fallback the exception.
         if let provider = DNSForwarderHint.provider(configured: state.dns.resolvers,
                                                     egress: state.dns.egressResolvers), dnsProbeEnabled {
-            egressRows.append("Router forwards to \(provider) — encryption of that hop is set on the router")
+            egressRows.append(L10n.string(.dnsForwarder, provider))
         }
         if !egressRows.isEmpty {
             menu.addItem(.separator())
-            menu.addItem(info("Queries answered by"))
+            menu.addItem(info(L10n.string(.dnsSectionEgress)))
             egressRows.forEach { menu.addItem(info($0)) }
         }
         return menu

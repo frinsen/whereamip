@@ -35,6 +35,25 @@ install-ready notes per version.
   involved), or the same box in a prefix the ISP has since rotated away
   (identical IPv6 interface identifier as an already-anchored resolver).
 
+- **User-facing texts are out of the code.** Every string the menu bar app shows
+  — dropdown rows, warning lines, the DNS submenu, Settings items, notification
+  titles/bodies, the welcome window — now comes from
+  `Sources/WhereAmIPUI/Resources/en.lproj/Localizable.strings`, looked up by
+  stable hierarchical keys (`menu.*`, `settings.*`, `dns.*`, `notification.*`,
+  `welcome.*`). Wording can be retuned for a release by editing that one file;
+  the UI tests assert against the lookups, not against literals, so retuning
+  doesn't break the suite. English only for now — a `de.lproj` beside it is all
+  a translation needs. `whereamip status`/`watch`/`--json` output is deliberately
+  untouched: it's a parseable API, not copy.
+- **Welcome window content is bundled Markdown**, one file per milestone under
+  `Sources/WhereAmIPUI/Resources/welcome/`. First launch renders `intro.md`; a
+  `welcomeMilestone` re-trigger renders that milestone's real highlights from
+  `<milestone>.md` — titled with the milestone version rather than the running
+  one — instead of repeating the first-run pitch. A milestone with no file falls
+  back to the intro copy. Rendering covers paragraphs, bullets and inline
+  emphasis, with no new dependency; the window sizes to its content once at open
+  and never resizes live.
+
 ### Changed
 - The DNS leak verdict is now measured from the enumeration's primary
   (IPv4-first) egress resolver rather than the Google beacon's answer; the
