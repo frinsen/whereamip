@@ -465,6 +465,104 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(menu.items.map(\.title).contains("DNS leak suspected — resolver exits outside the tunnel"))
     }
 
+    // MARK: - DNS detail submenu
+
+    func dnsState() -> ExitState {
+        var state = ExitState(connectivity: .online)
+        state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false),
+                               DNSResolver(address: "192.168.178.1", isIPv6: false, interface: "en0"),
+                               DNSResolver(address: "10.2.0.1", isIPv6: false, interface: "utun4")]
+        state.dns.egressResolvers = [
+            EgressResolver(ip: "185.44.108.99", port: 39071, operatorName: "WoodyNet, Inc.",
+                           location: "Berlin, State of Berlin, DE", transport: "UDP"),
+            EgressResolver(ip: "2620:171:57:f003::244", operatorName: "WoodyNet, Inc."),
+        ]
+        state.dns.egressIP = "185.44.108.99"
+        return state
+    }
+    func dnsSubmenu(_ state: ExitState, dnsProbeEnabled: Bool = true) -> NSMenu? {
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, dnsProbeEnabled: dnsProbeEnabled,
+                                     actions: MenuActions())
+        return menu.items.first { $0.title.hasPrefix("DNS: ") }?.submenu
+    }
+
+    func testDNSRowKeepsItsSummaryTitleAndGainsASubmenu() {
+        let menu = MenuBuilder.build(state: dnsState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let row = menu.items.first { $0.title.hasPrefix("DNS: ") }
+        XCTAssertEqual(row?.title, "DNS: 192.168.178.1  (+1 more)")
+        XCTAssertNotNil(row?.submenu)
+        XCTAssertTrue(row?.isEnabled ?? false, "a disabled parent row can never be opened")
+    }
+    func testDNSSubmenuListsEachUniqueConfiguredResolverOnceWithInterfaceAttribution() {
+        let titles = dnsSubmenu(dnsState())?.items.map(\.title) ?? []
+        XCTAssertEqual(titles.filter { $0.hasPrefix("192.168.178.1") }, ["192.168.178.1 — en0"],
+                       "the same address across a global and a scoped entry is one row")
+        XCTAssertTrue(titles.contains("10.2.0.1 — utun4"), "got: \(titles)")
+    }
+    func testDNSSubmenuListsEveryDiscoveredEgressResolver() {
+        let titles = dnsSubmenu(dnsState())?.items.map(\.title) ?? []
+        XCTAssertTrue(titles.contains("185.44.108.99 — WoodyNet, Inc. (Berlin, DE) · UDP"), "got: \(titles)")
+        XCTAssertTrue(titles.contains("2620:171:57:f003::244 — WoodyNet, Inc."))
+    }
+    func testDNSSubmenuSectionsAreLabelledAndSeparated() {
+        let sub = dnsSubmenu(dnsState())
+        let titles = sub?.items.map(\.title) ?? []
+        let configuredIndex = titles.firstIndex(of: "Configured resolvers")
+        let egressIndex = titles.firstIndex(of: "Queries answered by")
+        XCTAssertNotNil(configuredIndex)
+        XCTAssertNotNil(egressIndex)
+        XCTAssertLessThan(configuredIndex!, egressIndex!)
+        XCTAssertTrue(sub!.items[(configuredIndex!)..<egressIndex!].contains { $0.isSeparatorItem })
+        XCTAssertFalse(sub!.items[configuredIndex!].isEnabled, "section labels are info rows, not actions")
+    }
+    func testDNSSubmenuFallsBackToTheSingleEgressIPWhenEnumerationFoundNothing() {
+        var state = dnsState()
+        state.dns.egressResolvers = []
+        state.dns.egressIP = "203.0.113.7"
+        state.dns.egressOrg = "Cloudflare, Inc."
+        let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
+        XCTAssertTrue(titles.contains("203.0.113.7 — Cloudflare, Inc."), "got: \(titles)")
+    }
+    func testDNSSubmenuShowsDisabledRowWhenProbingIsOff() {
+        let titles = dnsSubmenu(dnsState(), dnsProbeEnabled: false)?.items.map(\.title) ?? []
+        XCTAssertTrue(titles.contains("DNS check disabled"), "got: \(titles)")
+        XCTAssertFalse(titles.contains { $0.hasPrefix("185.44.108.99") },
+                       "an opted-out user is shown no egress measurement at all")
+    }
+    func testDNSSubmenuOmitsTheEgressSectionWhenNothingWasMeasuredYet() {
+        var state = dnsState()
+        state.dns.egressResolvers = []
+        state.dns.egressIP = nil
+        let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
+        XCTAssertTrue(titles.contains("Configured resolvers"))
+        XCTAssertFalse(titles.contains("Queries answered by"), "no dangling section label: \(titles)")
+    }
+
+    // MARK: - router-forwarding attribution row
+
+    func testForwarderHintRowShownWhenARouterForwardsToAKnownProvider() {
+        var state = dnsState()
+        state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false)]
+        let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
+        XCTAssertTrue(titles.contains("Router forwards to Quad9 — encryption of that hop is set on the router"),
+                      "got: \(titles)")
+    }
+    func testForwarderHintRowAbsentWhenAPublicResolverIsConfiguredDirectly() {
+        var state = dnsState()
+        state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false)]
+        let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
+        XCTAssertFalse(titles.contains { $0.hasPrefix("Router forwards to") }, "got: \(titles)")
+    }
+    func testForwarderHintRowAbsentForAnUnattributableEgress() {
+        var state = dnsState()
+        state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false)]
+        state.dns.egressResolvers = [EgressResolver(ip: "62.109.121.1", operatorName: "Deutsche Telekom AG")]
+        let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
+        XCTAssertFalse(titles.contains { $0.hasPrefix("Router forwards to") }, "got: \(titles)")
+    }
+
     func testDNSProbeToggleRow() {
         var called = false
         let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,

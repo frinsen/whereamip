@@ -202,7 +202,13 @@ public enum MenuBuilder {
             }
             let uniqueCount = state.dns.uniqueAddressCount
             if uniqueCount > 1 { line += "  (+\(uniqueCount - 1) more)" }
-            block.append(info(line))
+            // Same summary the flat row always showed, now the title of a submenu holding the
+            // full picture: every configured resolver, and every egress the probe round found.
+            // NOT an `info` row — a disabled item can't be opened, so this one stays enabled
+            // (like Settings) while everything inside it is info.
+            let dnsItem = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            dnsItem.submenu = dnsSubmenu(state: state, dnsProbeEnabled: dnsProbeEnabled)
+            block.append(dnsItem)
         }
         if !block.isEmpty {
             menu.addItem(.separator())
@@ -261,6 +267,54 @@ public enum MenuBuilder {
         let quit = action("Quit WhereAmIP", key: "q") { actions.quit() }
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
+        return menu
+    }
+
+    /// The DNS row's detail submenu: what macOS is configured to ask (local fact, always known)
+    /// above what actually answered at the far end (measured, and only when the user allows the
+    /// probe). Two labelled sections rather than one flat list — the two halves are different
+    /// kinds of fact, and confusing "my router" with "the resolver that saw my query" is exactly
+    /// what makes split-DNS setups unreadable.
+    static func dnsSubmenu(state: ExitState, dnsProbeEnabled: Bool) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(info("Configured resolvers"))
+        // One row per unique ADDRESS: DNSConfigReader deliberately emits the same address once
+        // globally and once per service, which is right for leak attribution and pure noise in
+        // a list. The interfaces it was scoped to are collected onto that single row instead.
+        var seen = Set<String>()
+        for resolver in state.dns.resolvers where seen.insert(resolver.address).inserted {
+            let interfaces = state.dns.resolvers
+                .filter { $0.address == resolver.address }
+                .compactMap(\.interface)
+            var row = resolver.address
+            if !interfaces.isEmpty { row += " — \(interfaces.joined(separator: ", "))" }
+            menu.addItem(info(row))
+        }
+
+        var egressRows: [String] = []
+        if !dnsProbeEnabled {
+            // The opt-out is a fact worth stating here, where its absence would otherwise read
+            // as "nothing answered". Never shows a stale measurement next to it.
+            egressRows = ["DNS check disabled"]
+        } else if !state.dns.egressResolvers.isEmpty {
+            egressRows = state.dns.egressResolvers.map(\.displayLine)
+        } else if let egressIP = state.dns.egressIP {
+            // Enumeration found nothing and the beacon fallback answered instead — one row,
+            // formatted by the same rules so the two sources can't look like different features.
+            egressRows = [EgressResolver(ip: egressIP, operatorName: state.dns.egressOrg).displayLine]
+        }
+        // Neutral attribution, never a claim about encryption and never a warning: whether the
+        // router's own hop upstream is encrypted is configured there and unobservable from here.
+        if let provider = DNSForwarderHint.provider(configured: state.dns.resolvers,
+                                                    egress: state.dns.egressResolvers), dnsProbeEnabled {
+            egressRows.append("Router forwards to \(provider) — encryption of that hop is set on the router")
+        }
+        if !egressRows.isEmpty {
+            menu.addItem(.separator())
+            menu.addItem(info("Queries answered by"))
+            egressRows.forEach { menu.addItem(info($0)) }
+        }
         return menu
     }
 
