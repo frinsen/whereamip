@@ -6,7 +6,7 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
-## [Unreleased]
+## [0.4] — 2026-08-17
 
 ### Added
 - **Add to Applications folder** toggle (Settings ▸ Add to Applications folder, and in the
