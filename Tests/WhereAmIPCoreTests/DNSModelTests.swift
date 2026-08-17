@@ -11,6 +11,10 @@ final class DNSModelTests: XCTestCase {
         let state = try dec.decode(ExitState.self, from: Data(old.utf8))
         XCTAssertEqual(state.dns, DNSInfo())
         XCTAssertEqual(state.dns.leak, .unknown)
+        // Wave A additive fields (connection-kind display): absent in this pre-existing JSON,
+        // must decode as nil rather than throw.
+        XCTAssertNil(state.route.linkKind)
+        XCTAssertNil(state.route.linkName)
     }
 
     func testDNSInfoRoundTrips() throws {

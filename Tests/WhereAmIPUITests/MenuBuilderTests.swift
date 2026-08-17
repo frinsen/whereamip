@@ -42,6 +42,16 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertFalse(all.contains("VPN"))
         XCTAssertFalse(all.contains("Private Relay"))
     }
+    func testNonVPNRouteShowsLinkKindRow() {
+        var s = vpnState()
+        s.route = RouteInfo(defaultInterface: "en0", isVPN: false, vpnName: nil,
+                            hijackRoutePresent: false, linkKind: "Wi-Fi", linkName: "Wi-Fi")
+        s.privateRelay = .inactive
+        let menu = MenuBuilder.build(state: s, style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu).joined(separator: "|")
+        XCTAssertTrue(all.contains("Wi-Fi (en0)"))
+    }
     func testOfflineShowsLastSeen() {
         var s = vpnState()
         s.connectivity = .offline

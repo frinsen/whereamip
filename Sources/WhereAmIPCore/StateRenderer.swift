@@ -30,7 +30,12 @@ public enum StateRenderer {
             if let org = state.exit?.org { lines.append("   \(org)") }
         }
         if let iface = state.route.defaultInterface {
-            var r = "route: \(iface)"
+            var r: String
+            if let kind = state.route.linkKind {
+                r = "route: \(kind) (\(iface))"
+            } else {
+                r = "route: \(iface)"
+            }
             if let vpn = state.route.vpnName { r += " (\(vpn))" }
             lines.append(r)
         }

@@ -85,6 +85,14 @@ final class RenderJSONTests: XCTestCase {
         XCTAssertFalse(h.contains("⚠️ IPv6 leak"))
     }
 
+    func testHumanShowsLinkKindInRouteLine() {
+        var s = fixedState()
+        s.route = RouteInfo(defaultInterface: "en0", isVPN: false, vpnName: nil,
+                            hijackRoutePresent: false, linkKind: "Wi-Fi", linkName: "Wi-Fi")
+        let h = StateRenderer.human(s)
+        XCTAssertTrue(h.contains("route: Wi-Fi (en0)"))
+    }
+
     func testHumanShowsIPv6LineWhenCountriesMatch() {
         var state = ExitState(connectivity: .online)
         state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())

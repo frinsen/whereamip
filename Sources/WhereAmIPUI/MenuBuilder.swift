@@ -180,6 +180,8 @@ public enum MenuBuilder {
         var block: [NSMenuItem] = []
         if state.route.isVPN, let iface = state.route.defaultInterface {
             block.append(info("VPN: \(state.route.vpnName ?? "unknown") (\(iface)) owns default route"))
+        } else if let iface = state.route.defaultInterface, let kind = state.route.linkKind {
+            block.append(info("Route: \(kind) (\(iface))"))
         }
         if case .active(_, let country) = state.privateRelay {
             let via = country.flatMap { Flags.emoji(countryCode: $0) }.map { " via \($0)" } ?? ""

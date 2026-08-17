@@ -164,8 +164,15 @@ public enum RouteInspector {
         let scServiceName = isVPN ? SCServiceNamer.serviceName(forInterface: iface) : nil
         let name = VPNNamer.name(interface: iface, localAddress: localIP,
                                  scServiceName: scServiceName, runningBundleIDs: runningBundleIDs)
-        Log.route.debug("snapshot: interface=\(iface, privacy: .public) isVPN=\(isVPN, privacy: .public) vpnName=\(name ?? "nil", privacy: .public)")
+        // Connection-kind display (Wave A): only meaningful for the physical/underlay
+        // interface actually carrying the default route. When a VPN tunnel owns it, its
+        // "kind" is the tunnel itself (already named above) — attributing that back to
+        // whichever physical interface the tunnel rides over is a recorded follow-up, not
+        // guessed here.
+        let link = isVPN ? nil : InterfaceKind.lookup(bsdName: iface)
+        Log.route.debug("snapshot: interface=\(iface, privacy: .public) isVPN=\(isVPN, privacy: .public) vpnName=\(name ?? "nil", privacy: .public) linkKind=\(link?.kind ?? "nil", privacy: .public)")
         return RouteInfo(defaultInterface: iface, isVPN: isVPN, vpnName: name, hijackRoutePresent: hijack,
-                         v6DefaultInterface: v6?.interface, v6IsVPN: v6IsVPN)
+                         v6DefaultInterface: v6?.interface, v6IsVPN: v6IsVPN,
+                         linkKind: link?.kind, linkName: link?.displayName)
     }
 }

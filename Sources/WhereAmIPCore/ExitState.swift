@@ -30,22 +30,34 @@ public struct RouteInfo: Equatable, Codable, Sendable {
     // JSON produced by pre-existing versions of this app still decodes cleanly below.
     public var v6DefaultInterface: String?
     public var v6IsVPN: Bool
+    // Additive (Wave A, connection-kind display): the default-route interface's system-derived
+    // kind ("Wi-Fi", "Ethernet", "iPhone USB", …) and display name, via SCNetworkInterface.
+    // Populated only for non-tunnel interfaces — see RouteInspector.snapshot; both nil for VPN
+    // tunnels (underlay attribution is a recorded follow-up, not guessed) and for pre-existing
+    // JSON, which never had these keys — see the manual init(from:) below.
+    public var linkKind: String?
+    public var linkName: String?
     public init(defaultInterface: String? = nil, isVPN: Bool = false,
                 vpnName: String? = nil, hijackRoutePresent: Bool = false,
-                v6DefaultInterface: String? = nil, v6IsVPN: Bool = false) {
+                v6DefaultInterface: String? = nil, v6IsVPN: Bool = false,
+                linkKind: String? = nil, linkName: String? = nil) {
         self.defaultInterface = defaultInterface
         self.isVPN = isVPN
         self.vpnName = vpnName
         self.hijackRoutePresent = hijackRoutePresent
         self.v6DefaultInterface = v6DefaultInterface
         self.v6IsVPN = v6IsVPN
+        self.linkKind = linkKind
+        self.linkName = linkName
     }
 
     private enum CodingKeys: String, CodingKey {
         case defaultInterface, isVPN, vpnName, hijackRoutePresent, v6DefaultInterface, v6IsVPN
+        case linkKind, linkName
     }
-    // Manual init(from:) so older JSON (missing the two v6 keys) still decodes; encode(to:)
-    // is left to synthesis using the same CodingKeys, which always writes the full struct.
+    // Manual init(from:) so older JSON (missing the v6 and linkKind/linkName keys) still
+    // decodes; encode(to:) is left to synthesis using the same CodingKeys, which always writes
+    // the full struct.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         defaultInterface = try c.decodeIfPresent(String.self, forKey: .defaultInterface)
@@ -54,6 +66,8 @@ public struct RouteInfo: Equatable, Codable, Sendable {
         hijackRoutePresent = try c.decodeIfPresent(Bool.self, forKey: .hijackRoutePresent) ?? false
         v6DefaultInterface = try c.decodeIfPresent(String.self, forKey: .v6DefaultInterface)
         v6IsVPN = try c.decodeIfPresent(Bool.self, forKey: .v6IsVPN) ?? false
+        linkKind = try c.decodeIfPresent(String.self, forKey: .linkKind)
+        linkName = try c.decodeIfPresent(String.self, forKey: .linkName)
     }
 }
 
