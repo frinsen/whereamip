@@ -1,8 +1,8 @@
 import Foundation
 
 /// Attributes the "my router forwards to somebody" setup, the common home case: macOS is
-/// configured with nothing but private-range resolvers (the router), yet the queries come out
-/// at a well-known public provider — so the router, not this Mac, decides that upstream hop.
+/// configured with nothing but router-local resolvers, yet the queries come out at a well-known
+/// public provider — so the router, not this Mac, decides that upstream hop.
 ///
 /// Deliberately an attribution hint and nothing more. Whether that hop is ENCRYPTED is set on
 /// the router and is not observable from here (the client only ever sees its own plaintext
@@ -21,14 +21,59 @@ public enum DNSForwarderHint {
     ]
 
     /// The provider to name, or nil when the setup isn't a router-forwarding one: EVERY
-    /// configured resolver must be private-range (otherwise this Mac talks to a public resolver
+    /// configured resolver must be router-local (otherwise this Mac talks to a public resolver
     /// directly and there is no forwarding hop to attribute) and at least one discovered egress
     /// resolver must be attributable to a known provider. Empty inputs mean "nothing measured",
     /// never a vacuous yes.
-    public static func provider(configured: [DNSResolver], egress: [EgressResolver]) -> String? {
+    ///
+    /// `localPrefixes` defaults to a live getifaddrs snapshot; pass an explicit list (`[]` for
+    /// none) to keep a caller deterministic.
+    public static func provider(configured: [DNSResolver], egress: [EgressResolver],
+                                localPrefixes: [InterfacePrefix] = RouteInspector.localPrefixes()) -> String? {
         guard !configured.isEmpty, !egress.isEmpty else { return nil }
-        guard configured.allSatisfy({ isPrivate($0.address) }) else { return nil }
+        guard allRouterLocal(configured, localPrefixes: localPrefixes) else { return nil }
         return egress.lazy.compactMap { knownProvider($0.operatorName) }.first
+    }
+
+    /// PURE. Every configured resolver is this network's own gateway, one way or another.
+    ///
+    /// Two-pass because of a field case on a Fritz!Box: macOS keeps listing the router under a
+    /// PREVIOUSLY delegated global prefix (ISPs rotate them) that this host no longer holds an
+    /// address in, alongside the current one and a ULA. Those entries are the same physical box
+    /// — identical IPv6 interface identifier — so the second pass accepts an address whose
+    /// low 64 bits match one of the resolvers the first pass already anchored to this machine.
+    /// Anchors only ever come from pass one: a set of addresses sharing an identifier can never
+    /// bootstrap itself into being local, and a genuinely foreign resolver (2620:fe::fe, whose
+    /// identifier is `::fe`) still fails both passes.
+    static func allRouterLocal(_ configured: [DNSResolver], localPrefixes: [InterfacePrefix]) -> Bool {
+        let anchored = configured.filter { isRouterLocal($0.address, localPrefixes: localPrefixes) }
+        guard !anchored.isEmpty else { return false }
+        let routerIdentifiers = Set(anchored.compactMap { interfaceIdentifier($0.address) })
+        return configured.allSatisfy { resolver in
+            isRouterLocal(resolver.address, localPrefixes: localPrefixes)
+                || interfaceIdentifier(resolver.address).map(routerIdentifiers.contains) == true
+        }
+    }
+
+    /// PURE. On this machine's own network segment: either a private-range address, or inside
+    /// one of the host's directly connected prefixes. The latter is what catches a router that
+    /// advertises itself with a GLOBAL address out of the ISP's delegated prefix — it lives in
+    /// the Mac's own /64, so no vendor or ISP knowledge is needed to recognize it.
+    static func isRouterLocal(_ address: String, localPrefixes: [InterfacePrefix]) -> Bool {
+        if isPrivate(address) { return true }
+        // A /0 would match everything — never let a malformed snapshot turn this into a yes.
+        return localPrefixes.contains { prefix in
+            prefix.prefixLength > 0
+                && DNSLeakDetector.ipMatches(address, prefixOrIP: "\(prefix.address)/\(prefix.prefixLength)")
+        }
+    }
+
+    /// PURE. The low 64 bits of an IPv6 address — the part that identifies the interface itself
+    /// rather than the network it currently sits in. nil for anything that isn't IPv6.
+    static func interfaceIdentifier(_ address: String) -> [UInt8]? {
+        var a = in6_addr()
+        guard address.contains(":"), inet_pton(AF_INET6, address, &a) == 1 else { return nil }
+        return withUnsafeBytes(of: a) { Array($0[8..<16]) }
     }
 
     /// PURE. RFC1918 (10/8, 172.16/12, 192.168/16) plus IPv6 link-local (fe80::/10) and ULA

@@ -24,11 +24,16 @@ install-ready notes per version.
   answered by" (every discovered egress resolver). `whereamip status` shows
   the same egress resolvers on an indented line, and `--json` gains a
   `dns.egressResolvers` array — additive, absent from older output.
-- When every configured resolver is a private-range address but the queries
-  surface at a known public provider, the submenu names it: "Router forwards
-  to Quad9 — encryption of that hop is set on the router". An attribution
-  hint only — the client cannot observe whether that hop is encrypted, and
-  forwarding is normal configuration, so this never warns.
+- When every configured resolver is router-local but the queries surface at a
+  known public provider, the submenu names it: "Router forwards to Quad9 —
+  encryption of that hop is set on the router". An attribution hint only —
+  the client cannot observe whether that hop is encrypted, and forwarding is
+  normal configuration, so this never warns. "Router-local" means a private
+  range, an address inside one of this host's directly connected prefixes
+  (which is how a router advertising itself with a *global* address out of
+  the ISP's delegated prefix is recognized — no vendor or ISP knowledge
+  involved), or the same box in a prefix the ISP has since rotated away
+  (identical IPv6 interface identifier as an already-anchored resolver).
 
 ### Changed
 - The DNS leak verdict is now measured from the enumeration's primary
