@@ -1,0 +1,118 @@
+/* WhereAmIP — English UI strings.
+
+   This file is the ONE place to retune user-facing wording; keys are declared in
+   Sources/WhereAmIPUI/L10n.swift and every call site goes through L10n.string(_:).
+   A `de.lproj/Localizable.strings` next to this one is all a translation needs.
+
+   Rules that are not free to change:
+     - keys are stable; renaming one is a code change, not a text change
+     - %@ / %d placeholders keep their order and count (String(format:) fills them
+       positionally); reordering needs %1$@-style positional specifiers
+     - leading/trailing spaces in the fragment values (dns.row.*, menu.privateRelay.via,
+       notification.dns.body.egress) are intentional — those are appended to a line
+
+   NOT here: `whereamip` CLI output, JSON keys, log messages. Those are a parseable
+   API, not copy.
+*/
+
+/* MARK: - menu */
+
+"menu.header" = "WhereAmIP v%@";
+"menu.update.restart" = "↻ Restart to finish update (v%@)";
+"menu.update.available" = "⬆︎ Update v%@ available (brew upgrade whereamip)";
+"menu.offline" = "No internet connection";
+"menu.offline.hijack" = "⚠️ OpenVPN hijack routes present — tunnel likely dead";
+/* %1 timestamp, %2 country flag emoji (may be empty), %3 organisation (may be empty) */
+"menu.offline.lastSeen" = "Last seen online: %@ via %@ %@";
+/* %1 organisation, %2 ISO country code */
+"menu.leak.ipv6" = "⚠️ IPv6 leak — v6 exits via %@ (%@)";
+"menu.leak.dns" = "⚠️ DNS leak — queries answered via %@";
+/* %1 resolver operator, %2 egress IP */
+"menu.leak.dns.withOperator" = "⚠️ DNS leak — queries answered via %@ (%@)";
+"menu.leak.dns.suspected" = "DNS leak suspected — resolver exits outside the tunnel";
+"menu.since" = "Since %@";
+"menu.checked" = "Checked: %@";
+/* %1 VPN name, %2 interface */
+"menu.route.vpn" = "VPN: %@ (%@) owns default route";
+"menu.route.vpn.unknown" = "unknown";
+/* %1 link kind (Wi-Fi/Ethernet/…), %2 interface */
+"menu.route.link" = "Route: %@ (%@)";
+/* %1 the "menu.privateRelay.via" fragment, or empty when the relay country is unknown */
+"menu.privateRelay" = "Private Relay: ON — Safari exits%@ elsewhere";
+"menu.privateRelay.via" = " via %@";
+"menu.org.unknown" = "your ISP";
+"menu.refresh" = "Refresh";
+"menu.settings" = "Settings";
+"menu.restart" = "Restart WhereAmIP";
+"menu.quit" = "Quit WhereAmIP";
+
+/* MARK: - settings (also the welcome window's checkbox labels) */
+
+"settings.style" = "Menu Bar Style";
+"settings.style.emoji" = "Emoji flag";
+"settings.style.code" = "ISO country code";
+"settings.style.image" = "Flag image";
+"settings.notifications" = "Show Notifications";
+"settings.launchAtLogin" = "Launch at Login";
+"settings.applicationsLink" = "Add to Applications folder";
+"settings.updates" = "Check for Updates";
+"settings.dnsProbe" = "Check for DNS Leaks";
+"settings.welcome" = "Show Welcome Window";
+
+/* MARK: - dns */
+
+"dns.row" = "DNS: %@";
+"dns.row.interface" = " via %@";
+"dns.row.doh" = " · DoH";
+"dns.row.dot" = " · DoT";
+"dns.row.plaintext" = " · plaintext";
+"dns.row.more" = "  (+%d more)";
+"dns.section.configured" = "Configured resolvers";
+"dns.section.egress" = "Queries answered by";
+/* %1 resolver address, %2 comma-separated interfaces it is scoped to */
+"dns.resolver.interfaces" = "%@ — %@";
+"dns.disabled" = "DNS check disabled";
+"dns.forwarder" = "Router forwards to %@ — encryption of that hop is set on the router";
+
+/* MARK: - notification */
+
+/* %1 previous country flag, %2 new country flag */
+"notification.countryChanged.title" = "Exit changed: %@ → %@";
+"notification.countryChanged.body" = "Exit country changed";
+"notification.countryChanged.body.vpn" = "%@ took over the default route";
+"notification.ipChanged.title" = "New exit IP in %@";
+"notification.offline.title" = "Internet unreachable";
+"notification.offline.body" = "Network is up, probes failing";
+"notification.offline.body.hijack" = "OpenVPN hijack routes present — tunnel likely dead";
+/* %1 country flag, %2 city (may be empty) */
+"notification.online.title" = "Back online: %@ %@";
+"notification.leak.title" = "⚠️ Possible VPN leak";
+"notification.leak.body" = "VPN route active but traffic still exits via %@";
+"notification.relay.on.title" = "Private Relay ON";
+"notification.relay.on.body" = "Safari traffic exits via Apple's relay";
+"notification.relay.off.title" = "Private Relay OFF";
+"notification.relay.off.body" = "Safari traffic follows the system route";
+"notification.ipv6.title" = "⚠️ IPv6 leak detected";
+"notification.ipv6.body" = "IPv6 traffic exits via %@ — your VPN only tunnels IPv4";
+"notification.dns.title" = "⚠️ DNS leak detected";
+"notification.dns.body" = "DNS queries are answered outside your VPN tunnel";
+"notification.dns.body.egress" = " — resolver egress %@";
+"notification.flag.unknown" = "❓";
+"notification.org.unknown" = "your ISP";
+
+/* MARK: - welcome window (body copy lives in Resources/welcome/*.md) */
+
+"welcome.window.title" = "WhereAmIP";
+"welcome.heading.first" = "Welcome to WhereAmIP v%@";
+/* %1 is the WELCOME MILESTONE, not the running version — this window re-opens for
+   the release that earned it, so it names that release */
+"welcome.heading.milestone" = "WhereAmIP v%@ — what's new";
+"welcome.hint" = "Can't see the flag? A crowded menu bar may hide it behind the notch.";
+"welcome.setup.header" = "Your setup";
+"welcome.setup.caption" = "(reflects current settings)";
+/* Single line, must fit 353pt at 10pt system font without truncating — measure
+   before lengthening (see WelcomeWindow.swift) */
+"welcome.notify.caption" = "Alerts on exit, route, or connectivity changes. Asks macOS permission.";
+"welcome.notify.hint" = "Notifications are disabled in System Settings — open Notifications settings";
+"welcome.privacy" = "No tracking, no history, no logs.";
+"welcome.done" = "Done";
