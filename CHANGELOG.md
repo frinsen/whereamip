@@ -6,7 +6,7 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
-## [Unreleased]
+## [0.4.1] — 2026-08-17
 
 ### Fixed
 - **Restart/relaunch could silently drop the new instance.** Field bug from
