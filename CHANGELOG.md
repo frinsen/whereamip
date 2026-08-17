@@ -32,8 +32,22 @@ install-ready notes per version.
 - A generic "IKEv2 VPN" label for native NE personal VPN (IKEv2/IPsec)
   interfaces that otherwise expose no name anywhere reachable — used only as
   a last-resort fallback, never shadowing a real detected name.
+- Classic OpenVPN daemon tunnels (`ovpnagent`/`openvpn`, no SCDynamicStore
+  presence at all) are now named "OpenVPN" from running-process evidence,
+  instead of being misnamed by whichever known VPN app's bundle happens to
+  sort first in the table.
+- Confirmed DNS-leak rows in the dropdown and `whereamip status` now name
+  the resolver's egress operator when it's known: "queries answered via
+  Cloudflare, Inc. (2400:cb00:…)" instead of just the bare IP.
 
 ### Changed
+- The bundle-ID VPN-name table only names a tunnel when exactly one known
+  VPN app is running; two or more known apps running at once now show no
+  name instead of guessing by table order.
+- Tailscale MagicDNS setups (resolver `100.100.100.100`) cap the DNS-leak
+  verdict at "suspected" — it never advances to "confirmed" and never
+  notifies, since MagicDNS's delegation to a user-configured upstream is the
+  product working as designed, not a leak.
 - DNS-leak verdicts now recognize the VPN provider's own resolvers: when a
   resolver's egress IP is attributed — by ASN, or by an exact org-string
   match sourced from the same geo provider as the tunnel exit — to the same
