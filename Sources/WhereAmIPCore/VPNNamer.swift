@@ -20,6 +20,10 @@ public enum VPNNamer {
         if let scServiceName { return scServiceName }
         // Tailscale tell: CGNAT 100.64.0.0/10 source address
         if let addr = localAddress, isCGNAT(addr) { return "Tailscale" }
+        // Cloudflare WARP tell: the client assigns 172.16.0.2 as its tunnel address
+        // (fixed across installs; field-verified 2026-08-17). Bundle-ID lookup can't
+        // help the CLI, which has no AppKit and passes empty runningBundleIDs.
+        if localAddress == "172.16.0.2" { return "Cloudflare WARP" }
         for (id, name) in bundleIDNames where runningBundleIDs.contains(id) { return name }
         return nil
     }

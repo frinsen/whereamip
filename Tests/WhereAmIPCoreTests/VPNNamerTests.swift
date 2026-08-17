@@ -38,4 +38,16 @@ final class VPNNamerTests: XCTestCase {
                                      scServiceName: nil,
                                      runningBundleIDs: ["io.tailscale.ipn.macos"]), "Tailscale")
     }
+
+    /// The CLI has no AppKit, so runningBundleIDs is always empty there — WARP can only be
+    /// named via its fixed tunnel address, field-verified 2026-08-17 (172.16.0.2).
+    func testWARPByTunnelAddress() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun16", localAddress: "172.16.0.2",
+                                     scServiceName: nil, runningBundleIDs: []), "Cloudflare WARP")
+    }
+
+    func testOtherAddressInWARPSubnetDoesNotMatch() {
+        XCTAssertNil(VPNNamer.name(interface: "utun16", localAddress: "172.16.0.3",
+                                   scServiceName: nil, runningBundleIDs: []))
+    }
 }
