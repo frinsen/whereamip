@@ -211,11 +211,25 @@ public actor Monitor {
             // probe FAILURE preserves .confirmed inside decide() — different cases, both intentional).
             if dnsProbeEnabled() {
                 let egress = await dnsProbe.fetch()
+                // Org/ASN attribution for the org/ASN rescue (Wave B): one extra geo lookup of
+                // the DNS resolver's own egress IP, same cost class as the existing relay-egress
+                // lookup below. Deliberately not cached across refreshes — see the module-level
+                // design note. ECS answers are prefixes ("1.2.3.0/24") — geo endpoints 404 on
+                // them (field-verified) — so query the network address instead.
+                var egressASN: Int? = nil; var egressOrg: String? = nil; var egressProvider: String? = nil
+                if let egress {
+                    let lookupIP = String(egress.ip.split(separator: "/")[0])
+                    if let info = await geo.lookup(ip: lookupIP) {
+                        egressASN = info.asn; egressOrg = info.org; egressProvider = info.provider
+                    }
+                }
                 new.dns.leak = DNSLeakDetector.decide(egress: egress,
                                                       exit4: exitFreshThisTick ? new.exit : nil,
                                                       exit6: new.exit6,
                                                       route: new.route,
-                                                      previous: state.dns.leak)
+                                                      previous: state.dns.leak,
+                                                      egressASN: egressASN, egressOrg: egressOrg,
+                                                      egressProvider: egressProvider)
                 // On a failed probe (egress nil), egressIP/egressIsIPv6/measuredAt describe the
                 // last SUCCESSFUL measurement together — preserve all three as a pair rather
                 // than nil-ing egressIP while keeping the old measuredAt (that mismatched pair

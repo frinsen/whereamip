@@ -27,6 +27,13 @@ install-ready notes per version.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
 - Version row in Settings.
+- Connection kind (Wi-Fi/Ethernet/iPhone USB) shown for the active route,
+  derived from the system via `SCNetworkInterface` rather than guessed.
+- DNS-leak verdicts now recognize the VPN provider's own resolvers: egress
+  attributed by ASN (or exact same-source org) to the same operator as the
+  tunnel exit is ruled "none" instead of "suspected"; a leak can only
+  escalate to the confirmed badge/notification with positive
+  operator-mismatch evidence, never on failed lookups.
 
 ### Fixed
 - `whereamip watch` output is now line-buffered when piped or redirected —

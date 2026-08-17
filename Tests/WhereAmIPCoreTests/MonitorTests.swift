@@ -13,10 +13,19 @@ actor Counter {
 struct MockGeo: GeoFetching {
     let counter: Counter
     let info: ExitInfo?
+    // Steerable per-lookup attribution (Wave B org/ASN rescue) — default nil/nil/"mock" so any
+    // pre-existing test that doesn't care about ASN/org attribution behaves exactly as before
+    // this feature: `lookup(ip:)` still succeeds (non-nil), just carries no attribution data.
+    // `nil` here means "the lookup itself fails" (simulating a failed geo attribution call),
+    // distinct from "succeeded but carries no ASN/org" — set via `lookupFails`.
+    var lookupASN: Int? = nil
+    var lookupOrg: String? = nil
+    var lookupFails: Bool = false
     func fetch() async -> ExitInfo? { await counter.bumpGeo(); return info }
     func lookup(ip: String) async -> ExitInfo? {
         await counter.bumpLookup()
-        return ExitInfo(ip: ip, countryCode: "DE", provider: "mock", fetchedAt: Date())
+        if lookupFails { return nil }
+        return ExitInfo(ip: ip, countryCode: "DE", org: lookupOrg, provider: "mock", fetchedAt: Date(), asn: lookupASN)
     }
 }
 struct MockProbe: ProbeRunning {
@@ -435,7 +444,10 @@ final class MonitorTests: XCTestCase {
         let dnsProbe = MockDNSProbe(result: ("9.9.9.9", false))
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
                             provider: "mock", fetchedAt: Date())
-        let m = Monitor(geo: MockGeo(counter: c, info: info),
+        // Wave B: Monitor now attributes the DNS egress IP via an extra geo.lookup — give it an
+        // ASN that genuinely differs from the exit's (nil here), so the confirm below reflects
+        // positive mismatch evidence rather than the no-attribution "never confirm" case.
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 99999),
                         probe: MockProbe(counter: c, results: { true }),
                         route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
@@ -472,7 +484,11 @@ final class MonitorTests: XCTestCase {
         let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
                             provider: "mock", fetchedAt: Date())
-        let m = Monitor(geo: MockGeo(counter: c, info: info),
+        // Wave B: Monitor now attributes the DNS egress IP via an extra geo.lookup — give it an
+        // ASN that genuinely differs from the exit's (nil here), so the confirm below reflects
+        // positive mismatch evidence rather than the no-attribution "never confirm" case (see
+        // testTwoMismatchedFullRefreshesWithFailedAttributionNeverConfirm for that case).
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 12345),
                         probe: MockProbe(counter: c, results: { true }),
                         route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
                         httpIP: MockHTTPIP(counter: c, ip: nil),
@@ -493,6 +509,64 @@ final class MonitorTests: XCTestCase {
         await m.fullRefresh()
         let afterTwo = await m.currentState()
         XCTAssertEqual(afterTwo.dns.leak, .confirmed, "a second consecutive mismatch confirms the leak")
+    }
+
+    // MARK: - Org/ASN rescue wiring (Wave B)
+
+    func testMonitorRescuesToNoneWhenEgressASNMatchesExitASN() async {
+        // End-to-end: DNS egress resolves to a different IP than the tunnel exit, but Monitor's
+        // extra geo.lookup attributes that egress IP to the SAME ASN as the exit — the org/ASN
+        // rescue must fire through the real wiring, not just in DNSLeakDetector's unit tests.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date(), asn: 3209)
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 3209),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.leak, .none, "same-ASN egress is the tunnel operator's own DNS, not a leak")
+    }
+
+    func testTwoMismatchedFullRefreshesWithFailedAttributionNeverConfirm() async {
+        // End-to-end: the DNS egress probe succeeds every refresh, but Monitor's extra geo.lookup
+        // for attribution fails both times (simulating a network hiccup on that one lookup) — a
+        // mismatch with NO attribution data at all must never confirm, no matter how many
+        // consecutive refreshes see it. Stays .suspected forever until real evidence arrives.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupFails: true),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let afterOne = await m.currentState()
+        XCTAssertEqual(afterOne.dns.leak, .suspected)
+
+        await m.fullRefresh()
+        let afterTwo = await m.currentState()
+        XCTAssertEqual(afterTwo.dns.leak, .suspected,
+                       "no attribution data at all must never confirm a leak, even on repeated mismatches")
     }
 
     func testDisabledProbeNeverCalledAndVerdictUnknown() async {
