@@ -13,11 +13,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let updateChecker = UpdateChecker()
     var lastState = ExitState()
     var availableUpdate: String?
+    var restartUpdate: String?
+    private var lastDiskCheckAt: Date?
+    var welcomeWindowController: WelcomeWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.menu = NSMenu()
         statusItem.menu!.delegate = self
+
+        // Shown once (and again on a maintainer-bumped welcomeMilestone —
+        // see Version.swift), after the status item exists so the window can
+        // point at something already on screen. Gated by shouldShowWelcome
+        // (pure logic in Core, unit-tested there) — only Done stores
+        // welcomedMilestone, so dismissing via the close button/Esc shows it
+        // again next launch rather than losing it for good. Monitor setup
+        // below runs regardless of this window; the app's core behavior
+        // never waits on it.
+        if shouldShowWelcome(stored: settings.welcomedMilestone) {
+            welcomeWindowController = WelcomeWindowController(settings: settings)
+            welcomeWindowController?.show()
+        }
 
         monitor = Monitor(
             geo: GeoProviderChain(), probe: ConnectivityProbe(),
@@ -62,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // whether a newer GitHub release exists. Respects the `updates` setting:
     // when disabled, no network request is made at all.
     func checkForUpdates() {
+        checkInstalledVersion()
         guard settings.updatesEnabled else { return }
         Task {
             let latest = await updateChecker.latestVersion()
@@ -70,12 +87,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // Detects "brew upgrade already replaced the files on disk, but this
+    // process is still the old binary" by comparing the version installed at
+    // the stable brew opt path against our own. Cheap (one plist read), but
+    // still I/O — never call this from menuNeedsUpdate (menu-build must stay
+    // I/O-free). Evaluated at the same cadence as the GitHub check (launch,
+    // daily timer, manual Refresh) plus a throttled pass from stateChanged
+    // below, since that's the only place likely to observe the change soon
+    // after a background `brew upgrade` completes.
+    func checkInstalledVersion() {
+        guard let onDisk = InstalledVersion.onDisk(bundlePath: Bundle.main.bundlePath) else {
+            restartUpdate = nil
+            return
+        }
+        restartUpdate = SemVer.isNewer(onDisk.version, than: whereamipVersion) ? onDisk.version : nil
+    }
+
     func stateChanged(_ state: ExitState) {
         lastState = state
         let (title, image) = StatusItemRenderer.render(state.glyph(style: settings.menuBarStyle),
                                                         warning: state.ipv6Leak || state.dns.leak == .confirmed)
         statusItem.button?.title = title ?? ""
         statusItem.button?.image = image
+
+        // Throttled disk-version check (at most once/60s) — stateChanged fires
+        // often (probe ticks, route changes), so this catches a `brew upgrade`
+        // that finished in the background well before the next daily/manual
+        // update check without adding I/O on every single state change.
+        let now = Date()
+        if lastDiskCheckAt == nil || now.timeIntervalSince(lastDiskCheckAt!) >= 60 {
+            lastDiskCheckAt = now
+            checkInstalledVersion()
+        }
+    }
+
+    // Shared relaunch mechanism for both the update-restart row (which targets
+    // the newer opt-path bundle) and the plain "Restart WhereAmIP" row (which
+    // targets our own running bundle). `open -n` — rather than exec'ing the
+    // binary directly — properly re-registers the new instance with Launch
+    // Services; terminating only after a short delay avoids racing that
+    // handoff. The new instance recreates its own status item, so a brief
+    // moment with no (or two) menu bar icons during the switch is expected
+    // and acceptable.
+    func relaunch(from path: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-n", path]
+        try? process.run()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApp.terminate(nil)
+        }
     }
 
     func eventsHappened(_ events: [Event]) {
@@ -98,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
             dnsProbeEnabled: settings.dnsProbeEnabled,
+            restartUpdate: restartUpdate, applicationsLinked: ApplicationsLink.isLinked(),
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -116,8 +178,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 toggleNotifications: { [weak self] in
                     guard let self else { return }
                     if !settings.notificationsEnabled {
-                        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
-                            DispatchQueue.main.async { self.settings.notificationsEnabled = granted }
+                        NotificationPermissionFlow.requestEnable { [weak self] granted, needsSystemSettings in
+                            guard let self else { return }
+                            if needsSystemSettings {
+                                // The menu has no inline-label surface (unlike the
+                                // welcome window's hint button) — go straight to
+                                // System Settings instead of showing a hint.
+                                NotificationPermissionFlow.openSystemSettings()
+                            } else {
+                                self.settings.notificationsEnabled = granted
+                            }
                         }
                     } else {
                         settings.notificationsEnabled = false
@@ -129,6 +199,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         try? SMAppService.mainApp.register()
                     }
+                },
+                toggleApplicationsLink: {
+                    // Best-effort, same convention as toggleLaunchAtLogin above:
+                    // the menu has no inline surface for an error message, so a
+                    // failure (e.g. a real, non-symlink /Applications/WhereAmIP.app
+                    // someone created) just leaves the checkbox reflecting
+                    // whatever the actual on-disk state still is.
+                    try? ApplicationsLink.setLinked(!ApplicationsLink.isLinked(), bundlePath: Bundle.main.bundlePath)
+                },
+                showWelcomeWindow: { [weak self] in
+                    // Manual re-show, bypasses shouldShowWelcome entirely —
+                    // always shows regardless of welcomedMilestone. Clicking
+                    // Done afterwards just re-stores the same milestone
+                    // value, which is harmless.
+                    guard let self else { return }
+                    self.welcomeWindowController = WelcomeWindowController(settings: self.settings)
+                    self.welcomeWindowController?.show()
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {
@@ -148,6 +235,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     guard let self else { return }
                     self.settings.dnsProbeEnabled.toggle()
                     Task { await self.monitor.fullRefresh() }
+                },
+                restartAction: { [weak self] in
+                    guard let self, let appPath = InstalledVersion.onDisk(bundlePath: Bundle.main.bundlePath)?.appPath
+                    else { return }
+                    self.relaunch(from: appPath)
+                },
+                restartApp: { [weak self] in
+                    guard let self else { return }
+                    self.relaunch(from: Bundle.main.bundlePath)
                 }))
         menu.removeAllItems()
         fresh.items.forEach { item in

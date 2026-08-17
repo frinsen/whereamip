@@ -1,11 +1,22 @@
 import Foundation
 
 public enum StateRenderer {
-    public static func json(_ state: ExitState) -> String {
+    // `appVersion` is injected at render time rather than modeled on ExitState
+    // itself: ExitState represents network/exit state, not the running
+    // binary's identity, so it stays out of the Codable struct. Passing nil
+    // (the default) reproduces the exact prior output — additive-only change.
+    public static func json(_ state: ExitState, appVersion: String? = nil) -> String {
         let enc = JSONEncoder()
         enc.outputFormatting = [.sortedKeys]
         enc.dateEncodingStrategy = .iso8601
-        return String(data: try! enc.encode(state), encoding: .utf8)!
+        let data = try! enc.encode(state)
+        guard let appVersion else {
+            return String(data: data, encoding: .utf8)!
+        }
+        var obj = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        obj["appVersion"] = appVersion
+        let outData = try! JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])
+        return String(data: outData, encoding: .utf8)!
     }
     public static func human(_ state: ExitState) -> String {
         var lines: [String] = []
@@ -54,6 +65,8 @@ public enum StateRenderer {
             lines.append(exit.splitLine(label: "IPv4"))
             lines.append(exit6.splitLine(label: "IPv6"))
         }
+        // Footer, not headline: exit info stays first for glanceability.
+        lines.append("whereamip v\(whereamipVersion)")
         return lines.joined(separator: "\n")
     }
 }

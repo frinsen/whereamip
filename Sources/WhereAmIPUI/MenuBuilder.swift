@@ -7,24 +7,36 @@ public struct MenuActions {
     public var setStyle: (MenuBarStyle) -> Void
     public var toggleNotifications: () -> Void
     public var toggleLaunchAtLogin: () -> Void
+    public var toggleApplicationsLink: () -> Void
+    public var showWelcomeWindow: () -> Void
     public var quit: () -> Void
     public var copyUpdateCommand: () -> Void
     public var toggleUpdateChecks: () -> Void
     public var toggleDNSProbe: () -> Void
+    public var restartAction: () -> Void
+    public var restartApp: () -> Void
     public init(copyIP: @escaping () -> Void = {}, refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
+                toggleApplicationsLink: @escaping () -> Void = {},
+                showWelcomeWindow: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping () -> Void = {},
                 toggleUpdateChecks: @escaping () -> Void = {},
-                toggleDNSProbe: @escaping () -> Void = {}) {
+                toggleDNSProbe: @escaping () -> Void = {},
+                restartAction: @escaping () -> Void = {},
+                restartApp: @escaping () -> Void = {}) {
         self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
+        self.toggleApplicationsLink = toggleApplicationsLink
+        self.showWelcomeWindow = showWelcomeWindow
         self.copyUpdateCommand = copyUpdateCommand
         self.toggleUpdateChecks = toggleUpdateChecks
         self.toggleDNSProbe = toggleDNSProbe
+        self.restartAction = restartAction
+        self.restartApp = restartApp
     }
 }
 
@@ -36,8 +48,14 @@ final class ActionTarget: NSObject {
 }
 
 public enum MenuBuilder {
+    // Full date + time, including seconds (not time-only): an hours- or
+    // days-old "Since"/"Last seen" otherwise looks identical to a minutes-old
+    // one. Locale-aware via dateStyle/timeStyle (not a hardcoded format
+    // string) so it renders correctly for the user's own locale, e.g.
+    // "17.08.26, 10:45:32" in German locales vs "8/17/26, 10:45:32 AM" in US
+    // English.
     static let timeFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .medium; return f
     }()
 
     static func info(_ title: String) -> NSMenuItem {
@@ -57,14 +75,25 @@ public enum MenuBuilder {
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
                              dnsProbeEnabled: Bool = true,
+                             restartUpdate: String? = nil, applicationsLinked: Bool = false,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        // Quiet update hint — never a popup or badge, just the first row when
-        // a newer release exists. Clicking copies the brew command; the app
-        // itself never downloads or modifies anything.
-        if let availableUpdate {
+        // Restart-to-finish-update supersedes the plain "update available" row:
+        // if the copy on disk is already newer than the running process (e.g.
+        // `brew upgrade` ran but this process wasn't relaunched), advertising
+        // "run brew upgrade" again would just tell the user to redo what
+        // they've already done. Only one of these two rows is ever shown.
+        if let restartUpdate {
+            menu.addItem(action("↻ Restart to finish update (v\(restartUpdate))") {
+                actions.restartAction()
+            })
+            menu.addItem(.separator())
+        } else if let availableUpdate {
+            // Quiet update hint — never a popup or badge, just the first row when
+            // a newer release exists. Clicking copies the brew command; the app
+            // itself never downloads or modifies anything.
             menu.addItem(action("⬆︎ Update v\(availableUpdate) available (brew upgrade whereamip)") {
                 actions.copyUpdateCommand()
             })
@@ -83,7 +112,7 @@ public enum MenuBuilder {
             }
         } else {
             let flag = state.exit?.countryCode.flatMap { Flags.emoji(countryCode: $0) } ?? "❓"
-            menu.addItem(info("\(flag)  WhereAmIP"))
+            menu.addItem(info("\(flag)  WhereAmIP v\(whereamipVersion)"))
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
@@ -163,20 +192,30 @@ public enum MenuBuilder {
         styleItem.submenu = styleMenu
         settingsMenu.addItem(styleItem)
         settingsMenu.addItem(.separator())
-        let notify = action("Notify on changes") { actions.toggleNotifications() }
+        let notify = action("Show Notifications") { actions.toggleNotifications() }
         notify.state = notificationsEnabled ? .on : .off
         settingsMenu.addItem(notify)
         let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }
         login.state = launchAtLogin ? .on : .off
         settingsMenu.addItem(login)
+        let appsLink = action("Add to Applications folder") { actions.toggleApplicationsLink() }
+        appsLink.state = applicationsLinked ? .on : .off
+        settingsMenu.addItem(appsLink)
         let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
         checkUpdates.state = updatesEnabled ? .on : .off
         settingsMenu.addItem(checkUpdates)
         let dnsProbe = action("Check DNS egress") { actions.toggleDNSProbe() }
         dnsProbe.state = dnsProbeEnabled ? .on : .off
         settingsMenu.addItem(dnsProbe)
+        settingsMenu.addItem(.separator())
+        // Plain action (no checkmark, unlike the toggles above) — re-opens
+        // the first-run window on demand, independent of whether it's
+        // already been acknowledged.
+        settingsMenu.addItem(action("Show Welcome Window") { actions.showWelcomeWindow() })
         settings.submenu = settingsMenu
         menu.addItem(settings)
+
+        menu.addItem(action("Restart WhereAmIP") { actions.restartApp() })
 
         let quit = action("Quit WhereAmIP", key: "q") { actions.quit() }
         quit.keyEquivalentModifierMask = [.command]

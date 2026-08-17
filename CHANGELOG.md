@@ -27,11 +27,75 @@ install-ready notes per version.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
 - Version row in Settings.
+- **Add to Applications folder** toggle (Settings ▸ Add to Applications folder, and in the
+  new first-start window): creates/removes a `/Applications/WhereAmIP.app`
+  symlink pointing at the stable brew `opt` path, so the app shows up in
+  Spotlight/Launchpad/Finder without the Homebrew formula itself writing
+  outside its own prefix — the symlink is only ever created when a user
+  clicks the toggle. Also available via `whereamip config set applications
+  true|false`; `config get` reports the live on-disk state, not a stored
+  preference. Never touches a real (non-symlink) path if one happens to
+  already exist there.
+- **Welcome window**: shown once on first launch — what the app is, where it
+  lives in the menu bar (with a note that notched MacBooks can hide it behind
+  the notch), and live-wired Launch at Login / Add to Applications folder /
+  Show Notifications checkboxes plus a privacy note. Only clicking
+  Done acknowledges it; closing it any other way shows it again next launch.
+  Can also be reopened any time via **Settings ▸ Show Welcome Window**.
+  - Re-shown on upgrade when a maintainer-controlled `welcomeMilestone`
+    constant advances past what a given install last acknowledged (stored as
+    `welcomedMilestone`, not a plain "seen it" bool) — lets a future release
+    with genuinely notable changes re-surface the window (titled "what's
+    new" instead of "Welcome") without pestering on every ordinary upgrade.
+  - The notifications checkbox is never pre-checked and never triggers the
+    system permission dialog just by the window opening — only a direct
+    click can. If notifications were previously denied at the OS level, it
+    shows an inline "open Notifications settings" link instead of silently
+    re-requesting (which would resolve with no UI and look broken); the
+    Settings-menu toggle hits the same previously-denied case by opening
+    System Settings directly, since a menu has no inline-hint surface.
+  - No other permission prompts, no network calls, from this window.
+- Welcome window polish per design review.
+- Wording harmonized on "Show Notifications" everywhere (Settings menu row,
+  welcome window checkbox) — was "Notify on changes" in the menu and "Notify
+  on exit/connectivity changes" in the window; the detail now lives in the
+  window's caption instead. `whereamip config get/set notify` is unaffected
+  (documented stable CLI key, untouched).
 
 ### Fixed
 - `whereamip watch` output is now line-buffered when piped or redirected —
   previously the documented `watch --json >> file` logging pattern could
   delay lines by minutes.
+
+## [0.3.2] — 2026-08-17
+
+### Added
+- **Restart to finish update**: when `brew upgrade` has already replaced the
+  files on disk but the running process is still the old binary, the dropdown
+  now shows "↻ Restart to finish update (v…)" instead of re-advertising an
+  update the user already installed — one click relaunches into the new
+  version via the stable brew `opt` path. Field-motivated: a `brew upgrade`
+  left the app telling the user to do something they'd just done.
+- **Restart WhereAmIP** menu item, always available above Quit, for a plain
+  relaunch of the app independent of the update case.
+- The dropdown header and CLI status show the running version
+  (`WhereAmIP v0.3.2` in the dropdown; `whereamip status` gets a footer line
+  and `--json` gains a top-level `"appVersion"` key), so it's clear at a
+  glance which version is active — especially useful alongside the
+  restart-to-finish-update row.
+
+### Changed
+- "Since"/"Last seen online" timestamps in the dropdown now show a full,
+  locale-aware date and time (down to the second), not just a bare `HH:mm` —
+  an hours- or days-old state no longer looks identical to a minutes-old one.
+
+## [0.3.1] — 2026-08-17
+
+### Added
+- App icon: a mesh flag with a location pin and network route lines. Vector
+  source lives in `docs/icon-source.svg`; every `.icns` size is rendered
+  straight from the vector for crisp small sizes. Shown in Dock, Finder,
+  Cmd-Tab, and the README.
 
 ## [0.3] — 2026-08-16
 

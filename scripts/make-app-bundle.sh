@@ -4,7 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${1:-dist}"
-VERSION=$(grep -o '"[0-9][0-9.]*"' Sources/WhereAmIPCore/Version.swift | tr -d '"')
+# Scoped to the whereamipVersion line specifically — Version.swift also
+# declares welcomeMilestone (another quoted dotted-number literal), which a
+# file-wide grep would pick up too and corrupt VERSION into a multi-line value.
+VERSION=$(grep '^public let whereamipVersion' Sources/WhereAmIPCore/Version.swift | grep -o '"[0-9][0-9.]*"' | tr -d '"')
 # SWIFT_BUILD_FLAGS lets callers (e.g. the Homebrew formula, which already ran
 # its own `swift build -c release --disable-sandbox`) pass extra flags into
 # this script's build so it doesn't spawn a second, differently-sandboxed
@@ -21,6 +24,7 @@ cp .build/release/WhereAmIPApp "$APP/Contents/MacOS/whereamip"
 for bundle in .build/release/*.bundle; do
   [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
+cp docs/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -33,6 +37,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
   <key>NSAppTransportSecurity</key><dict>
     <key>NSExceptionDomains</key><dict>

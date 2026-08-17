@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon-source.svg" width="140" alt="WhereAmIP icon — a mesh flag with a location pin and network route lines">
+</p>
+
 # WhereAmIP
 
 > Where am I(P)? — a native macOS menu bar app that shows the country flag of your current internet exit point, tells you when your connection is *actually* dead, and untangles what your VPNs and iCloud Private Relay are really doing to your traffic.
@@ -17,7 +21,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - DNS resolver display and leak detection — shows which resolvers macOS uses (per interface) and whether encrypted DNS (DoH/DoT profile) is in force; an optional active probe (a lightweight TXT lookup of a Google-operated beacon, `o-o.myaddr.l.google.com`, sent via mDNSResponder on each full refresh) checks that queries exit through the VPN tunnel; `config set dns false` disables the probe entirely, so no such query is ever sent
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
-- Notifications on exit/connectivity change (off by default), launch at login
+- Notifications (off by default) — alerts on exit, route, or connectivity changes; launch at login
 - Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
 
@@ -39,7 +43,13 @@ This is a build-from-source formula (Xcode command line tools required) — no G
 open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"
 ```
 
-Then enable **Settings ▸ Launch at Login** inside the app so it starts automatically next time.
+Then enable **Settings ▸ Launch at Login** inside the app so it starts automatically next time. A first-start window also walks you through this — it offers Launch at Login and Add to Applications folder as live toggles the moment the app opens for the first time.
+
+Optional — make it show up in /Applications (the symlink survives upgrades); the first-start window's "Add to Applications folder" toggle (or **Settings ▸ Add to Applications folder** any time after) does this for you, but the manual `ln -s` below still works too for CLI-only folks:
+
+```bash
+ln -s "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app" /Applications/WhereAmIP.app
+```
 
 > If Launch at Login stops working after a `brew upgrade`, re-toggle it in Settings.
 
