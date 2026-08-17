@@ -148,7 +148,11 @@ public enum MenuBuilder {
                 menu.addItem(info("⚠️ IPv6 leak — v6 exits via \(org) (\(cc))"))
             }
             if state.dns.leak == .confirmed {
-                menu.addItem(info("⚠️ DNS leak — queries answered via \(state.dns.egressIP ?? "?")"))
+                if let org = state.dns.egressOrg, !org.isEmpty {
+                    menu.addItem(info("⚠️ DNS leak — queries answered via \(org) (\(state.dns.egressIP ?? "?"))"))
+                } else {
+                    menu.addItem(info("⚠️ DNS leak — queries answered via \(state.dns.egressIP ?? "?")"))
+                }
             } else if state.dns.leak == .suspected {
                 menu.addItem(info("DNS leak suspected — resolver exits outside the tunnel"))
             }

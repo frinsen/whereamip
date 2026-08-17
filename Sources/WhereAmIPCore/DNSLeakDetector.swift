@@ -10,7 +10,8 @@ public enum DNSLeakDetector {
                               route: RouteInfo,
                               previous: DNSLeak,
                               egressASN: Int? = nil, egressOrg: String? = nil,
-                              egressProvider: String? = nil) -> DNSLeak {
+                              egressProvider: String? = nil,
+                              intentionalDelegation: Bool = false) -> DNSLeak {
         // 0: no tunnel anywhere — nothing can leak, and a gone tunnel clears stale alarms.
         guard route.isVPN || route.v6IsVPN else { return .none }
         // 1: no measurement — never judge, never let failure CLEAR a confirmed alarm.
@@ -63,6 +64,12 @@ public enum DNSLeakDetector {
             let egressAttributionMissing = meaningfulASN(egressASN) == nil && meaningfulOrg(egressOrg) == nil
             if exitHasAttribution, egressAttributionMissing { return previous }
         }
+        // Tailscale's MagicDNS (documented resolver 100.100.100.100) intentionally delegates DNS
+        // to a user-configured upstream — a genuine third-party egress that is the product working
+        // as designed, indistinguishable from a leak by operator comparison alone. Policy (user
+        // decision 2026-08-17): visible as "suspected" in dropdown/CLI, never confirms, never
+        // notifies. https://tailscale.com/kb/1081/magicdns
+        if intentionalDelegation, previous == .suspected { return .suspected }
         return (previous == .suspected || previous == .confirmed) ? .confirmed : .suspected
     }
 

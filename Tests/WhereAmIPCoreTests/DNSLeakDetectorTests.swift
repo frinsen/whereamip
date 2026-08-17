@@ -212,6 +212,33 @@ final class DNSLeakDetectorTests: XCTestCase {
                                                      exit: exitInfo("1.2.3.4", provider: "ipwho.is", org: "  ")))
     }
 
+    // MARK: - C3: MagicDNS cap (intentional delegation)
+
+    func testIntentionalDelegationCapsSuspectedForeverAcrossTwoRounds() {
+        let first = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                           exit6: nil, route: vpn4, previous: .none,
+                                           intentionalDelegation: true)
+        XCTAssertEqual(first, .suspected, "first sight is still suspected")
+        let second = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                            exit6: nil, route: vpn4, previous: first,
+                                            intentionalDelegation: true)
+        XCTAssertEqual(second, .suspected, "MagicDNS delegation caps escalation — never confirms")
+        let third = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                           exit6: nil, route: vpn4, previous: second,
+                                           intentionalDelegation: true)
+        XCTAssertEqual(third, .suspected, "stays capped indefinitely, not just for one extra round")
+    }
+    func testIntentionalDelegationFalseConfirmsNormallyOnSecondMismatch() {
+        let first = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                           exit6: nil, route: vpn4, previous: .none,
+                                           intentionalDelegation: false)
+        XCTAssertEqual(first, .suspected)
+        let second = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                            exit6: nil, route: vpn4, previous: first,
+                                            intentionalDelegation: false)
+        XCTAssertEqual(second, .confirmed, "without the flag, escalation proceeds exactly as before")
+    }
+
     func testIsMeaningfulHelpers() {
         XCTAssertTrue(DNSLeakDetector.isMeaningful("1.2.3.4"))
         XCTAssertTrue(DNSLeakDetector.isMeaningful("2a00::1"))

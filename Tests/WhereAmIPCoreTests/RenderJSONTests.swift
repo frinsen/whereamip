@@ -147,6 +147,22 @@ final class RenderJSONTests: XCTestCase {
         let h = StateRenderer.human(state)
         XCTAssertTrue(h.contains("⚠️ DNS leak: queries answered via 203.0.113.7"))
     }
+    func testHumanShowsDNSLeakConfirmedLineWithResolvedOperator() {
+        var state = ExitState(connectivity: .online)
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        state.dns.egressOrg = "Cloudflare, Inc."
+        let h = StateRenderer.human(state)
+        XCTAssertTrue(h.contains("⚠️ DNS leak: queries answered via Cloudflare, Inc. (203.0.113.7)"))
+    }
+    func testHumanShowsDNSLeakConfirmedLineWithoutOperatorFallsBack() {
+        var state = ExitState(connectivity: .online)
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        XCTAssertNil(state.dns.egressOrg)
+        let h = StateRenderer.human(state)
+        XCTAssertTrue(h.contains("⚠️ DNS leak: queries answered via 203.0.113.7"))
+    }
     func testHumanShowsDNSLeakSuspectedLine() {
         var state = ExitState(connectivity: .online)
         state.dns.leak = .suspected

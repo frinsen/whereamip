@@ -576,6 +576,69 @@ final class MonitorTests: XCTestCase {
                        "no attribution data at all must never confirm a leak, even on repeated mismatches")
     }
 
+    // MARK: - C3: MagicDNS cap (Wave C)
+
+    func testMagicDNSResolverCapsPersistentAttributedMismatchAtSuspected() async {
+        // Resolver set includes Tailscale's documented MagicDNS address (100.100.100.100).
+        // Even with a real, attributed mismatch that persists across two full refreshes (which
+        // would normally confirm), the verdict must cap at .suspected and never advance.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date(), asn: 3209)
+        let dnsConfig = MockDNSConfig(resolvers: [DNSResolver(address: "100.100.100.100", isIPv6: false)])
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 9999, lookupOrg: "Some Other Org"),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "Tailscale")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: dnsConfig,
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let afterFirst = await m.currentState()
+        XCTAssertEqual(afterFirst.dns.leak, .suspected)
+
+        await m.fullRefresh()
+        let afterSecond = await m.currentState()
+        XCTAssertEqual(afterSecond.dns.leak, .suspected,
+                       "MagicDNS resolver caps the verdict at suspected — never confirms, even with attribution")
+    }
+
+    // MARK: - C4: leak row resolved operator (Wave C)
+
+    func testConfirmedLeakStoresEgressOrgFromTheReusedAttributionLookup() async {
+        // Monitor already performs one geo.lookup for the org/ASN rescue — C4 reuses that same
+        // result as the confirmed row's displayed operator, no extra lookup.
+        let c = Counter()
+        let dnsProbe = MockDNSProbe(result: ("203.0.113.7", false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date(), asn: 3209)
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 9999, lookupOrg: "Cloudflare, Inc."),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: dnsProbe,
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.leak, .confirmed)
+        XCTAssertEqual(s.dns.egressOrg, "Cloudflare, Inc.")
+        let lookupCalls = await c.lookupCalls
+        XCTAssertEqual(lookupCalls, 2, "one attribution lookup per full refresh — no extra lookup for the org display")
+    }
+
     func testEgressAttributionLookupUsesECSNetworkAddressNotThePrefix() async {
         // IMPORTANT 7: geo endpoints 404 on ECS prefixes ("1.2.3.0/24") — Monitor must strip to
         // the bare network address ("1.2.3.0") before looking it up, and must do so exactly

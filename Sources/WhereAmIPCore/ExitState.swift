@@ -145,12 +145,17 @@ public struct DNSInfo: Equatable, Codable, Sendable {
     public var egressIsIPv6: Bool
     public var measuredAt: Date?
     public var leak: DNSLeak
+    // The org attributed to `egressIP` by the same geo lookup Monitor already performs for the
+    // org/ASN rescue (Wave B) — reused here, no extra lookup. Optional and absent from older
+    // persisted JSON; the synthesized Codable conformance decodes a missing key as nil.
+    public var egressOrg: String?
     public init(resolvers: [DNSResolver] = [], encryption: DNSEncryption = .unknown,
                 egressIP: String? = nil, egressIsIPv6: Bool = false,
-                measuredAt: Date? = nil, leak: DNSLeak = .unknown) {
+                measuredAt: Date? = nil, leak: DNSLeak = .unknown, egressOrg: String? = nil) {
         self.resolvers = resolvers; self.encryption = encryption
         self.egressIP = egressIP; self.egressIsIPv6 = egressIsIPv6
         self.measuredAt = measuredAt; self.leak = leak
+        self.egressOrg = egressOrg
     }
     // DNSConfigReader.parse deliberately dedups by (address, interface) — a global entry plus
     // one per-service entry — so the same address can appear in `resolvers` up to 3x. That's

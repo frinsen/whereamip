@@ -51,7 +51,11 @@ public enum StateRenderer {
         // Leak surfacing matches the dropdown's warning-row spirit (MenuBuilder): visible even
         // when the resolvers list itself is empty, so it never depends on the line above.
         if state.dns.leak == .confirmed {
-            lines.append("⚠️ DNS leak: queries answered via \(state.dns.egressIP ?? "?")")
+            if let org = state.dns.egressOrg, !org.isEmpty {
+                lines.append("⚠️ DNS leak: queries answered via \(org) (\(state.dns.egressIP ?? "?"))")
+            } else {
+                lines.append("⚠️ DNS leak: queries answered via \(state.dns.egressIP ?? "?")")
+            }
         } else if state.dns.leak == .suspected {
             lines.append("DNS leak suspected — resolver exits outside the tunnel")
         }

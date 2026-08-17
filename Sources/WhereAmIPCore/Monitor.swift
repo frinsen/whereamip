@@ -234,20 +234,25 @@ public actor Monitor {
                                                       route: new.route,
                                                       previous: state.dns.leak,
                                                       egressASN: egressASN, egressOrg: egressOrg,
-                                                      egressProvider: egressProvider)
-                // On a failed probe (egress nil), egressIP/egressIsIPv6/measuredAt describe the
-                // last SUCCESSFUL measurement together — preserve all three as a pair rather
-                // than nil-ing egressIP while keeping the old measuredAt (that mismatched pair
-                // is what degraded a confirmed row's "via ?" display below).
+                                                      egressProvider: egressProvider,
+                                                      intentionalDelegation: new.dns.resolvers.contains {
+                                                          $0.address == "100.100.100.100"
+                                                      })
+                // On a failed probe (egress nil), egressIP/egressIsIPv6/measuredAt/egressOrg
+                // describe the last SUCCESSFUL measurement together — preserve all four as a
+                // pair rather than nil-ing egressIP while keeping the old measuredAt (that
+                // mismatched pair is what degraded a confirmed row's "via ?" display below).
                 new.dns.egressIP = egress?.ip ?? state.dns.egressIP
                 new.dns.egressIsIPv6 = egress?.isIPv6 ?? state.dns.egressIsIPv6
                 new.dns.measuredAt = egress != nil ? Date() : state.dns.measuredAt
+                new.dns.egressOrg = egress != nil ? egressOrg : state.dns.egressOrg
                 Log.dns.debug("verdict: egress=\(egress?.ip ?? "nil", privacy: .public) leak=\(new.dns.leak.rawValue, privacy: .public)")
             } else {
                 new.dns.leak = .unknown
                 new.dns.egressIP = nil
                 new.dns.egressIsIPv6 = false
                 new.dns.measuredAt = nil
+                new.dns.egressOrg = nil
             }
 
             let httpsIP = new.exit?.ip

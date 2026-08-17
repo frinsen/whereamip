@@ -31,4 +31,31 @@ final class DNSModelTests: XCTestCase {
     func testJSONOutputContainsDNSKey() {
         XCTAssertTrue(StateRenderer.json(ExitState()).contains("\"dns\""))
     }
+
+    // MARK: - C4: DNSInfo.egressOrg
+
+    func testOldDNSJSONWithoutEgressOrgKeyStillDecodes() throws {
+        // dns-shaped JSON predating egressOrg (Wave C) — no "egressOrg" key at all. Must decode
+        // with a nil default rather than throw.
+        let old = """
+        {"connectivity":"online","exit":{"ip":"1.2.3.4","provider":"test","fetchedAt":"2026-08-16T10:00:00Z"},"ipv6Leak":false,"privateRelay":{"status":"inactive"},"route":{"defaultInterface":"en0","hijackRoutePresent":false,"isVPN":false},"since":"2026-08-16T10:00:00Z","dns":{"resolvers":[],"encryption":"unknown","egressIsIPv6":false,"leak":"confirmed","egressIP":"203.0.113.7"}}
+        """
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let state = try dec.decode(ExitState.self, from: Data(old.utf8))
+        XCTAssertNil(state.dns.egressOrg)
+        XCTAssertEqual(state.dns.leak, .confirmed)
+        XCTAssertEqual(state.dns.egressIP, "203.0.113.7")
+    }
+
+    func testDNSInfoWithEgressOrgRoundTrips() throws {
+        var s = ExitState()
+        s.dns = DNSInfo(resolvers: [], encryption: .doh, egressIP: "203.0.113.7", egressIsIPv6: false,
+                        measuredAt: Date(timeIntervalSince1970: 1_000_000), leak: .confirmed,
+                        egressOrg: "Cloudflare, Inc.")
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let back = try dec.decode(ExitState.self, from: enc.encode(s))
+        XCTAssertEqual(back.dns, s.dns)
+        XCTAssertEqual(back.dns.egressOrg, "Cloudflare, Inc.")
+    }
 }

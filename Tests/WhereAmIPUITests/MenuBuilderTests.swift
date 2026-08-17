@@ -434,6 +434,27 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(title, "🇨🇿 ⚠️")
     }
 
+    func testDNSLeakConfirmedRowShowsResolvedOperatorWhenPresent() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        state.dns.egressOrg = "Cloudflare, Inc."
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(menu.items.map(\.title).contains(
+            "⚠️ DNS leak — queries answered via Cloudflare, Inc. (203.0.113.7)"))
+    }
+    func testDNSLeakConfirmedRowFallsBackWhenOrgMissing() {
+        var state = ExitState(connectivity: .online)
+        state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "203.0.113.7"
+        XCTAssertNil(state.dns.egressOrg)
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(menu.items.map(\.title).contains("⚠️ DNS leak — queries answered via 203.0.113.7"))
+    }
     func testDNSSuspectedRowIsQuieter() {
         var state = ExitState(connectivity: .online)
         state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())
