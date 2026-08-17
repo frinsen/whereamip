@@ -25,6 +25,14 @@ public enum VPNNamer {
         // help the CLI, which has no AppKit and passes empty runningBundleIDs.
         if localAddress == "172.16.0.2" { return "Cloudflare WARP" }
         for (id, name) in bundleIDNames where runningBundleIDs.contains(id) { return name }
+        // Native NE personal VPNs (IKEv2/IPsec profiles installed via Settings or MDM) expose
+        // no name in SCDynamicStore or any other reachable store — field-verified 2026-08-17,
+        // no Setup:/UserDefinedName entry exists for their ipsecN interface either. A truthful
+        // generic label beats showing nothing at all. Kept last so it can never shadow a real
+        // name from any of the tells above. The CGNAT/WARP tells above stay in place until A1's
+        // widened SCServiceNamer scan is field-verified against them (reviewer requirement) —
+        // they don't retire here.
+        if interface.hasPrefix("ipsec") { return "IKEv2 VPN" }
         return nil
     }
     static func isCGNAT(_ ip: String) -> Bool {
