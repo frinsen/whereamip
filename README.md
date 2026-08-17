@@ -22,7 +22,9 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications (off by default) — alerts on exit, route, or connectivity changes; launch at login
-- Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
+- Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. Once brew has installed it, the row becomes "↻ Restart to finish update" — one click relaunches into the new version. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
+- One-time welcome window on first start (and once after major releases): what the app is, where it lives, and live toggles for Launch at Login, Add to Applications folder, and Show Notifications — no permission prompts unless you flip a toggle. Reopen it anytime via Settings
+- Honest freshness: the dropdown shows both "Since" (when the current state began, to the second) and "Checked" (when it was last verified), and a manual Refresh shows a brief loading cue in the menu bar
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
 
 ## Install
@@ -107,6 +109,10 @@ WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), b
 - **IPv6 hijack detection** (Phase 2 of the IPv6 leak detector): the v6 hijack pair (`::/1` + `8000::/1`), analogous to the existing OpenVPN IPv4 hijack detection; re-add IPv6 relay egress ranges.
 - Faster far-end detection: a VPN server switch inside the same tunnel produces no local route event, so today the geo backstop (5 min) is the only trigger.
 - Optional history: `whereamip watch --json >> file` already works as a manual log; consider last-N transitions in the dropdown.
+- **Texts out of code + multi-language**: move all user-facing strings into localization catalogs and long-form content (onboarding, per-release what's-new highlights) into bundled Markdown files — centrally editable, translation-ready (`de` first). The what's-new window then renders real release highlights instead of repeating the pitch.
+- Signed & notarized downloads (needs an Apple Developer membership): would turn the unsigned release zip into a double-click install, enable a fast `brew install --cask` path, and drop the Gatekeeper caveats. Deliberately deferred until the project earns it — the build-from-source formula already installs cleanly without Apple's toll.
+- Flag-image style polish: rounded corners + hairline border so the PNG flags hold up on any menu bar background (emoji and ISO styles are unaffected).
+- Separate bundle id for dev builds (`….dev`): test bundles currently share settings and notification permissions with the installed app — convenient, but experiments can touch real state.
 
 ## Credits
 

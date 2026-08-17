@@ -71,11 +71,32 @@ public enum MenuBuilder {
         return i
     }
 
+    // Sized down from the full-resolution app icon for a menu row (NSMenuItem
+    // images render best around 16-18pt) — replaces the header row's flag
+    // emoji, which was redundant there: it's already visible in the menu bar
+    // directly above. Deliberately `NSApplication.shared` rather than the
+    // bare `NSApp` global: `NSApp` is an implicitly-unwrapped optional that
+    // only gets populated as a side effect of `NSApplicationMain`/an app
+    // actually launching — under `swift test` (no real app launch) it's
+    // nil, and force-unwrapping it crashed the whole test bundle. `.shared`
+    // is the safe, always-lazily-initialized accessor. It returns the
+    // bundle's actual icon in a real .app; in the test environment (no real
+    // bundle) AppKit hands back its generic icon instead, which is fine —
+    // tests only assert an image is present, not its pixels. Copied before
+    // resizing so this never mutates the shared instance (which other
+    // code/AppKit itself may also read).
+    static func appIconImage(size: CGFloat = 18) -> NSImage? {
+        guard let icon = NSApplication.shared.applicationIconImage?.copy() as? NSImage else { return nil }
+        icon.size = NSSize(width: size, height: size)
+        return icon
+    }
+
     public static func build(state: ExitState, style: MenuBarStyle,
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
                              dnsProbeEnabled: Bool = true,
                              restartUpdate: String? = nil, applicationsLinked: Bool = false,
+                             lastChecked: Date? = nil,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -111,8 +132,13 @@ public enum MenuBuilder {
                 menu.addItem(info("Last seen online: \(timeFormatter.string(from: exit.fetchedAt)) via \(flag) \(exit.org ?? "")"))
             }
         } else {
-            let flag = state.exit?.countryCode.flatMap { Flags.emoji(countryCode: $0) } ?? "❓"
-            menu.addItem(info("\(flag)  WhereAmIP v\(whereamipVersion)"))
+            // App icon, not the exit-country flag: the flag is already the
+            // menu *bar* glyph directly above this dropdown, so repeating it
+            // here was redundant. The icon instead identifies which app this
+            // dropdown belongs to.
+            let header = info("WhereAmIP v\(whereamipVersion)")
+            header.image = appIconImage()
+            menu.addItem(header)
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
@@ -139,6 +165,15 @@ public enum MenuBuilder {
                 }
             }
             menu.addItem(info("Since \(timeFormatter.string(from: state.since))"))
+            // Proof of freshness even when nothing changed: "Since" only moves
+            // when the exit/connectivity/route actually differs (see Monitor
+            // .apply), so a manual Refresh that confirms "still the same"
+            // would otherwise look identical to no refresh ever happening.
+            // Same formatter as Since — one source of truth, not a second
+            // date-format decision to keep in sync.
+            if let lastChecked {
+                menu.addItem(info("Checked: \(timeFormatter.string(from: lastChecked))"))
+            }
         }
 
         // VPN / relay block — only applicable lines

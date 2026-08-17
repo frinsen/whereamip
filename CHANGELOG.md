@@ -27,6 +27,67 @@ install-ready notes per version.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
 - Version row in Settings.
+
+### Fixed
+- `whereamip watch` output is now line-buffered when piped or redirected —
+  previously the documented `watch --json >> file` logging pattern could
+  delay lines by minutes.
+
+## [0.4.1] — 2026-08-17
+
+### Fixed
+- **Restart/relaunch could silently drop the new instance.** Field bug from
+  the first real 0.3.2→0.4 upgrade: clicking "↻ Restart to finish update" (or
+  plain "Restart WhereAmIP") terminated the running process but the new one
+  sometimes never launched — zero `whereamip` processes left afterward. The
+  old mechanism fired `open -n <path>` and then called `NSApp.terminate`
+  after a fixed 0.5s delay; that delay was a race, not a synchronization —
+  if this process (same bundle ID as the one being launched) died while
+  Launch Services was still mid-handshake on the pending launch, LS could
+  coalesce/abort it. Replaced with a detached waiter that polls for this
+  process's PID to actually disappear before running `open`, then terminates
+  immediately with no arbitrary delay — closing the race window entirely.
+- **Welcome window's Show Notifications checkbox could disagree with
+  Settings.** Reopening the welcome window (Settings ▸ Show Welcome Window)
+  with notifications already enabled showed the checkbox unchecked, directly
+  under a header claiming "reflects current settings". The original
+  "never pre-checked" rule was written for first-run only (where the setting
+  is always off anyway) and stopped being true the moment the window became
+  reopenable. Now mirrors `notificationsEnabled` like its two sibling
+  checkboxes, with one refinement: if the OS-level permission has actually
+  been denied, it shows unchecked regardless of the stored setting (an
+  enabled setting that can't deliver anything is honestly "off"), alongside
+  the existing denied-hint. The permission dialog still only ever appears as
+  a direct result of actively checking the box from off.
+- **Notification banners and System Settings showed a placeholder icon**,
+  even after a full cache reset. `AppIcon.icns` alone (`CFBundleIconFile`)
+  isn't enough — the notification subsystem on this macOS specifically looks
+  for `CFBundleIconName` resolved via a compiled asset catalog, which the
+  app bundle never shipped. Added the modern icon path: `docs/Assets.car`,
+  compiled once at dev time (`scripts/update-appicon.sh`, requires full
+  Xcode's `actool` — not available in Homebrew's Command-Line-Tools-only
+  build environment) and committed alongside `AppIcon.icns`;
+  `make-app-bundle.sh` only ever copies the committed file, never compiles
+  it, so `brew install` is unaffected. Both `CFBundleIconFile` and the new
+  `CFBundleIconName` are set in Info.plist — belt and suspenders, since
+  older subsystems still read the `.icns` directly.
+- **Manual refresh's loading cue shifted every neighboring menu bar icon.**
+  The "…" swap that replaced the glyph during a manual refresh changed the
+  status item's width, so surrounding icons visibly jumped left and back —
+  same disease class as the earlier welcome-window layout jump. Manual
+  refresh now dims the menu bar icon (native `NSStatusBarButton
+  .appearsDisabled`, the same mechanism system status items use to show
+  "busy") instead of swapping it — zero width change, still visible
+  feedback.
+
+### Changed
+- Dropdown header row shows the app icon instead of the exit-country flag
+  emoji (which was redundant there — the flag is already the menu *bar*
+  glyph directly above the dropdown); title is now plain "WhereAmIP v<version>".
+
+## [0.4] — 2026-08-17
+
+### Added
 - **Add to Applications folder** toggle (Settings ▸ Add to Applications folder, and in the
   new first-start window): creates/removes a `/Applications/WhereAmIP.app`
   symlink pointing at the stable brew `opt` path, so the app shows up in
@@ -61,11 +122,18 @@ install-ready notes per version.
   on exit/connectivity changes" in the window; the detail now lives in the
   window's caption instead. `whereamip config get/set notify` is unaffected
   (documented stable CLI key, untouched).
-
-### Fixed
-- `whereamip watch` output is now line-buffered when piped or redirected —
-  previously the documented `watch --json >> file` logging pattern could
-  delay lines by minutes.
+- **Manual refresh now shows a transient loading cue**: clicking Refresh (⌘R)
+  briefly sets the menu bar title to "…" and clears the image — across all
+  three styles — while the check runs, then re-renders unconditionally so
+  the indicator never sticks even when the refresh confirms nothing changed.
+  Automatic triggers (timers, wake, path changes) stay indicator-free, per
+  the "silent vs manual refresh" field lesson: a spinner on every 30-second
+  probe would just be noise.
+- **"Checked:" row in the dropdown**, directly under "Since": a manual
+  refresh that finds nothing new no longer looks identical to no refresh at
+  all. Tracked app-locally (not part of `ExitState`/the JSON output) and
+  updated after every fullRefresh/probeTick; reuses the same date/time
+  formatter as "Since".
 
 ## [0.3.2] — 2026-08-17
 
