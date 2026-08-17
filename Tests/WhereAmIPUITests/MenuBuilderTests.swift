@@ -13,6 +13,14 @@ final class MenuBuilderTests: XCTestCase {
     }
     func titles(_ menu: NSMenu) -> [String] { menu.items.map(\.title) }
 
+    // Assertions here go through L10n rather than literals ON PURPOSE: retuning the
+    // wording of a row is exactly what the extraction exists to allow, and a test that
+    // pinned the prose would veto every such edit. What's actually asserted is
+    // structure — which row, in what order, enabled or not, with which data
+    // interpolated. `stem` serves the absence checks: the literal part of a format up
+    // to its first placeholder is enough to recognise a row without pinning wording.
+    func stem(_ key: L10nKey) -> String { String(L10n.string(key).prefix { $0 != "%" }) }
+
     func testMenuContainsEssentials() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: true, actions: MenuActions())
@@ -21,8 +29,8 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(all.contains("Amsterdam"))
         XCTAssertTrue(all.contains("M247"))
         XCTAssertTrue(all.contains("OpenVPN"))
-        XCTAssertTrue(all.contains("Private Relay"))
-        XCTAssertTrue(all.contains("Quit WhereAmIP"))
+        XCTAssertTrue(all.contains(L10n.string(.menuPrivateRelay, L10n.string(.menuPrivateRelayVia, "🇩🇪"))))
+        XCTAssertTrue(all.contains(L10n.string(.menuQuit)))
     }
     func testIPRowIsEnabledInfoRowsDisabled() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
@@ -39,8 +47,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: s, style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         let all = titles(menu).joined(separator: "|")
-        XCTAssertFalse(all.contains("VPN"))
-        XCTAssertFalse(all.contains("Private Relay"))
+        XCTAssertFalse(all.contains(stem(.menuRouteVPN)))
+        XCTAssertFalse(all.contains(stem(.menuPrivateRelay)))
     }
     func testNonVPNRouteShowsLinkKindRow() {
         var s = vpnState()
@@ -50,7 +58,7 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: s, style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         let all = titles(menu).joined(separator: "|")
-        XCTAssertTrue(all.contains("Wi-Fi (en0)"))
+        XCTAssertTrue(all.contains(L10n.string(.menuRouteLink, "Wi-Fi", "en0")))
     }
     func testOfflineShowsLastSeen() {
         var s = vpnState()
@@ -58,8 +66,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: s, style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         let all = titles(menu).joined(separator: "|")
-        XCTAssertTrue(all.contains("No internet connection"))
-        XCTAssertTrue(all.contains("Last seen"))
+        XCTAssertTrue(all.contains(L10n.string(.menuOffline)))
+        XCTAssertTrue(all.contains(stem(.menuOfflineLastSeen)))
     }
     func testLastSeenAndSinceShowFullDateAndTime() {
         // Locale-aware: build the expected fragment with the same formatter the
@@ -72,21 +80,21 @@ final class MenuBuilderTests: XCTestCase {
                                      org: "M247 Europe SRL", provider: "ipwho.is", fetchedAt: fixedDate)
         let offlineMenu = MenuBuilder.build(state: offlineState, style: .emoji,
                                             notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let lastSeenItem = offlineMenu.items.first { $0.title.contains("Last seen online") }!
+        let lastSeenItem = offlineMenu.items.first { $0.title.contains(stem(.menuOfflineLastSeen)) }!
         XCTAssertTrue(lastSeenItem.title.contains(expected))
 
         var onlineState = vpnState()
         onlineState.since = fixedDate
         let onlineMenu = MenuBuilder.build(state: onlineState, style: .emoji,
                                            notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let sinceItem = onlineMenu.items.first { $0.title.hasPrefix("Since ") }!
+        let sinceItem = onlineMenu.items.first { $0.title.hasPrefix(stem(.menuSince)) }!
         XCTAssertTrue(sinceItem.title.contains(expected))
     }
     var fixedDate: Date { Date(timeIntervalSince1970: 1_700_000_000) }
     func testCheckedRowAbsentWhenLastCheckedNil() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains { $0.hasPrefix("Checked:") })
+        XCTAssertFalse(titles(menu).contains { $0.hasPrefix(stem(.menuChecked)) })
     }
     func testCheckedRowPresentDirectlyAfterSinceAndFormattedConsistently() {
         // Same formatter as Since — proves the two rows can't drift into two
@@ -100,8 +108,8 @@ final class MenuBuilderTests: XCTestCase {
                                      notificationsEnabled: false, launchAtLogin: false,
                                      lastChecked: checkedDate, actions: MenuActions())
         let all = titles(menu)
-        let sinceIndex = all.firstIndex { $0.hasPrefix("Since ") }!
-        let checkedIndex = all.firstIndex { $0.hasPrefix("Checked:") }!
+        let sinceIndex = all.firstIndex { $0.hasPrefix(stem(.menuSince)) }!
+        let checkedIndex = all.firstIndex { $0.hasPrefix(stem(.menuChecked)) }!
         XCTAssertEqual(checkedIndex, sinceIndex + 1)
         XCTAssertTrue(all[checkedIndex].contains(expected))
     }
@@ -111,14 +119,14 @@ final class MenuBuilderTests: XCTestCase {
         s.route.hijackRoutePresent = true
         let menu = MenuBuilder.build(state: s, style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(titles(menu).joined(separator: "|").contains("hijack"))
+        XCTAssertTrue(titles(menu).contains(L10n.string(.menuOfflineHijack)))
     }
     func testStyleRadioReflectsSelection() {
         let menu = MenuBuilder.build(state: vpnState(), style: .code,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let styleMenu = settings.items.first { $0.title == "Menu Bar Style" }!.submenu!
-        XCTAssertEqual(styleMenu.items.first { $0.state == .on }?.title, "ISO country code")
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let styleMenu = settings.items.first { $0.title == L10n.string(.settingsStyle) }!.submenu!
+        XCTAssertEqual(styleMenu.items.first { $0.state == .on }?.title, L10n.string(.settingsStyleCode))
     }
     func testUpdateRowAppearsFirstWhenAvailable() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
@@ -131,35 +139,34 @@ final class MenuBuilderTests: XCTestCase {
     func testNoUpdateRowWhenUnavailable() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains { $0.contains("Update") })
+        XCTAssertFalse(titles(menu).contains { $0.contains(stem(.menuUpdateAvailable)) })
     }
     func testRestartRowAppearsFirstWhenPresent() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      restartUpdate: "0.3.2", actions: MenuActions())
         let first = menu.items.first!
-        XCTAssertTrue(first.title.contains("Restart to finish update"))
-        XCTAssertTrue(first.title.contains("0.3.2"))
+        XCTAssertEqual(first.title, L10n.string(.menuUpdateRestart, "0.3.2"))
         XCTAssertTrue(first.isEnabled)
     }
     func testRestartRowSupersedesAvailableUpdateRow() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      availableUpdate: "0.3.2", restartUpdate: "0.3.2", actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains { $0.contains("Update v") })
+        XCTAssertFalse(titles(menu).contains { $0.contains(stem(.menuUpdateAvailable)) })
         let first = menu.items.first!
-        XCTAssertTrue(first.title.contains("Restart to finish update"))
+        XCTAssertTrue(first.title.contains(stem(.menuUpdateRestart)))
     }
     func testNoRestartRowWhenNil() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains { $0.contains("Restart to finish update") })
+        XCTAssertFalse(titles(menu).contains { $0.contains(stem(.menuUpdateRestart)) })
     }
     func testGeneralRestartRowAlwaysPresentImmediatelyBeforeQuit() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let restartIndex = menu.items.firstIndex { $0.title == "Restart WhereAmIP" }
-        let quitIndex = menu.items.firstIndex { $0.title == "Quit WhereAmIP" }
+        let restartIndex = menu.items.firstIndex { $0.title == L10n.string(.menuRestart) }
+        let quitIndex = menu.items.firstIndex { $0.title == L10n.string(.menuQuit) }
         XCTAssertNotNil(restartIndex)
         XCTAssertNotNil(quitIndex)
         XCTAssertEqual(restartIndex! + 1, quitIndex!)
@@ -168,9 +175,9 @@ final class MenuBuilderTests: XCTestCase {
     func testHeaderShowsRunningVersion() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let header = menu.items.first { $0.title.contains("WhereAmIP v") }
+        let header = menu.items.first { $0.title.contains(stem(.menuHeader)) }
         XCTAssertNotNil(header)
-        XCTAssertTrue(header!.title.contains("v\(whereamipVersion)"))
+        XCTAssertEqual(header?.title, L10n.string(.menuHeader, whereamipVersion))
     }
     func testHeaderShowsAppIconNotFlagEmoji() {
         // The exit-country flag emoji used to prefix this row — redundant,
@@ -179,8 +186,8 @@ final class MenuBuilderTests: XCTestCase {
         // app the dropdown belongs to instead of repeating the flag.
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let header = menu.items.first { $0.title.contains("WhereAmIP v") }!
-        XCTAssertEqual(header.title, "WhereAmIP v\(whereamipVersion)")
+        let header = menu.items.first { $0.title.contains(stem(.menuHeader)) }!
+        XCTAssertEqual(header.title, L10n.string(.menuHeader, whereamipVersion))
         XCTAssertFalse(header.title.contains("🇳🇱"))
         XCTAssertFalse(header.title.contains("❓"))
         XCTAssertNotNil(header.image)
@@ -189,8 +196,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      restartUpdate: "0.3.2", actions: MenuActions())
-        let restartIndex = menu.items.firstIndex { $0.title == "Restart WhereAmIP" }
-        let quitIndex = menu.items.firstIndex { $0.title == "Quit WhereAmIP" }
+        let restartIndex = menu.items.firstIndex { $0.title == L10n.string(.menuRestart) }
+        let quitIndex = menu.items.firstIndex { $0.title == L10n.string(.menuQuit) }
         XCTAssertNotNil(restartIndex)
         XCTAssertEqual(restartIndex! + 1, quitIndex!)
     }
@@ -198,16 +205,16 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      applicationsLinked: true, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Add to Applications folder" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsApplicationsLink) }!
         XCTAssertEqual(item.state, .on)
     }
     func testAddToApplicationsFolderReflectsStateOff() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      applicationsLinked: false, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Add to Applications folder" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsApplicationsLink) }!
         XCTAssertEqual(item.state, .off)
     }
     func testAddToApplicationsFolderFiresAction() {
@@ -215,8 +222,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      actions: MenuActions(toggleApplicationsLink: { fired = true }))
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Add to Applications folder" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsApplicationsLink) }!
         _ = item.target?.perform(item.action, with: item)
         XCTAssertTrue(fired)
     }
@@ -225,8 +232,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      actions: MenuActions(showWelcomeWindow: { fired = true }))
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Show Welcome Window" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsWelcome) }!
         XCTAssertEqual(item.state, .off)   // plain action, never a checkmark
         _ = item.target?.perform(item.action, with: item)
         XCTAssertTrue(fired)
@@ -239,30 +246,30 @@ final class MenuBuilderTests: XCTestCase {
         // row. Was "Notify on changes".
         let onMenu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                        notificationsEnabled: true, launchAtLogin: false, actions: MenuActions())
-        let settingsOn = onMenu.items.first { $0.title == "Settings" }!.submenu!
-        let onItem = settingsOn.items.first { $0.title == "Show Notifications" }!
+        let settingsOn = onMenu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let onItem = settingsOn.items.first { $0.title == L10n.string(.settingsNotifications) }!
         XCTAssertEqual(onItem.state, .on)
 
         let offMenu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                         notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let settingsOff = offMenu.items.first { $0.title == "Settings" }!.submenu!
-        let offItem = settingsOff.items.first { $0.title == "Show Notifications" }!
+        let settingsOff = offMenu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let offItem = settingsOff.items.first { $0.title == L10n.string(.settingsNotifications) }!
         XCTAssertEqual(offItem.state, .off)
     }
     func testCheckForUpdatesToggleReflectsSettingOn() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      updatesEnabled: true, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Check for Updates" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsUpdates) }!
         XCTAssertEqual(item.state, .on)
     }
     func testCheckForUpdatesToggleReflectsSettingOff() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      updatesEnabled: false, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Check for Updates" }!
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsUpdates) }!
         XCTAssertEqual(item.state, .off)
     }
     func testRendererEmoji() {
@@ -309,7 +316,7 @@ final class MenuBuilderTests: XCTestCase {
     func testIPv6LeakWarningRowIsFirstInInfoArea() {
         let menu = MenuBuilder.build(state: leakState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        let warningIndex = menu.items.firstIndex { $0.title.contains("⚠️ IPv6 leak") }
+        let warningIndex = menu.items.firstIndex { $0.title.contains(stem(.menuLeakIPv6)) }
         XCTAssertNotNil(warningIndex)
         let ipIndex = menu.items.firstIndex { $0.title.contains("185.107.56.123") }
         XCTAssertNotNil(ipIndex)
@@ -322,7 +329,7 @@ final class MenuBuilderTests: XCTestCase {
     func testNoLeakWarningRowWhenNotLeaking() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains { $0.contains("IPv6 leak") })
+        XCTAssertFalse(titles(menu).contains { $0.contains(stem(.menuLeakIPv6)) })
     }
     func testIPv4IPv6SplitLinesWhenCountriesDiffer() {
         var s = vpnState()
@@ -377,8 +384,8 @@ final class MenuBuilderTests: XCTestCase {
         // submenu must not brand itself with a second copy of it.
         let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        let settings = menu.items.first { $0.title == "Settings" }?.submenu
-        XCTAssertFalse(settings?.items.contains { $0.title == "WhereAmIP v\(whereamipVersion)" } ?? true)
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }?.submenu
+        XCTAssertFalse(settings?.items.contains { $0.title == L10n.string(.menuHeader, whereamipVersion) } ?? true)
     }
 
     // MARK: - DNS
@@ -390,7 +397,8 @@ final class MenuBuilderTests: XCTestCase {
         state.dns.encryption = .doh
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(menu.items.map(\.title).contains("DNS: 10.8.0.1 via utun13 · DoH  (+1 more)"))
+        XCTAssertTrue(menu.items.map(\.title).contains(L10n.string(.dnsRow, "10.8.0.1") + L10n.string(.dnsRowInterface, "utun13")
+                                                  + L10n.string(.dnsRowDoH) + L10n.string(.dnsRowMore, 1)))
     }
 
     // Field bug: DNSConfigReader.parse deliberately dedups by (address, interface) — a global
@@ -407,8 +415,8 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(state.dns.resolvers.count, 12)
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix("DNS: 192.168.178.1") }
-        XCTAssertEqual(dnsRow, "DNS: 192.168.178.1  (+3 more)")
+        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix(L10n.string(.dnsRow, "192.168.178.1")) }
+        XCTAssertEqual(dnsRow, L10n.string(.dnsRow, "192.168.178.1") + L10n.string(.dnsRowMore, 3))
     }
 
     func testDNSMoreSuffixOmittedWhenOnlyOneUniqueAddress() {
@@ -419,8 +427,8 @@ final class MenuBuilderTests: XCTestCase {
                                DNSResolver(address: "9.9.9.9", isIPv6: false, interface: "utun4")]
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix("DNS: 9.9.9.9") }
-        XCTAssertEqual(dnsRow, "DNS: 9.9.9.9")
+        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix(L10n.string(.dnsRow, "9.9.9.9")) }
+        XCTAssertEqual(dnsRow, L10n.string(.dnsRow, "9.9.9.9"))
     }
 
     func testDNSLeakWarningRowFirstAndBadgePredicate() {
@@ -430,7 +438,7 @@ final class MenuBuilderTests: XCTestCase {
         state.dns.egressIP = "203.0.113.7"
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(menu.items.map(\.title).contains("⚠️ DNS leak — queries answered via 203.0.113.7"))
+        XCTAssertTrue(menu.items.map(\.title).contains(L10n.string(.menuLeakDNS, "203.0.113.7")))
         let (title, _) = StatusItemRenderer.render(.text("🇨🇿"), warning: true)
         XCTAssertEqual(title, "🇨🇿 ⚠️")
     }
@@ -444,7 +452,7 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
         XCTAssertTrue(menu.items.map(\.title).contains(
-            "⚠️ DNS leak — queries answered via Cloudflare, Inc. (203.0.113.7)"))
+            L10n.string(.menuLeakDNSWithOperator, "Cloudflare, Inc.", "203.0.113.7")))
     }
     func testDNSLeakConfirmedRowFallsBackWhenOrgMissing() {
         var state = ExitState(connectivity: .online)
@@ -454,7 +462,7 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertNil(state.dns.egressOrg)
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(menu.items.map(\.title).contains("⚠️ DNS leak — queries answered via 203.0.113.7"))
+        XCTAssertTrue(menu.items.map(\.title).contains(L10n.string(.menuLeakDNS, "203.0.113.7")))
     }
     func testDNSSuspectedRowIsQuieter() {
         var state = ExitState(connectivity: .online)
@@ -462,7 +470,7 @@ final class MenuBuilderTests: XCTestCase {
         state.dns.leak = .suspected
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(menu.items.map(\.title).contains("DNS leak suspected — resolver exits outside the tunnel"))
+        XCTAssertTrue(menu.items.map(\.title).contains(L10n.string(.menuLeakDNSSuspected)))
     }
 
     // MARK: - DNS detail submenu
@@ -484,22 +492,22 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, dnsProbeEnabled: dnsProbeEnabled,
                                      actions: MenuActions())
-        return menu.items.first { $0.title.hasPrefix("DNS: ") }?.submenu
+        return menu.items.first { $0.title.hasPrefix(stem(.dnsRow)) }?.submenu
     }
 
     func testDNSRowKeepsItsSummaryTitleAndGainsASubmenu() {
         let menu = MenuBuilder.build(state: dnsState(), style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        let row = menu.items.first { $0.title.hasPrefix("DNS: ") }
-        XCTAssertEqual(row?.title, "DNS: 192.168.178.1  (+1 more)")
+        let row = menu.items.first { $0.title.hasPrefix(stem(.dnsRow)) }
+        XCTAssertEqual(row?.title, L10n.string(.dnsRow, "192.168.178.1") + L10n.string(.dnsRowMore, 1))
         XCTAssertNotNil(row?.submenu)
         XCTAssertTrue(row?.isEnabled ?? false, "a disabled parent row can never be opened")
     }
     func testDNSSubmenuListsEachUniqueConfiguredResolverOnceWithInterfaceAttribution() {
         let titles = dnsSubmenu(dnsState())?.items.map(\.title) ?? []
-        XCTAssertEqual(titles.filter { $0.hasPrefix("192.168.178.1") }, ["192.168.178.1 — en0"],
+        XCTAssertEqual(titles.filter { $0.hasPrefix("192.168.178.1") }, [L10n.string(.dnsResolverInterfaces, "192.168.178.1", "en0")],
                        "the same address across a global and a scoped entry is one row")
-        XCTAssertTrue(titles.contains("10.2.0.1 — utun4"), "got: \(titles)")
+        XCTAssertTrue(titles.contains(L10n.string(.dnsResolverInterfaces, "10.2.0.1", "utun4")), "got: \(titles)")
     }
     func testDNSSubmenuListsEveryDiscoveredEgressResolver() {
         let titles = dnsSubmenu(dnsState())?.items.map(\.title) ?? []
@@ -509,8 +517,8 @@ final class MenuBuilderTests: XCTestCase {
     func testDNSSubmenuSectionsAreLabelledAndSeparated() {
         let sub = dnsSubmenu(dnsState())
         let titles = sub?.items.map(\.title) ?? []
-        let configuredIndex = titles.firstIndex(of: "Configured resolvers")
-        let egressIndex = titles.firstIndex(of: "Queries answered by")
+        let configuredIndex = titles.firstIndex(of: L10n.string(.dnsSectionConfigured))
+        let egressIndex = titles.firstIndex(of: L10n.string(.dnsSectionEgress))
         XCTAssertNotNil(configuredIndex)
         XCTAssertNotNil(egressIndex)
         XCTAssertLessThan(configuredIndex!, egressIndex!)
@@ -527,7 +535,7 @@ final class MenuBuilderTests: XCTestCase {
     }
     func testDNSSubmenuShowsDisabledRowWhenProbingIsOff() {
         let titles = dnsSubmenu(dnsState(), dnsProbeEnabled: false)?.items.map(\.title) ?? []
-        XCTAssertTrue(titles.contains("DNS check disabled"), "got: \(titles)")
+        XCTAssertTrue(titles.contains(L10n.string(.dnsDisabled)), "got: \(titles)")
         XCTAssertFalse(titles.contains { $0.hasPrefix("185.44.108.99") },
                        "an opted-out user is shown no egress measurement at all")
     }
@@ -536,8 +544,8 @@ final class MenuBuilderTests: XCTestCase {
         state.dns.egressResolvers = []
         state.dns.egressIP = nil
         let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
-        XCTAssertTrue(titles.contains("Configured resolvers"))
-        XCTAssertFalse(titles.contains("Queries answered by"), "no dangling section label: \(titles)")
+        XCTAssertTrue(titles.contains(L10n.string(.dnsSectionConfigured)))
+        XCTAssertFalse(titles.contains(L10n.string(.dnsSectionEgress)), "no dangling section label: \(titles)")
     }
 
     // MARK: - router-forwarding attribution row
@@ -546,21 +554,21 @@ final class MenuBuilderTests: XCTestCase {
         var state = dnsState()
         state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false)]
         let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
-        XCTAssertTrue(titles.contains("Router forwards to Quad9 — encryption of that hop is set on the router"),
+        XCTAssertTrue(titles.contains(L10n.string(.dnsForwarder, "Quad9")),
                       "got: \(titles)")
     }
     func testForwarderHintRowAbsentWhenAPublicResolverIsConfiguredDirectly() {
         var state = dnsState()
         state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false)]
         let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
-        XCTAssertFalse(titles.contains { $0.hasPrefix("Router forwards to") }, "got: \(titles)")
+        XCTAssertFalse(titles.contains { $0.hasPrefix(stem(.dnsForwarder)) }, "got: \(titles)")
     }
     func testForwarderHintRowAbsentForAnUnattributableEgress() {
         var state = dnsState()
         state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false)]
         state.dns.egressResolvers = [EgressResolver(ip: "62.109.121.1", operatorName: "Deutsche Telekom AG")]
         let titles = dnsSubmenu(state)?.items.map(\.title) ?? []
-        XCTAssertFalse(titles.contains { $0.hasPrefix("Router forwards to") }, "got: \(titles)")
+        XCTAssertFalse(titles.contains { $0.hasPrefix(stem(.dnsForwarder)) }, "got: \(titles)")
     }
 
     func testDNSProbeToggleRow() {
@@ -568,8 +576,8 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, dnsProbeEnabled: false,
                                      actions: MenuActions(toggleDNSProbe: { called = true }))
-        let settings = menu.items.first { $0.title == "Settings" }?.submenu
-        let row = settings?.items.first { $0.title == "Check for DNS Leaks" }
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }?.submenu
+        let row = settings?.items.first { $0.title == L10n.string(.settingsDNSProbe) }
         XCTAssertEqual(row?.state, .off)
         (row?.representedObject as? AnyObject as? NSObject)?.perform(#selector(ActionTarget.fire))
         XCTAssertTrue(called)

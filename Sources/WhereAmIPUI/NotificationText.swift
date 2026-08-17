@@ -1,37 +1,40 @@
 import WhereAmIPCore
 
 public enum NotificationText {
-    static func flag(_ iso: String?) -> String { iso.flatMap { Flags.emoji(countryCode: $0) } ?? "❓" }
+    static func flag(_ iso: String?) -> String {
+        iso.flatMap { Flags.emoji(countryCode: $0) } ?? L10n.string(.notificationFlagUnknown)
+    }
     public static func text(for event: Event) -> (title: String, body: String)? {
         switch event {
         case .countryChanged(let from, let to, let vpnName):
-            return ("Exit changed: \(flag(from)) → \(flag(to))",
-                    vpnName.map { "\($0) took over the default route" } ?? "Exit country changed")
+            return (L10n.string(.notificationCountryChangedTitle, flag(from), flag(to)),
+                    vpnName.map { L10n.string(.notificationCountryChangedBodyVPN, $0) }
+                        ?? L10n.string(.notificationCountryChangedBody))
         case .ipChanged(let country, let fromOrg, let toOrg):
-            return ("New exit IP in \(flag(country))",
+            return (L10n.string(.notificationIPChangedTitle, flag(country)),
                     [fromOrg, toOrg].compactMap { $0 }.joined(separator: " → "))
         case .connectivityLost(let hijack):
-            return ("Internet unreachable",
-                    hijack ? "OpenVPN hijack routes present — tunnel likely dead"
-                           : "Network is up, probes failing")
+            return (L10n.string(.notificationOfflineTitle),
+                    hijack ? L10n.string(.notificationOfflineBodyHijack)
+                           : L10n.string(.notificationOfflineBody))
         case .connectivityRestored(let country, let city, let org):
-            return ("Back online: \(flag(country)) \(city ?? "")",
+            return (L10n.string(.notificationOnlineTitle, flag(country), city ?? ""),
                     org ?? "")
         case .leakSuspected(let org):
-            return ("⚠️ Possible VPN leak",
-                    "VPN route active but traffic still exits via \(org ?? "your ISP")")
+            return (L10n.string(.notificationLeakTitle),
+                    L10n.string(.notificationLeakBody, org ?? L10n.string(.notificationOrgUnknown)))
         case .privateRelayToggled(let active):
-            return ("Private Relay \(active ? "ON" : "OFF")",
-                    active ? "Safari traffic exits via Apple's relay" : "Safari traffic follows the system route")
+            return (L10n.string(active ? .notificationRelayOnTitle : .notificationRelayOffTitle),
+                    L10n.string(active ? .notificationRelayOnBody : .notificationRelayOffBody))
         case .vpnRouteChanged:
             return nil   // route changes alone are visible in the flag; don't notify
         case .ipv6Leak(_, let org):
-            return ("⚠️ IPv6 leak detected",
-                    "IPv6 traffic exits via \(org ?? "your ISP") — your VPN only tunnels IPv4")
+            return (L10n.string(.notificationIPv6Title),
+                    L10n.string(.notificationIPv6Body, org ?? L10n.string(.notificationOrgUnknown)))
         case .dnsLeakConfirmed(let egressIP, _):
-            return ("⚠️ DNS leak detected",
-                    "DNS queries are answered outside your VPN tunnel"
-                    + (egressIP.map { " — resolver egress \($0)" } ?? ""))
+            return (L10n.string(.notificationDNSTitle),
+                    L10n.string(.notificationDNSBody)
+                    + (egressIP.map { L10n.string(.notificationDNSBodyEgress, $0) } ?? ""))
         }
     }
 }
