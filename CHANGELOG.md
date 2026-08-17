@@ -38,12 +38,13 @@ install-ready notes per version.
   resolver's egress IP is attributed — by ASN, or by an exact org-string
   match sourced from the same geo provider as the tunnel exit — to the same
   network operator as the tunnel exit, the verdict is ruled "none" instead
-  of "suspected"/"confirmed". When that attribution is unavailable (the
-  lookup fails, or the tunnel exit itself carries no ASN/org to compare
-  against), a suspected leak now stays "suspected" in the dropdown/CLI
-  rather than advancing to the confirmed badge/notification — it can no
-  longer confirm on a failed lookup, only on genuine operator-mismatch
-  evidence.
+  of "suspected"/"confirmed". When a comparison was possible but could not
+  be evaluated — the tunnel exit carries an ASN/org, but the egress lookup
+  failed — a suspected leak now stays "suspected" in the dropdown/CLI
+  rather than advancing to the confirmed badge/notification: it never
+  confirms on a failed lookup when the rescue check was still owed. When no
+  comparison was ever possible (neither side attributed), behavior is
+  unchanged from before.
 
 ### Fixed
 - `whereamip watch` output is now line-buffered when piped or redirected —
