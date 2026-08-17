@@ -14,6 +14,7 @@ final class GeoProviderTests: XCTestCase {
         XCTAssertEqual(info?.countryCode, "NL")
         XCTAssertEqual(info?.org, "M247 Europe SRL")
         XCTAssertEqual(info?.provider, "ipwho.is")
+        XCTAssertEqual(info?.asn, 9009)
     }
     func testIpwhoisSoftFailureFallsThrough() async {
         MockURLProtocol.handlers["https://ipwho.is/"] = (200, fixture("ipwhois-failed.json"))
@@ -21,6 +22,7 @@ final class GeoProviderTests: XCTestCase {
         let info = await chain().fetch()
         XCTAssertEqual(info?.provider, "ipapi.co")
         XCTAssertEqual(info?.countryCode, "DE")
+        XCTAssertEqual(info?.asn, 3209, "ipapi.co's \"AS3209\" string form must parse to the bare int")
     }
     func testIPOnlyLastResort() async {
         MockURLProtocol.handlers["https://ipwho.is/"] = (500, Data())
@@ -29,6 +31,7 @@ final class GeoProviderTests: XCTestCase {
         let info = await chain().fetch()
         XCTAssertEqual(info?.ip, "46.114.1.2")
         XCTAssertNil(info?.countryCode)
+        XCTAssertNil(info?.asn, "ipify's payload carries no ASN data at all")
     }
     func testAllDeadReturnsNil() async {
         let info = await chain().fetch()   // no handlers → connection errors

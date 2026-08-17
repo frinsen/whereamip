@@ -23,13 +23,20 @@ public struct GeoProviderChain: Sendable {
             let conn = o["connection"] as? [String: Any]
             return ExitInfo(ip: ip, countryCode: o["country_code"] as? String, city: o["city"] as? String,
                             org: (conn?["org"] as? String) ?? (conn?["isp"] as? String),
-                            provider: "ipwho.is", fetchedAt: now)
+                            provider: "ipwho.is", fetchedAt: now, asn: conn?["asn"] as? Int)
         },
         GeoEndpoint(name: "ipapi.co", url: URL(string: "https://ipapi.co/json/")!) { data, now in
             let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             guard let ip = o["ip"] as? String else { throw BadResponse() }
+            // ipapi.co's "asn" field is a string like "AS15169" — parse the digits after the
+            // "AS" prefix; anything else (missing, malformed) yields nil, same as ipify's total
+            // absence of ASN data. Never guess.
+            let asn = (o["asn"] as? String).flatMap { s -> Int? in
+                let digits = s.hasPrefix("AS") ? String(s.dropFirst(2)) : s
+                return Int(digits)
+            }
             return ExitInfo(ip: ip, countryCode: o["country_code"] as? String, city: o["city"] as? String,
-                            org: o["org"] as? String, provider: "ipapi.co", fetchedAt: now)
+                            org: o["org"] as? String, provider: "ipapi.co", fetchedAt: now, asn: asn)
         },
         GeoEndpoint(name: "ipify", url: URL(string: "https://api.ipify.org?format=json")!) { data, now in
             let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]

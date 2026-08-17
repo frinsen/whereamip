@@ -9,14 +9,22 @@ public struct ExitInfo: Equatable, Codable, Sendable {
     public var org: String?
     public var provider: String
     public var fetchedAt: Date
+    // Additive (Wave B, org/ASN-level DNS-leak calibration): the exit's autonomous system
+    // number, when the geo provider's payload carries one. Fully synthesized Codable already
+    // decodes this compatibly against pre-existing JSON — Optional stored properties use
+    // decodeIfPresent under Swift's synthesis, so a missing "asn" key just yields nil, no
+    // manual init(from:) needed here (see ExitStateTests.testDecodesOldJSONWithoutIPv6Fields'
+    // sibling coverage for the general old-JSON-decodes-cleanly guarantee).
+    public var asn: Int?
     public init(ip: String, countryCode: String? = nil, city: String? = nil,
-                org: String? = nil, provider: String, fetchedAt: Date) {
+                org: String? = nil, provider: String, fetchedAt: Date, asn: Int? = nil) {
         self.ip = ip
         self.countryCode = countryCode
         self.city = city
         self.org = org
         self.provider = provider
         self.fetchedAt = fetchedAt
+        self.asn = asn
     }
 }
 
