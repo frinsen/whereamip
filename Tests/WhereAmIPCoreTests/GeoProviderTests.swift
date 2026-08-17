@@ -51,4 +51,19 @@ final class GeoProviderTests: XCTestCase {
         let info = await chain().lookup(ip: "5.6.7.8")
         XCTAssertEqual(info?.countryCode, "NL")
     }
+    func testLookupFallsBackToIpapiWhenIpwhoisFails() async {
+        // Single-point-of-silence fix (IMPORTANT 5): lookup(ip:) used to be ipwho.is-only, no
+        // fallback — a transient/rate-limited primary provider silently blanked out ASN/org
+        // attribution for the whole refresh. Must now fall through to ipapi.co, same as fetch().
+        MockURLProtocol.handlers["https://ipwho.is/5.6.7.8"] = (500, Data())
+        MockURLProtocol.handlers["https://ipapi.co/5.6.7.8/json/"] = (200, fixture("ipapi-ok.json"))
+        let info = await chain().lookup(ip: "5.6.7.8")
+        XCTAssertEqual(info?.provider, "ipapi.co")
+        XCTAssertEqual(info?.countryCode, "DE")
+        XCTAssertEqual(info?.asn, 3209)
+    }
+    func testLookupAllDeadReturnsNil() async {
+        let info = await chain().lookup(ip: "5.6.7.8")   // no handlers → connection errors on both
+        XCTAssertNil(info)
+    }
 }

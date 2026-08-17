@@ -40,18 +40,30 @@ public enum DNSLeakDetector {
         if !egress.isIPv6, route.isVPN, exit4 == nil { return previous == .confirmed ? .confirmed : .unknown }
         if egress.isIPv6, route.v6IsVPN, exit6 == nil { return previous == .confirmed ? .confirmed : .unknown }
         // 4: mismatch — including DNS escaping over the NON-tunneled stack (cross-stack leak).
+        //
         // Escalating .suspected/.confirmed onward to .confirmed is the real false-notification
-        // vector, so it now additionally requires POSITIVE mismatch evidence — egress
-        // attribution actually resolved (ASN or org present) and, per the rescue above, failed
-        // to match the tunnel operator. A lookup failure (both nil) must never confirm on
-        // ignorance: .confirmed stays .confirmed (existing preserve rule) and .suspected stays
-        // .suspected (no escalation) until real evidence arrives. First sight always becomes
-        // .suspected regardless of attribution.
-        if previous == .suspected || previous == .confirmed {
-            let hasPositiveEvidence = egressASN != nil || egressOrg != nil
-            return hasPositiveEvidence ? .confirmed : previous
+        // vector (adjudicated fix, external review round 2). The gate below applies ONLY to a
+        // SAME-STACK mismatch — egress's own stack IS the tunneled one, its judged exit (e4/e6)
+        // is present, and it already failed both the IP match and the org/ASN rescue above. In
+        // that case, hold at .suspected (never advance) ONLY when a rescue was genuinely
+        // possible but unevaluable: the judged exit itself carries real attribution (a non-zero
+        // ASN or a non-empty org) yet the egress lookup came back with neither — i.e. we simply
+        // couldn't compare, not that we compared and found a mismatch. If the judged exit has NO
+        // attribution at all, there was never anything to rescue against, so plain escalation
+        // proceeds exactly as pre-Wave-B.
+        //
+        // A CROSS-STACK mismatch (egress's own stack was never tunneled — routing alone already
+        // proves the leak) never reaches the rescue path above at all, so attribution is
+        // irrelevant there: `judgedExit` is nil and escalation proceeds unconditionally, exactly
+        // as pre-Wave-B.
+        let judgedExit: ExitInfo? = !egress.isIPv6 ? (route.isVPN ? exit4 : nil)
+                                                    : (route.v6IsVPN ? exit6 : nil)
+        if let judgedExit, previous == .suspected || previous == .confirmed {
+            let exitHasAttribution = meaningfulASN(judgedExit.asn) != nil || meaningfulOrg(judgedExit.org) != nil
+            let egressAttributionMissing = meaningfulASN(egressASN) == nil && meaningfulOrg(egressOrg) == nil
+            if exitHasAttribution, egressAttributionMissing { return previous }
         }
-        return .suspected
+        return (previous == .suspected || previous == .confirmed) ? .confirmed : .suspected
     }
 
     /// True iff `exit` egresses from the same network operator as the DNS resolver's egress,
@@ -59,19 +71,41 @@ public enum DNSLeakDetector {
     /// when both org strings came from the SAME geo provider (cross-provider org strings for
     /// the same operator can differ cosmetically) — an EXACT normalized org match. Containment
     /// ("PureVPN" vs "PureVPN S.A.") deliberately does NOT count: this rule can only SUPPRESS a
-    /// leak warning, so every comparison stays maximally conservative. Any missing datum (nil
-    /// ASN, provider mismatch, failed lookup) means no rescue — behavior is unchanged from today.
+    /// leak warning, so every comparison stays maximally conservative. Any missing OR
+    /// non-meaningful datum (nil/zero ASN, nil/empty org, provider mismatch, failed lookup)
+    /// means no rescue — behavior is unchanged from today.
     static func sameOperator(egressASN: Int?, egressOrg: String?, egressProvider: String?,
-                             exit: ExitInfo?) -> Bool {
-        if let a = egressASN, let b = exit?.asn, a == b { return true }
-        guard let egressProvider, egressProvider == exit?.provider,
-              let egressOrg, let exitOrg = exit?.org else { return false }
-        return normalizeOrg(egressOrg) == normalizeOrg(exitOrg)
+                             exit: ExitInfo) -> Bool {
+        if let a = meaningfulASN(egressASN), let b = meaningfulASN(exit.asn), a == b { return true }
+        guard let egressProvider, egressProvider == exit.provider,
+              let egressOrg = meaningfulOrg(egressOrg), let exitOrg = meaningfulOrg(exit.org)
+        else { return false }
+        return egressOrg == exitOrg
+    }
+
+    /// `nil` unless `asn` is present AND non-zero. Live-verified regression (external review
+    /// round 2): ipwho.is returns `asn: 0` for IPs it can't attribute — including the exact ECS
+    /// network-address shape Monitor feeds it (e.g. "1.2.3.0" from an ECS answer "1.2.3.0/24").
+    /// Treating 0 as a real ASN would let two UNATTRIBUTED sides "match" each other (0 == 0) and
+    /// rescue a genuine mismatch — even clearing an already-.confirmed alarm. 0 is a sentinel for
+    /// "unknown", not a real autonomous system number; must never participate in equality.
+    static func meaningfulASN(_ asn: Int?) -> Int? {
+        guard let asn, asn != 0 else { return nil }
+        return asn
+    }
+
+    /// `nil` unless `org`, once normalized, is non-empty. An empty string trivially satisfies
+    /// Swift's `String == String` (`"" == ""`), which would otherwise let two ORGLESS sides
+    /// "rescue" each other — same failure class as the ASN-0 sentinel above.
+    static func meaningfulOrg(_ org: String?) -> String? {
+        guard let org else { return nil }
+        let normalized = normalizeOrg(org)
+        return normalized.isEmpty ? nil : normalized
     }
 
     /// Lowercased, trimmed, with internal whitespace runs collapsed to a single space — used
-    /// only for the org-equality fallback in `sameOperator`. Deliberately NOT a fuzzy match:
-    /// still requires exact equality after normalization, never containment/substring.
+    /// only for the org-equality fallback in `sameOperator`/`meaningfulOrg`. Deliberately NOT a
+    /// fuzzy match: still requires exact equality after normalization, never containment/substring.
     static func normalizeOrg(_ s: String) -> String {
         s.lowercased()
          .split(whereSeparator: { $0.isWhitespace })

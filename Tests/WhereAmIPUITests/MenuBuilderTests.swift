@@ -440,7 +440,7 @@ final class MenuBuilderTests: XCTestCase {
         state.dns.leak = .suspected
         let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertTrue(menu.items.map(\.title).contains("DNS leak suspected — verifying…"))
+        XCTAssertTrue(menu.items.map(\.title).contains("DNS leak suspected — resolver exits outside the tunnel"))
     }
 
     func testDNSProbeToggleRow() {

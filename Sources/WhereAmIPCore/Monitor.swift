@@ -216,9 +216,14 @@ public actor Monitor {
                 // lookup below. Deliberately not cached across refreshes — see the module-level
                 // design note. ECS answers are prefixes ("1.2.3.0/24") — geo endpoints 404 on
                 // them (field-verified) — so query the network address instead.
+                //
+                // Gated on a tunnel actually being up (mirrors decide()'s rule 0): when there's
+                // no VPN anywhere, no verdict can ever use this data (decide() returns .none
+                // unconditionally) — so never spend the lookup, and never send the resolver's
+                // own egress IP to a third-party geo provider for nothing. Privacy + quota.
                 var egressASN: Int? = nil; var egressOrg: String? = nil; var egressProvider: String? = nil
-                if let egress {
-                    let lookupIP = String(egress.ip.split(separator: "/")[0])
+                if let egress, new.route.isVPN || new.route.v6IsVPN {
+                    let lookupIP = egress.ip.split(separator: "/").first.map(String.init) ?? egress.ip
                     if let info = await geo.lookup(ip: lookupIP) {
                         egressASN = info.asn; egressOrg = info.org; egressProvider = info.provider
                     }

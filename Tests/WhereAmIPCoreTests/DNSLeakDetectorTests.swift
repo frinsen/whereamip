@@ -30,14 +30,13 @@ final class DNSLeakDetectorTests: XCTestCase {
                                               exit6: nil, route: vpn4, previous: .none), .suspected)
     }
     func testSecondConsecutiveMismatchConfirms() {
-        // Wave B (binding design change): a second consecutive mismatch confirms ONLY when it
-        // carries positive egress-attribution evidence (ASN or org actually resolved and failed
-        // to match the tunnel operator) — plain IP inequality with zero attribution data is no
-        // longer sufficient on its own. See testAttributionAbsentNeverEscalatesSuspectedToConfirmed
-        // below for the no-attribution case this test used to (incorrectly, pre-Wave-B) cover.
+        // Unchanged from pre-Wave-B: the exit here carries no attribution at all (no asn/org),
+        // so per the adjudicated gate a rescue was never even possible — plain escalation
+        // proceeds exactly as before. (The "hold at .suspected" gate only applies when the
+        // judged exit itself HAS attribution but the egress lookup came back empty — see
+        // testAttributionAbsentNeverEscalatesSuspectedToConfirmed.)
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
-                                              exit6: nil, route: vpn4, previous: .suspected,
-                                              egressASN: 99999), .confirmed)
+                                              exit6: nil, route: vpn4, previous: .suspected), .confirmed)
     }
     func testConfirmedMismatchStaysConfirmed() {
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
@@ -48,6 +47,15 @@ final class DNSLeakDetectorTests: XCTestCase {
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("2a00:1450::5", true), exit4: exitInfo("1.2.3.4"),
                                               exit6: exitInfo("2a00:1450::5"), route: vpn4,
                                               previous: .none), .suspected)
+    }
+    func testCrossStackMismatchEscalatesRegardlessOfAttribution() {
+        // IMPORTANT 4: cross-stack mismatches (egress's own stack was never tunneled at all —
+        // routing alone already proves the leak) never reach the org/ASN rescue path, so the
+        // "hold at suspected" gate must never apply there either. Escalates exactly as
+        // pre-Wave-B, even with zero attribution on both sides.
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("2a00:1450::5", true), exit4: exitInfo("1.2.3.4"),
+                                              exit6: exitInfo("2a00:1450::5"), route: vpn4,
+                                              previous: .suspected), .confirmed)
     }
     func testVPNStackButNoFreshExitIsUnknown() {
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: nil,
@@ -119,22 +127,24 @@ final class DNSLeakDetectorTests: XCTestCase {
                                               egressOrg: "PureVPN", egressProvider: "ipwho.is"), .suspected)
     }
     func testAttributionAbsentNeverEscalatesSuspectedToConfirmed() {
-        let exit = exitInfo("1.2.3.4")
+        // The judged exit DOES carry attribution (asn: 12345) — a rescue was theoretically
+        // possible — but the egress lookup came back with nothing at all (both nil). That's
+        // "unevaluable", not "compared and mismatched": hold at .suspected forever rather than
+        // confirm on ignorance.
+        let exit = exitInfo("1.2.3.4", asn: 12345)
         let suspected = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exit,
                                                exit6: nil, route: vpn4, previous: .none)
         XCTAssertEqual(suspected, .suspected)
         let stillSuspected = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exit,
                                                     exit6: nil, route: vpn4, previous: suspected)
-        XCTAssertEqual(stillSuspected, .suspected, "no ASN/org attribution at all must never confirm on ignorance")
+        XCTAssertEqual(stillSuspected, .suspected,
+                       "exit has attribution but egress lookup found none — rescue was possible but unevaluable")
     }
     func testNilEverythingPreservesExistingBehavior() {
-        // The pre-existing transition table, re-run with the new params entirely absent. Every
-        // row is byte-identical to the original (pre-Wave-B) table EXCEPT the suspected->mismatch
-        // row: per the binding design, escalating to .confirmed now requires positive egress-
-        // attribution evidence, which nil-everything by definition never carries — that row
-        // correctly stays .suspected instead of advancing to .confirmed (see
-        // testAttributionAbsentNeverEscalatesSuspectedToConfirmed for the dedicated case, and
-        // testSecondConsecutiveMismatchConfirms above for the same transition WITH attribution).
+        // The full pre-existing transition table, re-run with the new params entirely absent —
+        // byte-identical to the original (pre-Wave-B) table. True precisely because the "hold"
+        // gate requires the JUDGED EXIT to carry attribution; none of these exits do, so a
+        // rescue was never possible and plain escalation always proceeds.
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("9.9.9.9", false), exit4: exitInfo("9.9.9.9"),
                                               exit6: nil, route: noVPN, previous: .confirmed), .none)
         XCTAssertEqual(DNSLeakDetector.decide(egress: nil, exit4: exitInfo("1.2.3.4"),
@@ -144,8 +154,7 @@ final class DNSLeakDetectorTests: XCTestCase {
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
                                               exit6: nil, route: vpn4, previous: .none), .suspected)
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
-                                              exit6: nil, route: vpn4, previous: .suspected), .suspected,
-                       "Wave B: no attribution at all -> never escalates on ignorance")
+                                              exit6: nil, route: vpn4, previous: .suspected), .confirmed)
         XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
                                               exit6: nil, route: vpn4, previous: .confirmed), .confirmed)
     }
@@ -155,7 +164,7 @@ final class DNSLeakDetectorTests: XCTestCase {
         XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: 100, egressOrg: nil, egressProvider: nil,
                                                      exit: exitInfo("1.2.3.4", asn: 200)))
         XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: nil, egressOrg: nil, egressProvider: nil,
-                                                     exit: nil))
+                                                     exit: exitInfo("1.2.3.4")))
     }
     func testSameOperatorHelperOrgNormalization() {
         XCTAssertTrue(DNSLeakDetector.sameOperator(egressASN: nil, egressOrg: " PureVPN   Ltd ",
@@ -164,6 +173,43 @@ final class DNSLeakDetectorTests: XCTestCase {
         XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: nil, egressOrg: "PureVPN",
                                                      egressProvider: "ipwho.is",
                                                      exit: exitInfo("1.2.3.4", provider: "ipwho.is", org: "PureVPN S.A.")))
+    }
+
+    // MARK: - Sentinel-value regressions (external review round 2, live-verified)
+
+    func testZeroASNSentinelNeverRescuesOrClearsConfirmed() {
+        // Live-verified: ipwho.is returns asn: 0 for IPs it can't attribute — including the
+        // exact ECS-network-address shape Monitor feeds it (e.g. "1.2.3.0" from "1.2.3.0/24").
+        // 0 == 0 must NEVER count as an ASN match, or a genuinely confirmed alarm could be
+        // silently cleared just because both sides happened to be unattributed.
+        let exit = exitInfo("1.2.3.4", asn: 0)
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exit,
+                                              exit6: nil, route: vpn4, previous: .confirmed,
+                                              egressASN: 0), .confirmed,
+                       "asn:0 on both sides must not rescue a mismatch or clear .confirmed")
+    }
+    func testEmptyOrgSentinelNeverRescues() {
+        // "" == "" trivially satisfies Swift string equality — must be excluded the same way.
+        let exit = exitInfo("1.2.3.4", provider: "ipwho.is", org: "")
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exit,
+                                              exit6: nil, route: vpn4, previous: .confirmed,
+                                              egressOrg: "", egressProvider: "ipwho.is"), .confirmed,
+                       "empty org strings on both sides must not rescue or clear .confirmed")
+    }
+    func testSameOperatorRejectsZeroASN() {
+        XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: 0, egressOrg: nil, egressProvider: nil,
+                                                     exit: exitInfo("1.2.3.4", asn: 0)))
+    }
+    func testSameOperatorRejectsEmptyOrg() {
+        XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: nil, egressOrg: "",
+                                                     egressProvider: "ipwho.is",
+                                                     exit: exitInfo("1.2.3.4", provider: "ipwho.is", org: "")))
+    }
+    func testSameOperatorRejectsWhitespaceOnlyOrg() {
+        // Normalizes to empty — must be treated as absent, same as a literal "".
+        XCTAssertFalse(DNSLeakDetector.sameOperator(egressASN: nil, egressOrg: "   ",
+                                                     egressProvider: "ipwho.is",
+                                                     exit: exitInfo("1.2.3.4", provider: "ipwho.is", org: "  ")))
     }
 
     func testIsMeaningfulHelpers() {

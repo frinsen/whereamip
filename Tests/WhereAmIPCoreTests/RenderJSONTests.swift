@@ -151,7 +151,7 @@ final class RenderJSONTests: XCTestCase {
         var state = ExitState(connectivity: .online)
         state.dns.leak = .suspected
         let h = StateRenderer.human(state)
-        XCTAssertTrue(h.contains("DNS leak suspected — verifying…"))
+        XCTAssertTrue(h.contains("DNS leak suspected — resolver exits outside the tunnel"))
     }
     func testHumanOmitsDNSLeakLineWhenNoneOrUnknown() {
         var noneState = ExitState(connectivity: .online)

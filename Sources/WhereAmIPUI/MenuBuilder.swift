@@ -150,7 +150,7 @@ public enum MenuBuilder {
             if state.dns.leak == .confirmed {
                 menu.addItem(info("⚠️ DNS leak — queries answered via \(state.dns.egressIP ?? "?")"))
             } else if state.dns.leak == .suspected {
-                menu.addItem(info("DNS leak suspected — verifying…"))
+                menu.addItem(info("DNS leak suspected — resolver exits outside the tunnel"))
             }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }

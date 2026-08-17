@@ -29,11 +29,21 @@ install-ready notes per version.
 - Version row in Settings.
 - Connection kind (Wi-Fi/Ethernet/iPhone USB) shown for the active route,
   derived from the system via `SCNetworkInterface` rather than guessed.
-- DNS-leak verdicts now recognize the VPN provider's own resolvers: egress
-  attributed by ASN (or exact same-source org) to the same operator as the
-  tunnel exit is ruled "none" instead of "suspected"; a leak can only
-  escalate to the confirmed badge/notification with positive
-  operator-mismatch evidence, never on failed lookups.
+- A generic "IKEv2 VPN" label for native NE personal VPN (IKEv2/IPsec)
+  interfaces that otherwise expose no name anywhere reachable — used only as
+  a last-resort fallback, never shadowing a real detected name.
+
+### Changed
+- DNS-leak verdicts now recognize the VPN provider's own resolvers: when a
+  resolver's egress IP is attributed — by ASN, or by an exact org-string
+  match sourced from the same geo provider as the tunnel exit — to the same
+  network operator as the tunnel exit, the verdict is ruled "none" instead
+  of "suspected"/"confirmed". When that attribution is unavailable (the
+  lookup fails, or the tunnel exit itself carries no ASN/org to compare
+  against), a suspected leak now stays "suspected" in the dropdown/CLI
+  rather than advancing to the confirmed badge/notification — it can no
+  longer confirm on a failed lookup, only on genuine operator-mismatch
+  evidence.
 
 ### Fixed
 - `whereamip watch` output is now line-buffered when piped or redirected —
@@ -44,6 +54,10 @@ install-ready notes per version.
   entry plus one per-service entry per address (for leak-detector
   attribution), which was inflating the dropdown/CLI count (e.g. "+11 more"
   for 4 actual addresses).
+- NE-based app VPNs (e.g. Tailscale's `utun16`) now get their real service
+  name: they only register `InterfaceName` under the IPv6/DNS State keys,
+  never IPv4, so the old IPv4-only key scan silently returned no name for
+  every one of them.
 
 ## [0.4.1] — 2026-08-17
 

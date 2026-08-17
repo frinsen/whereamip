@@ -63,14 +63,28 @@ public struct GeoProviderChain: Sendable {
         Log.geo.error("fetch: all geo providers failed")
         return nil
     }
+    // Per-IP lookup URL builders paired with the SAME parse closures `fetch()` already uses for
+    // each provider (reused verbatim — including the ASN handling for each payload shape).
+    // ipify has no per-IP lookup endpoint at all, so it's not part of this chain.
+    static let lookupEndpoints: [(name: String, url: (String) -> URL?, parse: @Sendable (Data, Date) throws -> ExitInfo)] = [
+        (name: "ipwho.is", url: { ip in URL(string: "https://ipwho.is/\(ip)") }, parse: GeoProviderChain.endpoints[0].parse),
+        (name: "ipapi.co", url: { ip in URL(string: "https://ipapi.co/\(ip)/json/") }, parse: GeoProviderChain.endpoints[1].parse),
+    ]
+    /// Single-IP attribution lookup (used for both stack-pinned exits and DNS-egress
+    /// attribution). Was a single point of silence — ipwho.is alone, no fallback — before this
+    /// fix: give it the same fallback-chain behavior class as `fetch()`, at minimum falling
+    /// through to ipapi.co when ipwho.is fails, so a transient/rate-limited primary provider
+    /// doesn't silently blank out ASN/org data for an entire refresh.
     public func lookup(ip: String, now: Date = Date()) async -> ExitInfo? {
-        guard let url = URL(string: "https://ipwho.is/\(ip)") else { return nil }
-        let info = await get(url, parse: Self.endpoints[0].parse, now: now)
-        if let info {
-            Log.geo.debug("lookup \(ip, privacy: .public): success country=\(info.countryCode ?? "nil", privacy: .public)")
-        } else {
-            Log.geo.debug("lookup \(ip, privacy: .public): failure")
+        for e in Self.lookupEndpoints {
+            guard let url = e.url(ip) else { continue }
+            if let info = await get(url, parse: e.parse, now: now) {
+                Log.geo.debug("lookup \(ip, privacy: .public): success via \(e.name, privacy: .public) country=\(info.countryCode ?? "nil", privacy: .public)")
+                return info
+            }
+            Log.geo.debug("lookup \(ip, privacy: .public): \(e.name, privacy: .public) failed")
         }
-        return info
+        Log.geo.error("lookup \(ip, privacy: .public): all geo providers failed")
+        return nil
     }
 }

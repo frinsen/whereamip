@@ -53,7 +53,7 @@ public enum StateRenderer {
         if state.dns.leak == .confirmed {
             lines.append("⚠️ DNS leak: queries answered via \(state.dns.egressIP ?? "?")")
         } else if state.dns.leak == .suspected {
-            lines.append("DNS leak suspected — verifying…")
+            lines.append("DNS leak suspected — resolver exits outside the tunnel")
         }
         if state.route.hijackRoutePresent { lines.append("⚠ hijack routes (0/1 + 128/1) present") }
         if case .active(let ip, let country) = state.privateRelay {
