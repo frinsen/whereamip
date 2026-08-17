@@ -7,7 +7,7 @@
 4. `chmod 600 purevpn.auth purevpn.ovpn`
 
 ## warp backend
-`brew install --cask cloudflare-warp`, then `warp-cli register` (one time).
+`brew install --cask cloudflare-warp`, then `warp-cli registration new` (one time).
 
 ## windscribe backend
 Install the Windscribe v2 desktop app and log in (free tier works).
