@@ -166,7 +166,7 @@ public enum MenuBuilder {
         styleItem.submenu = styleMenu
         settingsMenu.addItem(styleItem)
         settingsMenu.addItem(.separator())
-        let notify = action("Notify on changes") { actions.toggleNotifications() }
+        let notify = action("Show Notifications") { actions.toggleNotifications() }
         notify.state = notificationsEnabled ? .on : .off
         settingsMenu.addItem(notify)
         let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }

@@ -2,8 +2,8 @@ import AppKit
 import UserNotifications
 import WhereAmIPCore
 
-/// Shared "turn notifications on" flow used by both the menu's "Notify on
-/// changes" toggle (AppDelegate) and the welcome window's checkbox
+/// Shared "turn notifications on" flow used by both the menu's
+/// "Show Notifications" toggle (AppDelegate) and the welcome window's checkbox
 /// (WelcomeWindowController), so the two surfaces can't drift out of sync.
 /// The status→action *decision* (`NotificationPermission.action(for:)`)
 /// lives in WhereAmIPCore, pure and unit-tested; this wraps it with the

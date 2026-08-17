@@ -186,6 +186,24 @@ final class MenuBuilderTests: XCTestCase {
         _ = item.target?.perform(item.action, with: item)
         XCTAssertTrue(fired)
     }
+    func testNotificationsRowTitleAndStateReflectSetting() {
+        // Harmonized on "Show Notifications" — a verb phrase like its
+        // siblings (Launch at Login, Add to Applications folder, Check for
+        // Updates) using System Settings' "Notifications" vocabulary for the
+        // noun; detail lives in the welcome window's caption, not this menu
+        // row. Was "Notify on changes".
+        let onMenu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                       notificationsEnabled: true, launchAtLogin: false, actions: MenuActions())
+        let settingsOn = onMenu.items.first { $0.title == "Settings" }!.submenu!
+        let onItem = settingsOn.items.first { $0.title == "Show Notifications" }!
+        XCTAssertEqual(onItem.state, .on)
+
+        let offMenu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                        notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let settingsOff = offMenu.items.first { $0.title == "Settings" }!.submenu!
+        let offItem = settingsOff.items.first { $0.title == "Show Notifications" }!
+        XCTAssertEqual(offItem.state, .off)
+    }
     func testCheckForUpdatesToggleReflectsSettingOn() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,

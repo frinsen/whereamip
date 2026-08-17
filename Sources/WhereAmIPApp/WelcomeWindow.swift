@@ -177,7 +177,12 @@ final class WelcomeWindowController: NSWindowController {
                                          target: self, action: #selector(toggleApplications))
         applicationsCheckbox.state = ApplicationsLink.isLinked() ? .on : .off
 
-        notifyCheckbox = NSButton(checkboxWithTitle: "Notify on exit/connectivity changes",
+        // "Show Notifications" (not "Notify on exit/connectivity changes") —
+        // a verb phrase like its siblings (Launch at Login, Add to
+        // Applications folder, Check for Updates), matching System Settings'
+        // "Notifications" vocabulary for the noun itself; the detail moves
+        // to the caption below instead of living in the checkbox label.
+        notifyCheckbox = NSButton(checkboxWithTitle: "Show Notifications",
                                    target: self, action: #selector(toggleNotify))
         // Never pre-checked, regardless of the actual current setting — the
         // system permission dialog may only ever appear as a *direct* result
@@ -187,7 +192,15 @@ final class WelcomeWindowController: NSWindowController {
         // default to off anyway, so this rarely disagrees with reality.
         notifyCheckbox.state = .off
 
-        let notifyCaption = NSTextField(labelWithString: "Asks for macOS permission when enabled.")
+        // Single-line (not wrapping) label, so it must fit the caption's
+        // available width (372 - checkboxTextIndent = 353pt) at this 10pt
+        // font without truncating — measured directly via
+        // NSString.size(withAttributes:) rather than eyeballed; the design
+        // review's own suggested one-liner ("Alerts when your exit, route,
+        // or connectivity changes. Asks for macOS permission when enabled.",
+        // 465pt) and its proposed fallback (410pt) both overflowed, so this
+        // is trimmed further (341pt) to actually fit.
+        let notifyCaption = NSTextField(labelWithString: "Alerts on exit, route, or connectivity changes. Asks macOS permission.")
         notifyCaption.font = .systemFont(ofSize: 10)
         notifyCaption.textColor = .secondaryLabelColor
         notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent

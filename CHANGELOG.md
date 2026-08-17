@@ -21,7 +21,7 @@ install-ready notes per version.
 - **Welcome window**: shown once on first launch — what the app is, where it
   lives in the menu bar (with a note that notched MacBooks can hide it behind
   the notch), and live-wired Launch at Login / Add to Applications folder /
-  Notify on exit-connectivity-changes checkboxes plus a privacy note. Only clicking
+  Show Notifications checkboxes plus a privacy note. Only clicking
   Done acknowledges it; closing it any other way shows it again next launch.
   Can also be reopened any time via **Settings ▸ Show Welcome Window**.
   - Re-shown on upgrade when a maintainer-controlled `welcomeMilestone`
@@ -38,6 +38,11 @@ install-ready notes per version.
     System Settings directly, since a menu has no inline-hint surface.
   - No other permission prompts, no network calls, from this window.
 - Welcome window polish per design review.
+- Wording harmonized on "Show Notifications" everywhere (Settings menu row,
+  welcome window checkbox) — was "Notify on changes" in the menu and "Notify
+  on exit/connectivity changes" in the window; the detail now lives in the
+  window's caption instead. `whereamip config get/set notify` is unaffected
+  (documented stable CLI key, untouched).
 
 ## [0.3.2] — 2026-08-17
 

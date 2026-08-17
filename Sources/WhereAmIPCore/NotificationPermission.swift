@@ -5,7 +5,7 @@ import UserNotifications
 /// decision so it's unit-testable without a real notification center — the
 /// actual `UNUserNotificationCenter`/`NSWorkspace` calls live in the app
 /// target (WhereAmIPApp's `NotificationPermissionFlow`), which both the menu's
-/// "Notify on changes" toggle and the welcome window's checkbox go through,
+/// "Show Notifications" toggle and the welcome window's checkbox go through,
 /// so the two surfaces can't drift out of sync.
 public enum NotificationPermissionAction: Equatable {
     /// Never asked before — show the system permission prompt.
