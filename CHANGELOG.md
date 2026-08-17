@@ -6,7 +6,7 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
-## [Unreleased]
+## [0.4.2] — 2026-08-17
 
 ### Added
 - **E2E VPN test suite** (`scripts/e2e/run.sh`, local-only, opt-in): drives

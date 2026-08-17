@@ -1,4 +1,4 @@
-public let whereamipVersion = "0.4.1"
+public let whereamipVersion = "0.4.2"
 
 /// Release-time "flag" for re-showing the first-run welcome window on
 /// upgrade. Bump this ONLY in a release whose changes genuinely warrant
