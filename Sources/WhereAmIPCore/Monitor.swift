@@ -25,6 +25,9 @@ public protocol DNSConfigReading: Sendable {
     func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption)
 }
 public protocol DNSEgressProbing: Sendable { func fetch() async -> (ip: String, isIPv6: Bool)? }
+public protocol DNSEgressEnumerating: Sendable {
+    func enumerate(queryCount: Int) async -> [EgressResolver]
+}
 
 extension GeoProviderChain: GeoFetching {
     public func fetch() async -> ExitInfo? { await fetch(now: Date()) }
@@ -35,6 +38,7 @@ extension HTTPIPFetcher: HTTPIPFetching {}
 extension StackPinnedIP: StackIPFetching {}
 extension LiveDNSConfigReader: DNSConfigReading {}
 extension DNSEgressProbe: DNSEgressProbing {}
+extension DNSEgressEnumerator: DNSEgressEnumerating {}
 
 public actor Monitor {
     let geo: any GeoFetching
@@ -44,6 +48,7 @@ public actor Monitor {
     let stackIP: any StackIPFetching
     let dnsConfig: any DNSConfigReading
     let dnsProbe: any DNSEgressProbing
+    let dnsEnumerator: any DNSEgressEnumerating
     let dnsProbeEnabled: @Sendable () -> Bool
     let relayRanges: RelayRanges
     let debounce: Double
@@ -73,6 +78,7 @@ public actor Monitor {
                 httpIP: any HTTPIPFetching, stackIP: any StackIPFetching = StackPinnedIP(),
                 dnsConfig: any DNSConfigReading = LiveDNSConfigReader(),
                 dnsProbe: any DNSEgressProbing = DNSEgressProbe(),
+                dnsEnumerator: any DNSEgressEnumerating = DNSEgressEnumerator(),
                 dnsProbeEnabled: @escaping @Sendable () -> Bool = { Settings().dnsProbeEnabled },
                 relayRanges: RelayRanges,
                 debounceSeconds: Double = 1.5,
@@ -80,7 +86,8 @@ public actor Monitor {
                 onEvents: @escaping @Sendable ([Event]) -> Void) {
         self.geo = geo; self.probe = probe; self.route = route; self.httpIP = httpIP; self.stackIP = stackIP
         self.dnsConfig = dnsConfig
-        self.dnsProbe = dnsProbe; self.dnsProbeEnabled = dnsProbeEnabled
+        self.dnsProbe = dnsProbe; self.dnsEnumerator = dnsEnumerator
+        self.dnsProbeEnabled = dnsProbeEnabled
         self.relayRanges = relayRanges; self.debounce = debounceSeconds
         self.onChange = onChange; self.onEvents = onEvents
         // Seed the initial route synchronously so the first refresh doesn't report a
@@ -210,7 +217,21 @@ public actor Monitor {
             // deliberately .unknown, not a preserved alarm (an explicit opt-out clears state; a mere
             // probe FAILURE preserves .confirmed inside decide() — different cases, both intentional).
             if dnsProbeEnabled() {
-                let egress = await dnsProbe.fetch()
+                // One round of cache-busting lookups instead of the single Google beacon: a
+                // load-balanced resolver pool answers from several egress addresses, and one
+                // query only ever reveals one of them (the dnsleaktest.com mechanism). The
+                // beacon stays as the FALLBACK for when dnscheck.tools itself is unreachable —
+                // the verdict below must never go blind just because one service is down.
+                let discovered = await dnsEnumerator.enumerate(queryCount: DNSEgressEnumerator.roundSize)
+                // The primary — v4 first by `normalize`'s ordering, matching the stack the leak
+                // rule judges first — is the single egress fed to decide(), exactly as the
+                // beacon's answer was. The rest of the round is display detail.
+                let egress: (ip: String, isIPv6: Bool)?
+                if let primary = discovered.first {
+                    egress = (primary.ip, primary.ip.contains(":"))
+                } else {
+                    egress = await dnsProbe.fetch()
+                }
                 // Org/ASN attribution for the org/ASN rescue (Wave B): one extra geo lookup of
                 // the DNS resolver's own egress IP, same cost class as the existing relay-egress
                 // lookup below. Deliberately not cached across refreshes — see the module-level
@@ -245,7 +266,19 @@ public actor Monitor {
                 new.dns.egressIP = egress?.ip ?? state.dns.egressIP
                 new.dns.egressIsIPv6 = egress?.isIPv6 ?? state.dns.egressIsIPv6
                 new.dns.measuredAt = egress != nil ? Date() : state.dns.measuredAt
-                new.dns.egressOrg = egress != nil ? egressOrg : state.dns.egressOrg
+                // Prefer the geo provider's org: it's the very string the rescue above compares
+                // against, so displaying a different source's wording next to that reasoning
+                // would invite "why does it say X when it decided on Y". dnscheck.tools' own
+                // operator attribution fills in when the geo lookup failed or was skipped (no
+                // tunnel up) — no whois call is added either way.
+                let attributedOrg = egressOrg ?? discovered.first?.operatorName
+                new.dns.egressOrg = egress != nil ? attributedOrg : state.dns.egressOrg
+                // Paired with egressIP by the same rule: a refresh where nothing answered at all
+                // keeps the last successful round, while a successful measurement — including a
+                // beacon-only fallback, whose `discovered` is empty — always replaces it. A
+                // fresh egressIP beside a stale resolver list is exactly the mismatched pair
+                // that degraded the confirmed row's display before.
+                new.dns.egressResolvers = egress != nil ? discovered : state.dns.egressResolvers
                 Log.dns.debug("verdict: egress=\(egress?.ip ?? "nil", privacy: .public) leak=\(new.dns.leak.rawValue, privacy: .public)")
             } else {
                 new.dns.leak = .unknown
@@ -253,6 +286,7 @@ public actor Monitor {
                 new.dns.egressIsIPv6 = false
                 new.dns.measuredAt = nil
                 new.dns.egressOrg = nil
+                new.dns.egressResolvers = []
             }
 
             let httpsIP = new.exit?.ip
