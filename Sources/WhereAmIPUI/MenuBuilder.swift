@@ -10,18 +10,24 @@ public struct MenuActions {
     public var quit: () -> Void
     public var copyUpdateCommand: () -> Void
     public var toggleUpdateChecks: () -> Void
+    public var restartAction: () -> Void
+    public var restartApp: () -> Void
     public init(copyIP: @escaping () -> Void = {}, refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping () -> Void = {},
-                toggleUpdateChecks: @escaping () -> Void = {}) {
+                toggleUpdateChecks: @escaping () -> Void = {},
+                restartAction: @escaping () -> Void = {},
+                restartApp: @escaping () -> Void = {}) {
         self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
         self.copyUpdateCommand = copyUpdateCommand
         self.toggleUpdateChecks = toggleUpdateChecks
+        self.restartAction = restartAction
+        self.restartApp = restartApp
     }
 }
 
@@ -33,8 +39,14 @@ final class ActionTarget: NSObject {
 }
 
 public enum MenuBuilder {
+    // Full date + time, including seconds (not time-only): an hours- or
+    // days-old "Since"/"Last seen" otherwise looks identical to a minutes-old
+    // one. Locale-aware via dateStyle/timeStyle (not a hardcoded format
+    // string) so it renders correctly for the user's own locale, e.g.
+    // "17.08.26, 10:45:32" in German locales vs "8/17/26, 10:45:32 AM" in US
+    // English.
     static let timeFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .medium; return f
     }()
 
     static func info(_ title: String) -> NSMenuItem {
@@ -53,14 +65,25 @@ public enum MenuBuilder {
     public static func build(state: ExitState, style: MenuBarStyle,
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
+                             restartUpdate: String? = nil,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        // Quiet update hint — never a popup or badge, just the first row when
-        // a newer release exists. Clicking copies the brew command; the app
-        // itself never downloads or modifies anything.
-        if let availableUpdate {
+        // Restart-to-finish-update supersedes the plain "update available" row:
+        // if the copy on disk is already newer than the running process (e.g.
+        // `brew upgrade` ran but this process wasn't relaunched), advertising
+        // "run brew upgrade" again would just tell the user to redo what
+        // they've already done. Only one of these two rows is ever shown.
+        if let restartUpdate {
+            menu.addItem(action("↻ Restart to finish update (v\(restartUpdate))") {
+                actions.restartAction()
+            })
+            menu.addItem(.separator())
+        } else if let availableUpdate {
+            // Quiet update hint — never a popup or badge, just the first row when
+            // a newer release exists. Clicking copies the brew command; the app
+            // itself never downloads or modifies anything.
             menu.addItem(action("⬆︎ Update v\(availableUpdate) available (brew upgrade whereamip)") {
                 actions.copyUpdateCommand()
             })
@@ -79,7 +102,7 @@ public enum MenuBuilder {
             }
         } else {
             let flag = state.exit?.countryCode.flatMap { Flags.emoji(countryCode: $0) } ?? "❓"
-            menu.addItem(info("\(flag)  WhereAmIP"))
+            menu.addItem(info("\(flag)  WhereAmIP v\(whereamipVersion)"))
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
@@ -148,6 +171,8 @@ public enum MenuBuilder {
         settingsMenu.addItem(checkUpdates)
         settings.submenu = settingsMenu
         menu.addItem(settings)
+
+        menu.addItem(action("Restart WhereAmIP") { actions.restartApp() })
 
         let quit = action("Quit WhereAmIP", key: "q") { actions.quit() }
         quit.keyEquivalentModifierMask = [.command]

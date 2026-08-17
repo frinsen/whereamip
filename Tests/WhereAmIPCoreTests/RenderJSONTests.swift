@@ -39,6 +39,25 @@ final class RenderJSONTests: XCTestCase {
         XCTAssertTrue(h.contains("OpenVPN"))
         XCTAssertTrue(h.contains("utun4"))
     }
+    func testHumanEndsWithVersionFooter() {
+        let h = StateRenderer.human(fixedState())
+        XCTAssertTrue(h.hasSuffix("whereamip v\(whereamipVersion)"))
+    }
+    func testJSONWithAppVersionAddsKeyAdditively() {
+        // Documented, additive API change: passing appVersion adds a single
+        // top-level "appVersion" key; every other key is byte-identical to the
+        // no-appVersion golden above (sortedKeys just inserts it alphabetically).
+        let json = StateRenderer.json(fixedState(), appVersion: "9.9.9")
+        XCTAssertTrue(json.contains(#""appVersion":"9.9.9""#))
+        // Still valid, still every prior key present.
+        let obj = try! JSONSerialization.jsonObject(with: json.data(using: .utf8)!) as! [String: Any]
+        XCTAssertEqual(obj["appVersion"] as? String, "9.9.9")
+        XCTAssertEqual(obj["connectivity"] as? String, "online")
+        XCTAssertNotNil(obj["exit"])
+    }
+    func testJSONWithoutAppVersionOmitsKey() {
+        XCTAssertFalse(StateRenderer.json(fixedState()).contains("appVersion"))
+    }
     func testHumanShowsLeakLineWhenConfirmed() {
         var s = fixedState()
         s.exit6 = ExitInfo(ip: "2001:db8::1", countryCode: "US", city: "Ashburn", org: "Comcast",

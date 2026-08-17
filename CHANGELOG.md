@@ -6,6 +6,28 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [0.3.2] — 2026-08-17
+
+### Added
+- **Restart to finish update**: when `brew upgrade` has already replaced the
+  files on disk but the running process is still the old binary, the dropdown
+  now shows "↻ Restart to finish update (v…)" instead of re-advertising an
+  update the user already installed — one click relaunches into the new
+  version via the stable brew `opt` path. Field-motivated: a `brew upgrade`
+  left the app telling the user to do something they'd just done.
+- **Restart WhereAmIP** menu item, always available above Quit, for a plain
+  relaunch of the app independent of the update case.
+- The dropdown header and CLI status show the running version
+  (`WhereAmIP v0.3.2` in the dropdown; `whereamip status` gets a footer line
+  and `--json` gains a top-level `"appVersion"` key), so it's clear at a
+  glance which version is active — especially useful alongside the
+  restart-to-finish-update row.
+
+### Changed
+- "Since"/"Last seen online" timestamps in the dropdown now show a full,
+  locale-aware date and time (down to the second), not just a bare `HH:mm` —
+  an hours- or days-old state no longer looks identical to a minutes-old one.
+
 ## [0.3.1] — 2026-08-17
 
 ### Added

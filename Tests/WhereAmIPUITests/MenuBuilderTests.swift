@@ -51,6 +51,28 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(all.contains("No internet connection"))
         XCTAssertTrue(all.contains("Last seen"))
     }
+    func testLastSeenAndSinceShowFullDateAndTime() {
+        // Locale-aware: build the expected fragment with the same formatter the
+        // production code uses rather than hardcoding a locale-specific literal.
+        let expected = MenuBuilder.timeFormatter.string(from: fixedDate)
+
+        var offlineState = vpnState()
+        offlineState.connectivity = .offline
+        offlineState.exit = ExitInfo(ip: "185.107.56.123", countryCode: "NL", city: "Amsterdam",
+                                     org: "M247 Europe SRL", provider: "ipwho.is", fetchedAt: fixedDate)
+        let offlineMenu = MenuBuilder.build(state: offlineState, style: .emoji,
+                                            notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let lastSeenItem = offlineMenu.items.first { $0.title.contains("Last seen online") }!
+        XCTAssertTrue(lastSeenItem.title.contains(expected))
+
+        var onlineState = vpnState()
+        onlineState.since = fixedDate
+        let onlineMenu = MenuBuilder.build(state: onlineState, style: .emoji,
+                                           notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let sinceItem = onlineMenu.items.first { $0.title.hasPrefix("Since ") }!
+        XCTAssertTrue(sinceItem.title.contains(expected))
+    }
+    var fixedDate: Date { Date(timeIntervalSince1970: 1_700_000_000) }
     func testHijackWarningRow() {
         var s = vpnState()
         s.connectivity = .offline
@@ -78,6 +100,54 @@ final class MenuBuilderTests: XCTestCase {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         XCTAssertFalse(titles(menu).contains { $0.contains("Update") })
+    }
+    func testRestartRowAppearsFirstWhenPresent() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     restartUpdate: "0.3.2", actions: MenuActions())
+        let first = menu.items.first!
+        XCTAssertTrue(first.title.contains("Restart to finish update"))
+        XCTAssertTrue(first.title.contains("0.3.2"))
+        XCTAssertTrue(first.isEnabled)
+    }
+    func testRestartRowSupersedesAvailableUpdateRow() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     availableUpdate: "0.3.2", restartUpdate: "0.3.2", actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains { $0.contains("Update v") })
+        let first = menu.items.first!
+        XCTAssertTrue(first.title.contains("Restart to finish update"))
+    }
+    func testNoRestartRowWhenNil() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains { $0.contains("Restart to finish update") })
+    }
+    func testGeneralRestartRowAlwaysPresentImmediatelyBeforeQuit() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let restartIndex = menu.items.firstIndex { $0.title == "Restart WhereAmIP" }
+        let quitIndex = menu.items.firstIndex { $0.title == "Quit WhereAmIP" }
+        XCTAssertNotNil(restartIndex)
+        XCTAssertNotNil(quitIndex)
+        XCTAssertEqual(restartIndex! + 1, quitIndex!)
+        XCTAssertTrue(menu.items[restartIndex!].isEnabled)
+    }
+    func testHeaderShowsRunningVersion() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let header = menu.items.first { $0.title.contains("WhereAmIP v") }
+        XCTAssertNotNil(header)
+        XCTAssertTrue(header!.title.contains("v\(whereamipVersion)"))
+    }
+    func testGeneralRestartRowStillPresentWhenUpdateRowsShown() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     restartUpdate: "0.3.2", actions: MenuActions())
+        let restartIndex = menu.items.firstIndex { $0.title == "Restart WhereAmIP" }
+        let quitIndex = menu.items.firstIndex { $0.title == "Quit WhereAmIP" }
+        XCTAssertNotNil(restartIndex)
+        XCTAssertEqual(restartIndex! + 1, quitIndex!)
     }
     func testCheckForUpdatesToggleReflectsSettingOn() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,

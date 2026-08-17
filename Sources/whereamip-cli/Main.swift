@@ -29,7 +29,7 @@ struct Status: AsyncParsableCommand {
         let m = makeMonitor()
         await m.fullRefresh()
         let state = await m.currentState()
-        print(json ? StateRenderer.json(state) : StateRenderer.human(state))
+        print(json ? StateRenderer.json(state, appVersion: whereamipVersion) : StateRenderer.human(state))
     }
 }
 

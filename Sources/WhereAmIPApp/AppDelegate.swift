@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let updateChecker = UpdateChecker()
     var lastState = ExitState()
     var availableUpdate: String?
+    var restartUpdate: String?
+    private var lastDiskCheckAt: Date?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -62,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // whether a newer GitHub release exists. Respects the `updates` setting:
     // when disabled, no network request is made at all.
     func checkForUpdates() {
+        checkInstalledVersion()
         guard settings.updatesEnabled else { return }
         Task {
             let latest = await updateChecker.latestVersion()
@@ -70,12 +73,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // Detects "brew upgrade already replaced the files on disk, but this
+    // process is still the old binary" by comparing the version installed at
+    // the stable brew opt path against our own. Cheap (one plist read), but
+    // still I/O — never call this from menuNeedsUpdate (menu-build must stay
+    // I/O-free). Evaluated at the same cadence as the GitHub check (launch,
+    // daily timer, manual Refresh) plus a throttled pass from stateChanged
+    // below, since that's the only place likely to observe the change soon
+    // after a background `brew upgrade` completes.
+    func checkInstalledVersion() {
+        guard let onDisk = InstalledVersion.onDisk(bundlePath: Bundle.main.bundlePath) else {
+            restartUpdate = nil
+            return
+        }
+        restartUpdate = SemVer.isNewer(onDisk.version, than: whereamipVersion) ? onDisk.version : nil
+    }
+
     func stateChanged(_ state: ExitState) {
         lastState = state
         let (title, image) = StatusItemRenderer.render(state.glyph(style: settings.menuBarStyle),
                                                         ipv6Leak: state.ipv6Leak)
         statusItem.button?.title = title ?? ""
         statusItem.button?.image = image
+
+        // Throttled disk-version check (at most once/60s) — stateChanged fires
+        // often (probe ticks, route changes), so this catches a `brew upgrade`
+        // that finished in the background well before the next daily/manual
+        // update check without adding I/O on every single state change.
+        let now = Date()
+        if lastDiskCheckAt == nil || now.timeIntervalSince(lastDiskCheckAt!) >= 60 {
+            lastDiskCheckAt = now
+            checkInstalledVersion()
+        }
+    }
+
+    // Shared relaunch mechanism for both the update-restart row (which targets
+    // the newer opt-path bundle) and the plain "Restart WhereAmIP" row (which
+    // targets our own running bundle). `open -n` — rather than exec'ing the
+    // binary directly — properly re-registers the new instance with Launch
+    // Services; terminating only after a short delay avoids racing that
+    // handoff. The new instance recreates its own status item, so a brief
+    // moment with no (or two) menu bar icons during the switch is expected
+    // and acceptable.
+    func relaunch(from path: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-n", path]
+        try? process.run()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApp.terminate(nil)
+        }
     }
 
     func eventsHappened(_ events: [Event]) {
@@ -97,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             notificationsEnabled: settings.notificationsEnabled,
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
+            restartUpdate: restartUpdate,
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -142,6 +190,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         self.availableUpdate = nil
                     }
+                },
+                restartAction: { [weak self] in
+                    guard let self, let appPath = InstalledVersion.onDisk(bundlePath: Bundle.main.bundlePath)?.appPath
+                    else { return }
+                    self.relaunch(from: appPath)
+                },
+                restartApp: { [weak self] in
+                    guard let self else { return }
+                    self.relaunch(from: Bundle.main.bundlePath)
                 }))
         menu.removeAllItems()
         fresh.items.forEach { item in
