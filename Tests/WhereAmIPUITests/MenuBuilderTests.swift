@@ -382,6 +382,36 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(menu.items.map(\.title).contains("DNS: 10.8.0.1 via utun13 · DoH  (+1 more)"))
     }
 
+    // Field bug: DNSConfigReader.parse deliberately dedups by (address, interface) — a global
+    // entry plus one per-service entry — so the same address can appear up to 3x. The "+N more"
+    // count must reflect UNIQUE addresses, not raw model entries.
+    func testDNSMoreCountReflectsUniqueAddressesNotRawEntryCount() {
+        var state = ExitState(connectivity: .online)
+        // 4 unique addresses, 12 total entries (each repeated up to 3x across nil/en0/utun).
+        let addresses = ["192.168.178.1", "fd00::1", "2001:db8::1", "2001:db8::2"]
+        let interfaces: [String?] = [nil, "en0", "utun4"]
+        state.dns.resolvers = addresses.flatMap { addr in
+            interfaces.map { iface in DNSResolver(address: addr, isIPv6: addr.contains(":"), interface: iface) }
+        }
+        XCTAssertEqual(state.dns.resolvers.count, 12)
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix("DNS: 192.168.178.1") }
+        XCTAssertEqual(dnsRow, "DNS: 192.168.178.1  (+3 more)")
+    }
+
+    func testDNSMoreSuffixOmittedWhenOnlyOneUniqueAddress() {
+        var state = ExitState(connectivity: .online)
+        // Same address repeated across three interfaces (dedup artifact) — only 1 unique address.
+        state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false),
+                               DNSResolver(address: "9.9.9.9", isIPv6: false, interface: "en0"),
+                               DNSResolver(address: "9.9.9.9", isIPv6: false, interface: "utun4")]
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let dnsRow = menu.items.map(\.title).first { $0.hasPrefix("DNS: 9.9.9.9") }
+        XCTAssertEqual(dnsRow, "DNS: 9.9.9.9")
+    }
+
     func testDNSLeakWarningRowFirstAndBadgePredicate() {
         var state = ExitState(connectivity: .online)
         state.exit = ExitInfo(ip: "1.2.3.4", countryCode: "CZ", provider: "t", fetchedAt: Date())

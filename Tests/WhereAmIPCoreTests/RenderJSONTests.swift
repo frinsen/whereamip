@@ -103,6 +103,27 @@ final class RenderJSONTests: XCTestCase {
         state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false)]
         XCTAssertTrue(StateRenderer.human(state).contains("dns: 9.9.9.9"))
     }
+    // Field bug: DNSConfigReader.parse dedups by (address, interface), so the same address can
+    // appear multiple times (global + per-service entries). The "+N" count must reflect unique
+    // addresses, not raw resolver-entry count.
+    func testHumanDNSCountReflectsUniqueAddressesNotRawEntryCount() {
+        var state = ExitState(connectivity: .online)
+        let addresses = ["192.168.178.1", "fd00::1", "2001:db8::1", "2001:db8::2"]
+        let interfaces: [String?] = [nil, "en0", "utun4"]
+        state.dns.resolvers = addresses.flatMap { addr in
+            interfaces.map { iface in DNSResolver(address: addr, isIPv6: addr.contains(":"), interface: iface) }
+        }
+        XCTAssertEqual(state.dns.resolvers.count, 12)
+        XCTAssertTrue(StateRenderer.human(state).contains("dns: 192.168.178.1 +3"))
+    }
+    func testHumanDNSOmitsCountWhenOnlyOneUniqueAddress() {
+        var state = ExitState(connectivity: .online)
+        state.dns.resolvers = [DNSResolver(address: "9.9.9.9", isIPv6: false),
+                               DNSResolver(address: "9.9.9.9", isIPv6: false, interface: "en0"),
+                               DNSResolver(address: "9.9.9.9", isIPv6: false, interface: "utun4")]
+        let line = StateRenderer.human(state).split(separator: "\n").first { $0.hasPrefix("dns: ") }
+        XCTAssertEqual(line, "dns: 9.9.9.9")
+    }
     func testHumanShowsDNSLeakConfirmedLine() {
         var state = ExitState(connectivity: .online)
         state.dns.leak = .confirmed

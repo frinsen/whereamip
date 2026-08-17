@@ -32,6 +32,11 @@ install-ready notes per version.
 - `whereamip watch` output is now line-buffered when piped or redirected —
   previously the documented `watch --json >> file` logging pattern could
   delay lines by minutes.
+- DNS row's "+N more" count now reflects unique resolver **addresses**, not
+  raw model entries — `DNSConfigReader.parse` intentionally keeps a global
+  entry plus one per-service entry per address (for leak-detector
+  attribution), which was inflating the dropdown/CLI count (e.g. "+11 more"
+  for 4 actual addresses).
 
 ## [0.4.1] — 2026-08-17
 

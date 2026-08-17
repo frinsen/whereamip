@@ -194,7 +194,8 @@ public enum MenuBuilder {
             case .plaintext: line += " · plaintext"
             case .unknown: break
             }
-            if state.dns.resolvers.count > 1 { line += "  (+\(state.dns.resolvers.count - 1) more)" }
+            let uniqueCount = state.dns.uniqueAddressCount
+            if uniqueCount > 1 { line += "  (+\(uniqueCount - 1) more)" }
             block.append(info(line))
         }
         if !block.isEmpty {

@@ -37,7 +37,8 @@ public enum StateRenderer {
         if let first = state.dns.resolvers.first {
             var d = "dns: \(first.address)"
             if let iface = first.interface { d += " (\(iface))" }
-            if state.dns.resolvers.count > 1 { d += " +\(state.dns.resolvers.count - 1)" }
+            let uniqueCount = state.dns.uniqueAddressCount
+            if uniqueCount > 1 { d += " +\(uniqueCount - 1)" }
             if state.dns.encryption == .doh { d += " · DoH" }
             if state.dns.encryption == .dot { d += " · DoT" }
             lines.append(d)

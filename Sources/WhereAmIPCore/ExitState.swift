@@ -130,6 +130,14 @@ public struct DNSInfo: Equatable, Codable, Sendable {
         self.egressIP = egressIP; self.egressIsIPv6 = egressIsIPv6
         self.measuredAt = measuredAt; self.leak = leak
     }
+    // DNSConfigReader.parse deliberately dedups by (address, interface) — a global entry plus
+    // one per-service entry — so the same address can appear in `resolvers` up to 3x. That's
+    // correct for DNSLeakDetector's per-service attribution, but a display's "+N more" count
+    // must reflect distinct addresses, not raw entry count. One source of truth shared by the
+    // dropdown (MenuBuilder) and the CLI (StateRenderer.human) — same precedent as `splitLine`.
+    public var uniqueAddressCount: Int {
+        Set(resolvers.map(\.address)).count
+    }
 }
 
 public struct ExitState: Equatable, Codable, Sendable {
