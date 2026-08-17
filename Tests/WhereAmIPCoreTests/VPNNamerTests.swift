@@ -62,4 +62,44 @@ final class VPNNamerTests: XCTestCase {
         XCTAssertEqual(VPNNamer.name(interface: "ipsec0", localAddress: nil,
                                      scServiceName: "Corp VPN", runningBundleIDs: []), "Corp VPN")
     }
+
+    // MARK: - C1: classic daemon tunnel process evidence
+
+    /// THE field bug: office ovpnagent daemon tunnel registers no SC State keys at all, and
+    /// Tailscale.app happens to be running in the background too — the bundle table alone
+    /// would pick "Tailscale" by table order. Process evidence must fire first.
+    func testOpenVPNDaemonNamedByOvpnagentProcessEvenWithTailscaleAppRunning() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun17", localAddress: "192.168.4.4",
+                                     scServiceName: nil, runningBundleIDs: ["io.tailscale.ipn.macos"],
+                                     runningProcessNames: ["ovpnagent"]), "OpenVPN")
+    }
+    func testOpenVPNDaemonNamedByOpenvpnProcess() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun17", localAddress: "192.168.4.4",
+                                     scServiceName: nil, runningBundleIDs: [],
+                                     runningProcessNames: ["openvpn"]), "OpenVPN")
+    }
+    func testSCServiceNameWinsOverProcessEvidence() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun17", localAddress: "192.168.4.4",
+                                     scServiceName: "PureVPN", runningBundleIDs: [],
+                                     runningProcessNames: ["openvpn"]), "PureVPN")
+    }
+    func testNoMatchingProcessesFallsThroughPastProcessTell() {
+        XCTAssertNil(VPNNamer.name(interface: "utun17", localAddress: "192.168.4.4",
+                                   scServiceName: nil, runningBundleIDs: [],
+                                   runningProcessNames: ["Finder", "WindowServer"]))
+    }
+
+    // MARK: - C2: ambiguity-aware bundle table
+
+    func testAmbiguousMultipleVendorAppsRunningReturnsNil() {
+        XCTAssertNil(VPNNamer.name(interface: "utun4", localAddress: "10.8.0.2",
+                                   scServiceName: nil,
+                                   runningBundleIDs: ["io.tailscale.ipn.macos", "net.openvpn.connect.app"]))
+    }
+    func testSameVendorMultipleBundleIDsStillNamed() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun4", localAddress: "10.8.0.2",
+                                     scServiceName: nil,
+                                     runningBundleIDs: ["io.tailscale.ipn.macos", "io.tailscale.ipn.macsys"]),
+                      "Tailscale")
+    }
 }

@@ -162,8 +162,13 @@ public enum RouteInspector {
         }
         let isVPN = isTunnelInterface(iface)
         let scServiceName = isVPN ? SCServiceNamer.serviceName(forInterface: iface) : nil
+        // Process scan is only worth its cost when the SC widening (A1) genuinely came up
+        // empty on a tunnel — classic daemon tunnels are exactly the case scServiceName can
+        // never explain, so scanning otherwise would just burn a libproc walk for nothing.
+        let processNames: Set<String> = (isVPN && scServiceName == nil) ? ProcessScanner.runningProcessNames() : []
         let name = VPNNamer.name(interface: iface, localAddress: localIP,
-                                 scServiceName: scServiceName, runningBundleIDs: runningBundleIDs)
+                                 scServiceName: scServiceName, runningBundleIDs: runningBundleIDs,
+                                 runningProcessNames: processNames)
         // Connection-kind display (Wave A): only meaningful for the physical/underlay
         // interface actually carrying the default route. When a VPN tunnel owns it, its
         // "kind" is the tunnel itself (already named above) — attributing that back to

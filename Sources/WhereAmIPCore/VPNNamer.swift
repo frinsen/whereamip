@@ -12,10 +12,12 @@ public enum VPNNamer {
     ]
     /// Precedence: (a) non-tunnel interface → nil; (b) `scServiceName` — the authoritative,
     /// route-correlated answer from SCDynamicStore; (c) CGNAT 100.64/10 source address →
-    /// "Tailscale"; (d) bundle-ID presence table, as a last resort only (a running-but-
-    /// disconnected VPN app must never win over the route-owning service's real name).
+    /// "Tailscale"; (d) classic daemon-tunnel process evidence (see below); (e) bundle-ID
+    /// presence table, as a last resort only (a running-but-disconnected VPN app must never
+    /// win over the route-owning service's real name).
     public static func name(interface: String, localAddress: String?,
-                            scServiceName: String?, runningBundleIDs: [String]) -> String? {
+                            scServiceName: String?, runningBundleIDs: [String],
+                            runningProcessNames: Set<String> = []) -> String? {
         guard RouteInspector.isTunnelInterface(interface) else { return nil }
         if let scServiceName { return scServiceName }
         // Tailscale tell: CGNAT 100.64.0.0/10 source address
@@ -24,7 +26,15 @@ public enum VPNNamer {
         // (fixed across installs; field-verified 2026-08-17). Bundle-ID lookup can't
         // help the CLI, which has no AppKit and passes empty runningBundleIDs.
         if localAddress == "172.16.0.2" { return "Cloudflare WARP" }
-        for (id, name) in bundleIDNames where runningBundleIDs.contains(id) { return name }
+        // Classic daemon tunnels (OpenVPN etc.) register NOTHING in SCDynamicStore — after the
+        // State-key widening, a nameless tunnel plus a running openvpn/ovpnagent process is
+        // causal evidence (sibling-session field diagnosis 2026-08-17: office ovpnagent tunnel
+        // misnamed "Tailscale" by bundle-table order).
+        if runningProcessNames.contains(where: { $0 == "openvpn" || $0 == "ovpnagent" }) { return "OpenVPN" }
+        // Only name from app presence when it's unambiguous — multiple known VPN apps running
+        // means table ORDER would decide, and a wrong name shown confidently is worse than none.
+        let matchedNames = Set(bundleIDNames.filter { runningBundleIDs.contains($0.id) }.map(\.name))
+        if matchedNames.count == 1 { return matchedNames.first }
         // Native NE personal VPNs (IKEv2/IPsec profiles installed via Settings or MDM) expose
         // no name in SCDynamicStore or any other reachable store — field-verified 2026-08-17,
         // no Setup:/UserDefinedName entry exists for their ipsecN interface either. A truthful
