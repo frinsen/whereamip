@@ -87,6 +87,26 @@ struct Config: AsyncParsableCommand {
     struct Set: ParsableCommand {
         @Argument var key: String
         @Argument var value: String
-        func run() throws { try Settings().set(key: key, value: value) }
+        func run() throws {
+            // "applications" is handled here rather than in Settings.set(key:value:):
+            // its truth lives on the filesystem (the /Applications symlink), and
+            // applying it needs the .app path derived from *this CLI's own*
+            // executable location — something the generic Settings setter has no
+            // way to know. ApplicationsLink.appPath does that derivation and is
+            // independently unit-tested against fixture symlink chains.
+            guard key == "applications" else {
+                try Settings().set(key: key, value: value)
+                return
+            }
+            guard value == "true" || value == "false" else {
+                throw SettingsError.invalid("applications must be true|false")
+            }
+            guard let appPath = ApplicationsLink.appPath(fromExecutablePath: CommandLine.arguments[0]) else {
+                throw SettingsError.invalid(
+                    "Could not determine the installed WhereAmIP.app location from this CLI — " +
+                    "'applications' is only supported for Homebrew installs.")
+            }
+            try ApplicationsLink.setLinked(value == "true", bundlePath: appPath)
+        }
     }
 }

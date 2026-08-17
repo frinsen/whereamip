@@ -149,6 +149,43 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertNotNil(restartIndex)
         XCTAssertEqual(restartIndex! + 1, quitIndex!)
     }
+    func testShowInApplicationsReflectsStateOn() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     applicationsLinked: true, actions: MenuActions())
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Show in Applications" }!
+        XCTAssertEqual(item.state, .on)
+    }
+    func testShowInApplicationsReflectsStateOff() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     applicationsLinked: false, actions: MenuActions())
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Show in Applications" }!
+        XCTAssertEqual(item.state, .off)
+    }
+    func testShowInApplicationsFiresAction() {
+        var fired = false
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     actions: MenuActions(toggleApplicationsLink: { fired = true }))
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Show in Applications" }!
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertTrue(fired)
+    }
+    func testShowWelcomeWindowRowExistsAndFires() {
+        var fired = false
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     actions: MenuActions(showWelcomeWindow: { fired = true }))
+        let settings = menu.items.first { $0.title == "Settings" }!.submenu!
+        let item = settings.items.first { $0.title == "Show Welcome Window" }!
+        XCTAssertEqual(item.state, .off)   // plain action, never a checkmark
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertTrue(fired)
+    }
     func testCheckForUpdatesToggleReflectsSettingOn() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,

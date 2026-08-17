@@ -15,11 +15,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var availableUpdate: String?
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
+    var welcomeWindowController: WelcomeWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.menu = NSMenu()
         statusItem.menu!.delegate = self
+
+        // Shown once (and again on a maintainer-bumped welcomeMilestone —
+        // see Version.swift), after the status item exists so the window can
+        // point at something already on screen. Gated by shouldShowWelcome
+        // (pure logic in Core, unit-tested there) — only Done stores
+        // welcomedMilestone, so dismissing via the close button/Esc shows it
+        // again next launch rather than losing it for good. Monitor setup
+        // below runs regardless of this window; the app's core behavior
+        // never waits on it.
+        if shouldShowWelcome(stored: settings.welcomedMilestone) {
+            welcomeWindowController = WelcomeWindowController(settings: settings)
+            welcomeWindowController?.show()
+        }
 
         monitor = Monitor(
             geo: GeoProviderChain(), probe: ConnectivityProbe(),
@@ -144,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             notificationsEnabled: settings.notificationsEnabled,
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
-            restartUpdate: restartUpdate,
+            restartUpdate: restartUpdate, applicationsLinked: ApplicationsLink.isLinked(),
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -163,8 +177,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 toggleNotifications: { [weak self] in
                     guard let self else { return }
                     if !settings.notificationsEnabled {
-                        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
-                            DispatchQueue.main.async { self.settings.notificationsEnabled = granted }
+                        NotificationPermissionFlow.requestEnable { [weak self] granted, needsSystemSettings in
+                            guard let self else { return }
+                            if needsSystemSettings {
+                                // The menu has no inline-label surface (unlike the
+                                // welcome window's hint button) — go straight to
+                                // System Settings instead of showing a hint.
+                                NotificationPermissionFlow.openSystemSettings()
+                            } else {
+                                self.settings.notificationsEnabled = granted
+                            }
                         }
                     } else {
                         settings.notificationsEnabled = false
@@ -176,6 +198,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     } else {
                         try? SMAppService.mainApp.register()
                     }
+                },
+                toggleApplicationsLink: {
+                    // Best-effort, same convention as toggleLaunchAtLogin above:
+                    // the menu has no inline surface for an error message, so a
+                    // failure (e.g. a real, non-symlink /Applications/WhereAmIP.app
+                    // someone created) just leaves the checkbox reflecting
+                    // whatever the actual on-disk state still is.
+                    try? ApplicationsLink.setLinked(!ApplicationsLink.isLinked(), bundlePath: Bundle.main.bundlePath)
+                },
+                showWelcomeWindow: { [weak self] in
+                    // Manual re-show, bypasses shouldShowWelcome entirely —
+                    // always shows regardless of welcomedMilestone. Clicking
+                    // Done afterwards just re-stores the same milestone
+                    // value, which is harmless.
+                    guard let self else { return }
+                    self.welcomeWindowController = WelcomeWindowController(settings: self.settings)
+                    self.welcomeWindowController?.show()
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {

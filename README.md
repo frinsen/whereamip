@@ -42,9 +42,9 @@ This is a build-from-source formula (Xcode command line tools required) — no G
 open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"
 ```
 
-Then enable **Settings ▸ Launch at Login** inside the app so it starts automatically next time.
+Then enable **Settings ▸ Launch at Login** inside the app so it starts automatically next time. A first-start window also walks you through this — it offers Launch at Login and Show in Applications as live toggles the moment the app opens for the first time.
 
-Optional — make it show up in /Applications (the symlink survives upgrades):
+Optional — make it show up in /Applications (the symlink survives upgrades); the first-start window's "Show in Applications" toggle (or **Settings ▸ Show in Applications** any time after) does this for you, but the manual `ln -s` below still works too for CLI-only folks:
 
 ```bash
 ln -s "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app" /Applications/WhereAmIP.app

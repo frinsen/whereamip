@@ -7,6 +7,8 @@ public struct MenuActions {
     public var setStyle: (MenuBarStyle) -> Void
     public var toggleNotifications: () -> Void
     public var toggleLaunchAtLogin: () -> Void
+    public var toggleApplicationsLink: () -> Void
+    public var showWelcomeWindow: () -> Void
     public var quit: () -> Void
     public var copyUpdateCommand: () -> Void
     public var toggleUpdateChecks: () -> Void
@@ -16,6 +18,8 @@ public struct MenuActions {
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
+                toggleApplicationsLink: @escaping () -> Void = {},
+                showWelcomeWindow: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping () -> Void = {},
                 toggleUpdateChecks: @escaping () -> Void = {},
@@ -24,6 +28,8 @@ public struct MenuActions {
         self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
+        self.toggleApplicationsLink = toggleApplicationsLink
+        self.showWelcomeWindow = showWelcomeWindow
         self.copyUpdateCommand = copyUpdateCommand
         self.toggleUpdateChecks = toggleUpdateChecks
         self.restartAction = restartAction
@@ -65,7 +71,7 @@ public enum MenuBuilder {
     public static func build(state: ExitState, style: MenuBarStyle,
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
-                             restartUpdate: String? = nil,
+                             restartUpdate: String? = nil, applicationsLinked: Bool = false,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -166,9 +172,17 @@ public enum MenuBuilder {
         let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }
         login.state = launchAtLogin ? .on : .off
         settingsMenu.addItem(login)
+        let appsLink = action("Show in Applications") { actions.toggleApplicationsLink() }
+        appsLink.state = applicationsLinked ? .on : .off
+        settingsMenu.addItem(appsLink)
         let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
         checkUpdates.state = updatesEnabled ? .on : .off
         settingsMenu.addItem(checkUpdates)
+        settingsMenu.addItem(.separator())
+        // Plain action (no checkmark, unlike the toggles above) — re-opens
+        // the first-run window on demand, independent of whether it's
+        // already been acknowledged.
+        settingsMenu.addItem(action("Show Welcome Window") { actions.showWelcomeWindow() })
         settings.submenu = settingsMenu
         menu.addItem(settings)
 

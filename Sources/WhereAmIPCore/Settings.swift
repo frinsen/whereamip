@@ -30,6 +30,18 @@ public final class Settings: @unchecked Sendable {
         get { d.object(forKey: "updatesEnabled") == nil ? true : d.bool(forKey: "updatesEnabled") }
         set { d.set(newValue, forKey: "updatesEnabled") }
     }
+    // Internal, not surfaced in `set(key:value:)`/the config-command switch below:
+    // the milestone (see `welcomeMilestone` in Version.swift) last
+    // acknowledged via the welcome window's Done button. Empty = never shown
+    // (first run). A plain "shown once" bool isn't enough here — a
+    // maintainer needs to be able to re-surface the window on a specific
+    // future release without touching every existing installs' "already
+    // shown" state, hence storing *which* milestone was last acknowledged
+    // rather than just whether any welcome ever happened.
+    public var welcomedMilestone: String {
+        get { d.string(forKey: "welcomedMilestone") ?? "" }
+        set { d.set(newValue, forKey: "welcomedMilestone") }
+    }
     public func set(key: String, value: String) throws {
         switch key {
         case "style":
@@ -41,10 +53,36 @@ public final class Settings: @unchecked Sendable {
         case "updates":
             guard value == "true" || value == "false" else { throw SettingsError.invalid("updates must be true|false") }
             updatesEnabled = (value == "true")
-        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates)")
+        // "applications" is deliberately absent here: its truth lives on the
+        // filesystem (ApplicationsLink.isLinked), not in UserDefaults, and
+        // applying it needs a bundle/executable path this generic setter
+        // doesn't have. The CLI's `config set applications` handles it
+        // directly via ApplicationsLink instead (see whereamip-cli/Main.swift).
+        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates, applications)")
         }
     }
-    public func allValues() -> [(key: String, value: String)] {
-        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled))]
+    /// `applicationsLinkPath` is injectable for tests; real callers use the
+    /// default `/Applications/WhereAmIP.app`. Unlike the other three values
+    /// this one isn't read from `d` — it's live filesystem state.
+    public func allValues(applicationsLinkPath: String = "/Applications/WhereAmIP.app") -> [(key: String, value: String)] {
+        [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled)),
+         ("applications", String(ApplicationsLink.isLinked(linkPath: applicationsLinkPath)))]
     }
+}
+
+/// Whether the welcome window should be shown automatically at launch, given
+/// the previously stored `Settings.welcomedMilestone` (empty = never shown).
+/// Extracted as pure logic (no AppKit, no Settings dependency) so it's
+/// unit-testable directly against string fixtures.
+///
+/// True when nothing has been acknowledged yet (first run), or when
+/// `welcomeMilestone` (Version.swift) has advanced past what's stored — i.e.
+/// a maintainer bumped it in a release worth re-surfacing the window for. A
+/// "downgrade" (stored somehow newer than the current constant) never
+/// re-triggers it. AppDelegate only stores `welcomedMilestone` when the user
+/// clicks Done (not on mere close), so an accidentally dismissed window
+/// retries next launch; the Settings-menu manual re-show bypasses this
+/// predicate entirely and shows unconditionally.
+public func shouldShowWelcome(stored: String) -> Bool {
+    stored.isEmpty || SemVer.isNewer(welcomeMilestone, than: stored)
 }

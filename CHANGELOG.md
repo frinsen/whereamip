@@ -6,6 +6,38 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [Unreleased]
+
+### Added
+- **Show in Applications** toggle (Settings ▸ Show in Applications, and in the
+  new first-start window): creates/removes a `/Applications/WhereAmIP.app`
+  symlink pointing at the stable brew `opt` path, so the app shows up in
+  Spotlight/Launchpad/Finder without the Homebrew formula itself writing
+  outside its own prefix — the symlink is only ever created when a user
+  clicks the toggle. Also available via `whereamip config set applications
+  true|false`; `config get` reports the live on-disk state, not a stored
+  preference. Never touches a real (non-symlink) path if one happens to
+  already exist there.
+- **Welcome window**: shown once on first launch — what the app is, where it
+  lives in the menu bar (with a note that notched MacBooks can hide it behind
+  the notch), and live-wired Launch at Login / Show in Applications / Notify
+  on exit-connectivity-changes checkboxes plus a privacy note. Only clicking
+  Done acknowledges it; closing it any other way shows it again next launch.
+  Can also be reopened any time via **Settings ▸ Show Welcome Window**.
+  - Re-shown on upgrade when a maintainer-controlled `welcomeMilestone`
+    constant advances past what a given install last acknowledged (stored as
+    `welcomedMilestone`, not a plain "seen it" bool) — lets a future release
+    with genuinely notable changes re-surface the window (titled "what's
+    new" instead of "Welcome") without pestering on every ordinary upgrade.
+  - The notifications checkbox is never pre-checked and never triggers the
+    system permission dialog just by the window opening — only a direct
+    click can. If notifications were previously denied at the OS level, it
+    shows an inline "open Notifications settings" link instead of silently
+    re-requesting (which would resolve with no UI and look broken); the
+    Settings-menu toggle hits the same previously-denied case by opening
+    System Settings directly, since a menu has no inline-hint surface.
+  - No other permission prompts, no network calls, from this window.
+
 ## [0.3.2] — 2026-08-17
 
 ### Added
