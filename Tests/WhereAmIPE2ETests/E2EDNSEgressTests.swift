@@ -15,4 +15,19 @@ final class E2EDNSEgressTests: XCTestCase {
                        atomically: true, encoding: .utf8)
         }
     }
+
+    /// The round of cache-busting lookups against dnscheck.tools. Gated exactly like the probe
+    /// above — the parser itself is covered offline in DNSEgressEnumeratorTests; this only
+    /// proves the live service still answers in the shape we parse.
+    func testLiveEgressEnumerationFindsAtLeastOneResolver() async throws {
+        try XCTSkipUnless(env["WHEREAMIP_E2E"] == "1")
+        let resolvers = await DNSEgressEnumerator(deadlineSeconds: 6).enumerate()
+        XCTAssertFalse(resolvers.isEmpty, "live enumeration found no egress resolver on a working network")
+        XCTAssertEqual(resolvers.map(\.ip).count, Set(resolvers.map(\.ip)).count, "results must be deduped by IP")
+        if let dir = env["E2E_DUMP_DIR"] {
+            try? (resolvers.map(\.displayLine).joined(separator: "\n") + "\n")
+                .write(toFile: "\(dir)/egress-enum-\(env["E2E_BACKEND"] ?? "unknown").txt",
+                       atomically: true, encoding: .utf8)
+        }
+    }
 }

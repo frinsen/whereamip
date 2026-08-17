@@ -155,11 +155,25 @@ final class MockDNSProbe: DNSEgressProbing, @unchecked Sendable {
     func fetch() async -> (ip: String, isIPv6: Bool)? { callCount += 1; return result }
 }
 
+/// Stand-in for `DNSEgressEnumerator` — hands back a fixed resolver list (empty simulating a
+/// service outage, which must fall back to the beacon probe) without touching real DNS, and
+/// counts invocations so tests can assert the round was (or was not) actually fired.
+final class MockDNSEnumerator: DNSEgressEnumerating, @unchecked Sendable {
+    var result: [EgressResolver]
+    var callCount = 0
+    var lastQueryCount: Int?
+    init(result: [EgressResolver]) { self.result = result }
+    func enumerate(queryCount: Int) async -> [EgressResolver] {
+        callCount += 1; lastQueryCount = queryCount; return result
+    }
+}
+
 final class MonitorTests: XCTestCase {
     func makeMonitor(counter: Counter, probeOK: Bool = true, httpIP: String? = nil,
                      ip4: String? = nil, ip6: String? = nil,
                      dnsConfig: any DNSConfigReading = MockDNSConfig(resolvers: []),
                      dnsProbe: any DNSEgressProbing = MockDNSProbe(result: nil),
+                     dnsEnumerator: any DNSEgressEnumerating = MockDNSEnumerator(result: []),
                      dnsProbeEnabled: @escaping @Sendable () -> Bool = { true },
                      onEvents: @escaping @Sendable ([Event]) -> Void = { _ in }) -> Monitor {
         let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
@@ -171,6 +185,7 @@ final class MonitorTests: XCTestCase {
                        stackIP: MockStackIP(counter: counter, ip4: ip4, ip6: ip6),
                        dnsConfig: dnsConfig,
                        dnsProbe: dnsProbe,
+                       dnsEnumerator: dnsEnumerator,
                        dnsProbeEnabled: dnsProbeEnabled,
                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                        debounceSeconds: 0.05,
@@ -268,6 +283,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
@@ -323,6 +339,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
@@ -376,6 +393,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
@@ -462,6 +480,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: dnsConfig,
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -502,6 +521,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -535,6 +555,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -561,6 +582,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -594,6 +616,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: dnsConfig,
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -625,6 +648,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -654,6 +678,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -683,6 +708,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: dnsProbe,
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { true },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -767,6 +793,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
                         debounceSeconds: 0.05,
@@ -782,6 +809,209 @@ final class MonitorTests: XCTestCase {
         let events = box.all().flatMap { $0 }
         XCTAssertTrue(events.contains { if case .leakSuspected = $0 { return true }; return false },
                       "a tunnel that genuinely returns the same exit IP must still be flagged")
+    }
+
+    // MARK: - DNS egress enumeration
+
+    func woodyNet(_ ip: String) -> EgressResolver {
+        EgressResolver(ip: ip, port: 39071, operatorName: "WoodyNet, Inc.",
+                       location: "Berlin, State of Berlin, DE", transport: "UDP")
+    }
+
+    func testEnumerationReplacesTheBeaconProbeAndFillsEgressFields() async {
+        let c = Counter()
+        let probe = MockDNSProbe(result: ("203.0.113.7", false))
+        let enumerator = MockDNSEnumerator(result: [woodyNet("74.80.89.244"),
+                                                    woodyNet("2620:171:57:f003:9999::244")])
+        let m = makeMonitor(counter: c, dnsProbe: probe, dnsEnumerator: enumerator)
+
+        await m.fullRefresh()
+
+        XCTAssertEqual(enumerator.callCount, 1, "one round per full refresh")
+        XCTAssertEqual(enumerator.lastQueryCount, DNSEgressEnumerator.roundSize)
+        XCTAssertEqual(probe.callCount, 0, "the beacon probe is a fallback, not a second query")
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressResolvers.map(\.ip), ["74.80.89.244", "2620:171:57:f003:9999::244"])
+        XCTAssertEqual(s.dns.egressIP, "74.80.89.244", "the primary (v4-first) resolver stays the egress of record")
+        XCTAssertFalse(s.dns.egressIsIPv6)
+        XCTAssertNotNil(s.dns.measuredAt)
+    }
+
+    func testEnumerationOfAnIPv6OnlyPoolSetsEgressIsIPv6() async {
+        let c = Counter()
+        let enumerator = MockDNSEnumerator(result: [woodyNet("2620:171:57:f003:9999::244")])
+        let m = makeMonitor(counter: c, dnsEnumerator: enumerator)
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressIP, "2620:171:57:f003:9999::244")
+        XCTAssertTrue(s.dns.egressIsIPv6)
+    }
+
+    func testEmptyEnumerationFallsBackToTheBeaconProbe() async {
+        // dnscheck.tools down / its zone blocked: the round returns nothing and the Google
+        // beacon must still produce a verdict-grade measurement, exactly as before this feature.
+        let c = Counter()
+        let probe = MockDNSProbe(result: ("203.0.113.7", false))
+        let m = makeMonitor(counter: c, dnsProbe: probe, dnsEnumerator: MockDNSEnumerator(result: []))
+
+        await m.fullRefresh()
+
+        XCTAssertEqual(probe.callCount, 1)
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressIP, "203.0.113.7")
+        XCTAssertTrue(s.dns.egressResolvers.isEmpty)
+        XCTAssertNotNil(s.dns.measuredAt)
+    }
+
+    func testEnumeratedPrimaryFeedsTheLeakVerdict() async {
+        // The enumerated primary is what decide() judges: an egress that matches the tunnel
+        // exit clears, one that doesn't raises suspicion — the same rule the beacon probe fed.
+        let c = Counter()
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt",
+                            provider: "mock", fetchedAt: Date())
+        func monitor(egress: String) -> Monitor {
+            Monitor(geo: MockGeo(counter: c, info: info),
+                    probe: MockProbe(counter: c, results: { true }),
+                    route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                    httpIP: MockHTTPIP(counter: c, ip: nil),
+                    stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                    dnsConfig: MockDNSConfig(resolvers: []),
+                    dnsProbe: MockDNSProbe(result: nil),
+                    dnsEnumerator: MockDNSEnumerator(result: [EgressResolver(ip: egress)]),
+                    dnsProbeEnabled: { true },
+                    relayRanges: RelayRanges(csv: ""),
+                    debounceSeconds: 0.05,
+                    onChange: { _ in }, onEvents: { _ in })
+        }
+
+        let matching = monitor(egress: "1.2.3.4")
+        await matching.fullRefresh()
+        let cleared = await matching.currentState()
+        XCTAssertEqual(cleared.dns.leak, .none, "an egress equal to the tunnel exit is no leak")
+
+        let mismatching = monitor(egress: "203.0.113.7")
+        await mismatching.fullRefresh()
+        let suspected = await mismatching.currentState()
+        XCTAssertEqual(suspected.dns.leak, .suspected)
+    }
+
+    func testEnumeratedOperatorFillsEgressOrgWhenGeoAttributionFails() async {
+        // dnscheck.tools already names the operator, so a failed (or skipped) geo lookup no
+        // longer costs the confirmed leak row its "queries answered via <org>" attribution.
+        let c = Counter()
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupFails: true),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: [woodyNet("74.80.89.244")]),
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressOrg, "WoodyNet, Inc.")
+    }
+
+    func testGeoAttributionStillWinsOverTheEnumeratedOperator() async {
+        // The rescue in decide() compares against the geo provider's org, so the displayed org
+        // must come from the same source whenever that lookup succeeded — no two-source drift.
+        let c = Counter()
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                            provider: "mock", fetchedAt: Date(), asn: 3209)
+        let m = Monitor(geo: MockGeo(counter: c, info: info, lookupASN: 9999, lookupOrg: "Cloudflare, Inc."),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: MockRoute(info: RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")),
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: [woodyNet("74.80.89.244")]),
+                        dnsProbeEnabled: { true },
+                        relayRanges: RelayRanges(csv: ""),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressOrg, "Cloudflare, Inc.")
+        let lookups = await c.lookupCalls
+        XCTAssertEqual(lookups, 1, "still exactly one attribution lookup per full refresh — no whois added")
+    }
+
+    func testDisabledProbeNeverEnumeratesAndClearsTheList() async {
+        let c = Counter()
+        let enumerator = MockDNSEnumerator(result: [woodyNet("74.80.89.244")])
+        let enabled = MutableFlag(true)
+        let m = makeMonitor(counter: c, dnsEnumerator: enumerator, dnsProbeEnabled: { enabled.get() })
+
+        await m.fullRefresh()
+        let measured = await m.currentState()
+        XCTAssertEqual(measured.dns.egressResolvers.count, 1)
+
+        enabled.set(false)
+        await m.fullRefresh()
+        let cleared = await m.currentState()
+        XCTAssertEqual(enumerator.callCount, 1, "an opted-out user's machine must send no query at all")
+        XCTAssertTrue(cleared.dns.egressResolvers.isEmpty, "every egress field resets together")
+        XCTAssertNil(cleared.dns.egressIP)
+    }
+
+    func testTotalMeasurementFailurePreservesTheLastResolverListPairedWithEgressIP() async {
+        // Same pairing rule as egressIP/measuredAt: on a refresh where NOTHING answered, the
+        // displayed list must stay the last successful round's, never a half-stale mix.
+        let c = Counter()
+        let enumerator = MockDNSEnumerator(result: [woodyNet("74.80.89.244")])
+        let m = makeMonitor(counter: c, dnsProbe: MockDNSProbe(result: nil), dnsEnumerator: enumerator)
+
+        await m.fullRefresh()
+        let measured = await m.currentState()
+        XCTAssertEqual(measured.dns.egressResolvers.count, 1)
+
+        enumerator.result = []   // service down AND the beacon probe already returns nil
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressResolvers.map(\.ip), ["74.80.89.244"])
+        XCTAssertEqual(s.dns.egressIP, measured.dns.egressIP)
+        XCTAssertEqual(s.dns.measuredAt, measured.dns.measuredAt)
+    }
+
+    func testSuccessfulBeaconFallbackClearsAStaleResolverList() async {
+        // The other half of the pairing rule: once the beacon has produced a FRESH egressIP,
+        // the list must not keep showing resolvers from an older round that no longer answered.
+        let c = Counter()
+        let enumerator = MockDNSEnumerator(result: [woodyNet("74.80.89.244")])
+        let probe = MockDNSProbe(result: nil)
+        let m = makeMonitor(counter: c, dnsProbe: probe, dnsEnumerator: enumerator)
+
+        await m.fullRefresh()
+        let measured = await m.currentState()
+        XCTAssertEqual(measured.dns.egressResolvers.count, 1)
+
+        enumerator.result = []
+        probe.result = ("203.0.113.7", false)
+        await m.fullRefresh()
+        let s = await m.currentState()
+        XCTAssertEqual(s.dns.egressIP, "203.0.113.7")
+        XCTAssertTrue(s.dns.egressResolvers.isEmpty, "a fresh fallback measurement supersedes the old list")
+    }
+
+    func testTickNeverEnumerates() async {
+        let c = Counter()
+        let enumerator = MockDNSEnumerator(result: [woodyNet("74.80.89.244")])
+        let m = makeMonitor(counter: c, dnsEnumerator: enumerator)
+
+        await m.fullRefresh()
+        await m.probeTick()
+
+        XCTAssertEqual(enumerator.callCount, 1, "only full refreshes measure — ticks observe local config only")
     }
 
     // MARK: - IPv6 leak detection (Phase 1)
@@ -800,6 +1030,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -832,6 +1063,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -857,6 +1089,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: nil),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -881,6 +1114,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -914,6 +1148,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: stackIP,
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -962,6 +1197,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -993,6 +1229,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,
@@ -1020,6 +1257,7 @@ final class MonitorTests: XCTestCase {
                         stackIP: MockStackIP(counter: c, ip4: ip4, ip6: ip6),
                         dnsConfig: MockDNSConfig(resolvers: []),
                         dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
                         dnsProbeEnabled: { false },
                         relayRanges: RelayRanges(csv: ""),
                         debounceSeconds: 0.05,

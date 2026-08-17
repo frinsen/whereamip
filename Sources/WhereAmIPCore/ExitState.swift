@@ -147,15 +147,43 @@ public struct DNSInfo: Equatable, Codable, Sendable {
     public var leak: DNSLeak
     // The org attributed to `egressIP` by the same geo lookup Monitor already performs for the
     // org/ASN rescue (Wave B) — reused here, no extra lookup. Optional and absent from older
-    // persisted JSON; the synthesized Codable conformance decodes a missing key as nil.
+    // persisted JSON; the manual init(from:) below decodes a missing key as nil.
     public var egressOrg: String?
+    // Additive (DNS egress enumeration): EVERY egress resolver a round of cache-busting lookups
+    // surfaced, not just the one `egressIP` names — public resolvers are load-balanced, so a
+    // single lookup only ever reveals one pool member. `egressIP` stays the primary (v4-first)
+    // one and remains the sole input to the leak verdict; this list is display detail. Empty
+    // when enumeration found nothing (service down → the Google beacon fallback filled
+    // `egressIP` instead), when the probe is disabled, and in all pre-existing JSON.
+    public var egressResolvers: [EgressResolver]
     public init(resolvers: [DNSResolver] = [], encryption: DNSEncryption = .unknown,
                 egressIP: String? = nil, egressIsIPv6: Bool = false,
-                measuredAt: Date? = nil, leak: DNSLeak = .unknown, egressOrg: String? = nil) {
+                measuredAt: Date? = nil, leak: DNSLeak = .unknown, egressOrg: String? = nil,
+                egressResolvers: [EgressResolver] = []) {
         self.resolvers = resolvers; self.encryption = encryption
         self.egressIP = egressIP; self.egressIsIPv6 = egressIsIPv6
         self.measuredAt = measuredAt; self.leak = leak
         self.egressOrg = egressOrg
+        self.egressResolvers = egressResolvers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case resolvers, encryption, egressIP, egressIsIPv6, measuredAt, leak, egressOrg, egressResolvers
+    }
+    // Manual init(from:) so older JSON (missing the egressResolvers key) still decodes — a
+    // non-Optional stored property gets no decodeIfPresent from synthesis, unlike `egressOrg`
+    // above. Same precedent as RouteInfo's v6/link fields; encode(to:) stays synthesized off
+    // these same keys and always writes the full struct.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        resolvers = try c.decodeIfPresent([DNSResolver].self, forKey: .resolvers) ?? []
+        encryption = try c.decodeIfPresent(DNSEncryption.self, forKey: .encryption) ?? .unknown
+        egressIP = try c.decodeIfPresent(String.self, forKey: .egressIP)
+        egressIsIPv6 = try c.decodeIfPresent(Bool.self, forKey: .egressIsIPv6) ?? false
+        measuredAt = try c.decodeIfPresent(Date.self, forKey: .measuredAt)
+        leak = try c.decodeIfPresent(DNSLeak.self, forKey: .leak) ?? .unknown
+        egressOrg = try c.decodeIfPresent(String.self, forKey: .egressOrg)
+        egressResolvers = try c.decodeIfPresent([EgressResolver].self, forKey: .egressResolvers) ?? []
     }
     // DNSConfigReader.parse deliberately dedups by (address, interface) — a global entry plus
     // one per-service entry — so the same address can appear in `resolvers` up to 3x. That's

@@ -1,5 +1,16 @@
 import Foundation
 
+/// One directly connected (on-link) prefix of a local interface — the address configured on it
+/// plus that address's prefix length. "Reachable without a router", which is exactly what makes
+/// an address local to this machine's network segment.
+public struct InterfacePrefix: Equatable, Sendable {
+    public let address: String
+    public let prefixLength: Int
+    public init(address: String, prefixLength: Int) {
+        self.address = address; self.prefixLength = prefixLength
+    }
+}
+
 public enum RouteInspector {
     public static func isTunnelInterface(_ name: String) -> Bool {
         name.hasPrefix("utun") || name.hasPrefix("ppp") || name.hasPrefix("ipsec")
@@ -145,6 +156,54 @@ public enum RouteInspector {
             if stripZoneID(String(cString: buf)).lowercased() == want { return String(cString: cur.pointee.ifa_name) }
         }
         return nil
+    }
+
+    /// Every on-link prefix this host currently has an address in — the same getifaddrs walk as
+    /// the lookups above, now also reading `ifa_netmask`. Used to decide whether an address is
+    /// on this machine's own network segment (see `DNSForwarderHint`), which is how a router
+    /// that advertises itself with a GLOBAL address out of the ISP's delegated prefix is
+    /// recognized as local without any hardcoded ISP or vendor knowledge.
+    ///
+    /// Deliberately excluded: loopback and down interfaces (nothing is reachable through them),
+    /// zero-length prefixes (a /0 netmask would make every address on earth "local"), and IPv6
+    /// link-local addresses — every interface has an fe80::/64, and fe80 is already covered by
+    /// the private-range table, so including them would only add ambiguity.
+    public static func localPrefixes() -> [InterfacePrefix] {
+        var out: [InterfacePrefix] = []
+        var ifaddrPtr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddrPtr) == 0 else { return [] }
+        defer { freeifaddrs(ifaddrPtr) }
+        var ptr = ifaddrPtr
+        while let cur = ptr {
+            defer { ptr = cur.pointee.ifa_next }
+            let flags = Int32(cur.pointee.ifa_flags)
+            guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 else { continue }
+            guard let sa = cur.pointee.ifa_addr, let netmask = cur.pointee.ifa_netmask else { continue }
+            switch Int32(sa.pointee.sa_family) {
+            case AF_INET:
+                var sin = UnsafeRawPointer(sa).assumingMemoryBound(to: sockaddr_in.self).pointee
+                var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                guard inet_ntop(AF_INET, &sin.sin_addr, &buf, socklen_t(INET_ADDRSTRLEN)) != nil else { continue }
+                // Contiguous netmasks only (the only kind macOS configures), so a popcount over
+                // the raw bytes is the prefix length regardless of byte order.
+                let mask = UnsafeRawPointer(netmask).assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr.s_addr
+                let bits = mask.nonzeroBitCount
+                if bits > 0 { out.append(InterfacePrefix(address: String(cString: buf), prefixLength: bits)) }
+            case AF_INET6:
+                var sin6 = UnsafeRawPointer(sa).assumingMemoryBound(to: sockaddr_in6.self).pointee
+                let isLinkLocal = withUnsafeBytes(of: sin6.sin6_addr) { $0[0] == 0xFE && $0[1] & 0xC0 == 0x80 }
+                guard !isLinkLocal else { continue }
+                var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                guard inet_ntop(AF_INET6, &sin6.sin6_addr, &buf, socklen_t(INET6_ADDRSTRLEN)) != nil else { continue }
+                let mask = UnsafeRawPointer(netmask).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+                let bits = withUnsafeBytes(of: mask) { $0.reduce(0) { $0 + $1.nonzeroBitCount } }
+                if bits > 0 {
+                    out.append(InterfacePrefix(address: stripZoneID(String(cString: buf)), prefixLength: bits))
+                }
+            default: continue
+            }
+        }
+        return out
     }
 
     public static func snapshot(runningBundleIDs: [String] = []) -> RouteInfo {

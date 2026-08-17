@@ -6,6 +6,43 @@ semver: patch = fixes, minor = features. See also the
 [GitHub releases](https://github.com/frinsen/whereamip/releases) for
 install-ready notes per version.
 
+## [Unreleased]
+
+### Added
+- **DNS egress enumeration**: the leak check now discovers *all* of your
+  egress resolvers instead of one. Public resolvers are load-balanced across
+  a pool, so a single lookup only ever reveals whichever member answered it;
+  a full refresh now fires a round of six TXT lookups of random, single-use
+  names under `test.dnscheck.tools` (an authoritative server that reports who
+  asked — the dnsleaktest.com mechanism), which typically surfaces both an
+  IPv4 and an IPv6 egress of the same operator. Each discovered resolver
+  carries its operator, location, and transport (UDP/TCP/TLS). The Google
+  `o-o.myaddr.l.google.com` beacon remains as the fallback when that service
+  is unreachable, and `config set dns false` still disables every query.
+- The dropdown's DNS row is now a submenu: "Configured resolvers" (each
+  unique address once, with the interfaces it was scoped to) above "Queries
+  answered by" (every discovered egress resolver). `whereamip status` shows
+  the same egress resolvers on an indented line, and `--json` gains a
+  `dns.egressResolvers` array — additive, absent from older output.
+- When every configured resolver is router-local but the queries surface at a
+  known public provider, the submenu names it: "Router forwards to Quad9 —
+  encryption of that hop is set on the router". An attribution hint only —
+  the client cannot observe whether that hop is encrypted, and forwarding is
+  normal configuration, so this never warns. "Router-local" means a private
+  range, an address inside one of this host's directly connected prefixes
+  (which is how a router advertising itself with a *global* address out of
+  the ISP's delegated prefix is recognized — no vendor or ISP knowledge
+  involved), or the same box in a prefix the ISP has since rotated away
+  (identical IPv6 interface identifier as an already-anchored resolver).
+
+### Changed
+- The DNS leak verdict is now measured from the enumeration's primary
+  (IPv4-first) egress resolver rather than the Google beacon's answer; the
+  verdict logic itself, including the two-consecutive-refresh confirmation
+  and the org/ASN rescue, is unchanged. A confirmed leak row can now name
+  the egress operator from the enumeration data when the geo attribution
+  lookup fails — no additional lookup was added.
+
 ## [0.4.2] — 2026-08-17
 
 ### Added
