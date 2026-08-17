@@ -23,12 +23,16 @@ final class WelcomeWindowController: NSWindowController {
     private var notifyHintButton: NSButton!
 
     // Fixed height for the two conditionally-populated status lines
-    // (applicationsErrorLabel, notifyHintButton) — ~2 lines at their 10pt
-    // font. Both views stay permanently in their stacks at this height;
-    // only their text/enabled state changes (never `.isHidden`, never
-    // inserted/removed), so the window's size never jumps depending on
-    // whether an error or a permission hint happens to be showing right now
-    // (field-reported bug — see toggleApplications()/toggleNotify()).
+    // (applicationsErrorLabel, notifyHintButton) — EXACTLY two lines at their
+    // shared 10pt font (NSLayoutManager.defaultLineHeight(for: .systemFont(
+    // ofSize: 10)) measures 12pt/line, so 2 lines = 24pt; not a rounder but
+    // looser guess — a looser reservation is exactly what read as a "hole"
+    // in the second design review). Both views stay permanently in their
+    // stacks at this height; only their text/enabled state changes (never
+    // `.isHidden`, never inserted/removed), so the window's size never jumps
+    // depending on whether an error or a permission hint happens to be
+    // showing right now (field-reported bug — see
+    // toggleApplications()/toggleNotify()).
     //
     // Height alone isn't enough, though: a *width* that varies with content
     // is just as capable of moving things around. NSStackView sizes a
@@ -41,7 +45,18 @@ final class WelcomeWindowController: NSWindowController {
     // vertical one was fixed). So every conditionally-populated view in this
     // window gets BOTH dimensions pinned to a constant — never just capped —
     // so no sibling's layout can depend on this view's content at all.
-    private static let reservedStatusLineHeight: CGFloat = 28
+    private static let reservedStatusLineHeight: CGFloat = 24
+    // The one standard gap after a reserved status slot — replaces what was
+    // an oversized, inconsistent custom-spacing value that (on top of the
+    // reservation itself) made the setup→commit transition read as an empty
+    // hole rather than a deliberate section break.
+    private static let sectionGap: CGFloat = 20
+    // Footer gaps (privacy→Done, Done→window-bottom-edge) are equalized to
+    // this value rather than sectionGap: the side margins are 24pt, and the
+    // bottom margin must never be smaller than the side margins, so the
+    // footer's "standard" gap is pinned to match the sides exactly instead
+    // of the plain ~20pt used elsewhere.
+    private static let footerGap: CGFloat = 24
     // Approximates the leading edge of a standard AppKit checkbox's title
     // text (checkbox glyph + its gap before the label) — not pixel-exact
     // across every rendering, but close enough to visually align a caption
@@ -61,8 +76,11 @@ final class WelcomeWindowController: NSWindowController {
             ? "Welcome to WhereAmIP v\(whereamipVersion)"
             : "WhereAmIP v\(whereamipVersion) — what's new"
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             // No .resizable — this is a small fixed-size informational window.
+            // The actual height is whatever the content's Auto Layout fitting
+            // size resolves to (see stack's `<=` bottom constraint below);
+            // this is just the initial frame before that first layout pass.
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false)
         // Plain, not the versioned heading text: avoids showing "Welcome to
@@ -173,6 +191,14 @@ final class WelcomeWindowController: NSWindowController {
         notifyHintButton.isEnabled = false
         (notifyHintButton.cell as? NSButtonCell)?.wraps = true
         (notifyHintButton.cell as? NSButtonCell)?.lineBreakMode = .byWordWrapping
+        // NSButton centers its title by default regardless of the button's
+        // own frame alignment — the frame was already leading-aligned (via
+        // the fixed-width constraint below + notifyCaptionColumn's
+        // `.leading`), but the *text inside it* still rendered centered,
+        // reading as if it floated on the window's axis instead of lining
+        // up with notifyCaption directly above it. Left-align the title
+        // itself to match.
+        (notifyHintButton.cell as? NSButtonCell)?.alignment = .left
 
         // notifyCaption + notifyHintButton indented to align under the
         // checkbox's *label* text, not its square (item: caption placement).
@@ -230,14 +256,17 @@ final class WelcomeWindowController: NSWindowController {
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 12
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 24, bottom: 20, right: 24)
+        // Bottom inset equals the side insets (24) — never smaller, per the
+        // footer fix: Done→window-bottom-edge is a real margin, not a
+        // between-elements gap, so it follows footerGap, not sectionGap.
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 24, bottom: Self.footerGap, right: 24)
         stack.setCustomSpacing(8, after: iconView)     // reclaim space the icon doesn't need
         stack.setCustomSpacing(4, after: heading)
         stack.setCustomSpacing(6, after: body)          // tighten hint-to-body: one thought
         stack.setCustomSpacing(24, after: hint)         // air above the checkbox group: pitch → setup
-        stack.setCustomSpacing(6, after: setupSection)  // error status stays visually part of setup
-        stack.setCustomSpacing(24, after: applicationsErrorLabel) // setup → commit
-        stack.setCustomSpacing(18, after: privacy)      // extra air right above Done
+        stack.setCustomSpacing(4, after: setupSection)  // error status stays visually part of setup
+        stack.setCustomSpacing(Self.sectionGap, after: applicationsErrorLabel) // setup → commit
+        stack.setCustomSpacing(Self.footerGap, after: privacy) // privacy → Done, equal to Done → bottom edge
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         [heading, body, hint, applicationsErrorLabel, privacy].forEach {
