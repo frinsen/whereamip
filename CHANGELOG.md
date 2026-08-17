@@ -26,7 +26,6 @@ install-ready notes per version.
   configuration.
 - The IPv6 exit address is now always shown when measured (previously only
   when its country differed from IPv4).
-- Version row in Settings.
 
 ### Fixed
 - `whereamip watch` output is now line-buffered when piped or redirected —
@@ -37,6 +36,12 @@ install-ready notes per version.
   entry plus one per-service entry per address (for leak-detector
   attribution), which was inflating the dropdown/CLI count (e.g. "+11 more"
   for 4 actual addresses).
+- Settings submenu no longer shows its own "WhereAmIP v<version>" row — the
+  main dropdown header already carries it, and a submenu re-branding itself
+  isn't native macOS menu style.
+- Settings toggle "Check DNS egress" renamed to "Check for DNS Leaks" —
+  matches the wording of the sibling "Check for Updates" toggle and the
+  vocabulary already used by the DNS leak warning row.
 
 ## [0.4.1] — 2026-08-17
 
