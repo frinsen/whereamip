@@ -44,6 +44,12 @@ open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"
 
 Then enable **Settings ▸ Launch at Login** inside the app so it starts automatically next time.
 
+Optional — make it show up in /Applications (the symlink survives upgrades):
+
+```bash
+ln -s "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app" /Applications/WhereAmIP.app
+```
+
 > If Launch at Login stops working after a `brew upgrade`, re-toggle it in Settings.
 
 ## CLI
