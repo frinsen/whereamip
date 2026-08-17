@@ -219,10 +219,9 @@ public enum MenuBuilder {
         let settingsMenu = NSMenu()
         settingsMenu.autoenablesItems = false
         // There is no persistent "debug mode" to show here — diagnostics exist only while
-        // `whereamip debug` streams (nothing on disk, by design). Version + the checkmark
-        // rows below are the app's complete visible state.
-        settingsMenu.addItem(info("WhereAmIP v\(whereamipVersion)"))
-        settingsMenu.addItem(.separator())
+        // `whereamip debug` streams (nothing on disk, by design). The checkmark rows below
+        // are the app's complete visible state. No version row here: the main dropdown
+        // header already shows "WhereAmIP v<version>" — a submenu doesn't re-brand itself.
         let styleItem = NSMenuItem(title: "Menu Bar Style", action: nil, keyEquivalent: "")
         let styleMenu = NSMenu()
         styleMenu.autoenablesItems = false
@@ -246,7 +245,7 @@ public enum MenuBuilder {
         let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }
         checkUpdates.state = updatesEnabled ? .on : .off
         settingsMenu.addItem(checkUpdates)
-        let dnsProbe = action("Check DNS egress") { actions.toggleDNSProbe() }
+        let dnsProbe = action("Check for DNS Leaks") { actions.toggleDNSProbe() }
         dnsProbe.state = dnsProbeEnabled ? .on : .off
         settingsMenu.addItem(dnsProbe)
         settingsMenu.addItem(.separator())

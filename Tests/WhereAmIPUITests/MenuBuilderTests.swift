@@ -372,12 +372,13 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(titles.contains("IPv6: 2a00::1 (CZ)"))
     }
 
-    func testSettingsSubmenuShowsVersion() {
+    func testSettingsSubmenuHasNoDuplicateVersionRow() {
+        // The main dropdown header already shows "WhereAmIP v<version>" — the Settings
+        // submenu must not brand itself with a second copy of it.
         let menu = MenuBuilder.build(state: ExitState(), style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
         let settings = menu.items.first { $0.title == "Settings" }?.submenu
-        XCTAssertEqual(settings?.items.first?.title, "WhereAmIP v\(whereamipVersion)")
-        XCTAssertEqual(settings?.items.first?.isEnabled, false)
+        XCTAssertFalse(settings?.items.contains { $0.title == "WhereAmIP v\(whereamipVersion)" } ?? true)
     }
 
     // MARK: - DNS
@@ -470,7 +471,7 @@ final class MenuBuilderTests: XCTestCase {
                                      launchAtLogin: false, dnsProbeEnabled: false,
                                      actions: MenuActions(toggleDNSProbe: { called = true }))
         let settings = menu.items.first { $0.title == "Settings" }?.submenu
-        let row = settings?.items.first { $0.title == "Check DNS egress" }
+        let row = settings?.items.first { $0.title == "Check for DNS Leaks" }
         XCTAssertEqual(row?.state, .off)
         (row?.representedObject as? AnyObject as? NSObject)?.perform(#selector(ActionTarget.fire))
         XCTAssertTrue(called)
