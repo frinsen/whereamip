@@ -6,7 +6,10 @@ OVPN=/opt/homebrew/sbin/openvpn
 PROFILE="$E2E_ROOT/secrets/purevpn.ovpn"
 AUTH="$E2E_ROOT/secrets/purevpn.auth"   # two lines: username, password; chmod 600
 PIDFILE="$E2E_LOG_DIR/openvpn.pid"
-E2E_EXPECTED_VPN_NAME="PureVPN"
+# No E2E_EXPECTED_VPN_NAME: a raw openvpn daemon has no app bundle, no SC service
+# name, and a CLI-invoked tunnel carries no nameable identity — whereamip correctly
+# reports vpnName=null here (field-verified 2026-08-17). Route/DNS/leak assertions
+# are the meaningful checks for this backend.
 E2E_EXPECTS_VPN=1
 e2e_describe() { echo "PureVPN .ovpn profile via openvpn CLI (the leaky profile)"; }
 e2e_available() {

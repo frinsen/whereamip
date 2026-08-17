@@ -33,11 +33,29 @@ e2e_snapshot_state() {
   scutil --nc status "PureVPN" 2>/dev/null | head -1 > "$E2E_SNAP_DIR/purevpn.state" || true
   /Applications/Tailscale.app/Contents/MacOS/Tailscale status --peers=false \
     > "$E2E_SNAP_DIR/tailscale.state" 2>&1 || true
-  # Detect active network service from default route interface.
+  # Detect active network service from default route interface. FIELD-VERIFIED GAP
+  # (runs of 2026-08-17): when a VPN owns the default route at snapshot time, the
+  # route interface is utun*/ipsec* — which maps to NO hardware port, and the old
+  # fallback picked service-list line 2 ("USB 10/100/1000 LAN", inactive), so the
+  # dns-swap backend mutated a service carrying no traffic. Skip tunnel interfaces
+  # and find the first physical port whose device is active with an address instead.
   local iface; iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')"
-  local svc
-  if [ -n "$iface" ]; then
-    svc="$(networksetup -listallhardwareports | awk -v dev="$iface" '/^Hardware Port:/{port=substr($0,16)} /^Device:/{if ($2==dev) print port}')"
+  local svc=""
+  case "$iface" in
+    utun*|ipsec*|ppp*|"") ;;  # tunnel or none — derive from physical ports below
+    *) svc="$(networksetup -listallhardwareports | awk -v dev="$iface" '/^Hardware Port:/{port=substr($0,16)} /^Device:/{if ($2==dev) print port}')" ;;
+  esac
+  if [ -z "${svc:-}" ]; then
+    local _pairs _port _dev
+    _pairs="$(networksetup -listallhardwareports | awk '/^Hardware Port:/{port=substr($0,16)} /^Device:/{print port "|" $2}')"
+    while IFS='|' read -r _port _dev; do
+      case "$_dev" in utun*|ipsec*|ppp*|bridge*|awdl*|llw*|"") continue ;; esac
+      if ifconfig "$_dev" 2>/dev/null | grep -q "status: active" \
+         && ifconfig "$_dev" 2>/dev/null | grep -q "inet "; then
+        svc="$_port"; break
+      fi
+    done <<< "$_pairs"
+    [ -n "$svc" ] && e2e_log "snapshot: default route is a tunnel — active physical service resolved to '$svc'"
   fi
   if [ -z "${svc:-}" ]; then
     e2e_log "warning: active interface detection failed, falling back to service list heuristic"
