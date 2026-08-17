@@ -32,6 +32,31 @@ install-ready notes per version.
   enabled setting that can't deliver anything is honestly "off"), alongside
   the existing denied-hint. The permission dialog still only ever appears as
   a direct result of actively checking the box from off.
+- **Notification banners and System Settings showed a placeholder icon**,
+  even after a full cache reset. `AppIcon.icns` alone (`CFBundleIconFile`)
+  isn't enough — the notification subsystem on this macOS specifically looks
+  for `CFBundleIconName` resolved via a compiled asset catalog, which the
+  app bundle never shipped. Added the modern icon path: `docs/Assets.car`,
+  compiled once at dev time (`scripts/update-appicon.sh`, requires full
+  Xcode's `actool` — not available in Homebrew's Command-Line-Tools-only
+  build environment) and committed alongside `AppIcon.icns`;
+  `make-app-bundle.sh` only ever copies the committed file, never compiles
+  it, so `brew install` is unaffected. Both `CFBundleIconFile` and the new
+  `CFBundleIconName` are set in Info.plist — belt and suspenders, since
+  older subsystems still read the `.icns` directly.
+- **Manual refresh's loading cue shifted every neighboring menu bar icon.**
+  The "…" swap that replaced the glyph during a manual refresh changed the
+  status item's width, so surrounding icons visibly jumped left and back —
+  same disease class as the earlier welcome-window layout jump. Manual
+  refresh now dims the menu bar icon (native `NSStatusBarButton
+  .appearsDisabled`, the same mechanism system status items use to show
+  "busy") instead of swapping it — zero width change, still visible
+  feedback.
+
+### Changed
+- Dropdown header row shows the app icon instead of the exit-country flag
+  emoji (which was redundant there — the flag is already the menu *bar*
+  glyph directly above the dropdown); title is now plain "WhereAmIP v<version>".
 
 ## [0.4] — 2026-08-17
 

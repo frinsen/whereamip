@@ -24,7 +24,16 @@ cp .build/release/WhereAmIPApp "$APP/Contents/MacOS/whereamip"
 for bundle in .build/release/*.bundle; do
   [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
+# Two icon paths, both committed artifacts built by scripts/update-appicon.sh
+# (never compiled here — actool needs full Xcode, and this script must keep
+# working under Homebrew's CLT-only build environment):
+#   - AppIcon.icns: legacy CFBundleIconFile path, still read by older subsystems.
+#   - Assets.car: compiled asset catalog, CFBundleIconName path — required by
+#     newer subsystems (notably notification banners) that don't fall back
+#     to CFBundleIconFile/.icns at all. Both keys are set below deliberately
+#     (belt and suspenders), not just the newer one.
 cp docs/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp docs/Assets.car "$APP/Contents/Resources/Assets.car"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -38,6 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
   <key>NSAppTransportSecurity</key><dict>
     <key>NSExceptionDomains</key><dict>

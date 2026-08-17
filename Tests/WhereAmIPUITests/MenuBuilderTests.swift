@@ -162,6 +162,19 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertNotNil(header)
         XCTAssertTrue(header!.title.contains("v\(whereamipVersion)"))
     }
+    func testHeaderShowsAppIconNotFlagEmoji() {
+        // The exit-country flag emoji used to prefix this row — redundant,
+        // since it's already the menu *bar* glyph directly above the
+        // dropdown. Replaced with the app icon so the row identifies which
+        // app the dropdown belongs to instead of repeating the flag.
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let header = menu.items.first { $0.title.contains("WhereAmIP v") }!
+        XCTAssertEqual(header.title, "WhereAmIP v\(whereamipVersion)")
+        XCTAssertFalse(header.title.contains("🇳🇱"))
+        XCTAssertFalse(header.title.contains("❓"))
+        XCTAssertNotNil(header.image)
+    }
     func testGeneralRestartRowStillPresentWhenUpdateRowsShown() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,

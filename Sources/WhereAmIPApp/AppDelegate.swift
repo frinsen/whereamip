@@ -105,13 +105,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // Manual-refresh-only loading cue (spec §2 field lesson: "silent vs
     // manual refresh" — periodic/automatic triggers never emit a loading
-    // state, only a user-initiated Refresh click does). Sets the status
-    // button directly rather than going through StatusItemRenderer/Glyph,
-    // since "…" isn't a real glyph state and must render identically across
-    // all three menu bar styles (emoji/code/image) without new branching.
-    func showTransientRefreshIndicator() {
-        statusItem.button?.title = "…"
-        statusItem.button?.image = nil
+    // state, only a user-initiated Refresh click does). Dims the status
+    // button natively — the same `appearsDisabled` mechanism system menu
+    // bar items use to show "busy" — rather than swapping its title/image.
+    // An earlier version replaced the glyph with "…", which changed the
+    // status item's WIDTH and made every neighboring menu bar icon visibly
+    // shift left and back (field-reported jitter, same disease class as the
+    // earlier welcome-window jumping bug); dimming changes zero geometry
+    // and works identically across all three menu bar styles (emoji/code/
+    // image) with no new per-style branching.
+    func setManualRefreshIndicator(_ inProgress: Bool) {
+        statusItem.button?.appearsDisabled = inProgress
     }
 
     // Passive check only — never downloads or applies anything, just learns
@@ -241,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 refresh: { [weak self] in
                     guard let self else { return }
-                    self.showTransientRefreshIndicator()
+                    self.setManualRefreshIndicator(true)
                     Task {
                         await self.runMonitorRefresh(full: true)
                         // Unconditional re-render: Monitor.apply() only calls
@@ -249,10 +253,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         // the old one (`guard next != old else { return }`)
                         // — a refresh that confirms "nothing changed" would
                         // never fire onChange/stateChanged() on its own, and
-                        // the transient "…" set above would stick forever.
+                        // the dim indicator set above would stick forever.
                         // Always pull currentState() and re-render explicitly
-                        // instead of relying on onChange for this one path.
+                        // instead of relying on onChange for this one path,
+                        // then clear the dim now that fresh state is showing.
                         self.stateChanged(await self.monitor.currentState())
+                        self.setManualRefreshIndicator(false)
                     }
                     self.checkForUpdates()
                 },
