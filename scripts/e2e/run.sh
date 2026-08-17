@@ -25,7 +25,17 @@ trap e2e_restore_state EXIT
 trap 'e2e_restore_state; trap - EXIT; exit 130' INT TERM
 
 e2e_log "log dir: $E2E_LOG_DIR"
-# Backends + scenarios appended by later tasks.
+
+# Baseline sanity check: scenarios (esp. EXPECTS_VPN=0 backends and restore
+# assertions) assume the host starts with no VPN up. Warn loudly but proceed —
+# refusing to run would block legitimate re-runs after a crash left a VPN
+# connected.
+e2e_status_json "$E2E_LOG_DIR/pre-baseline.json" || true
+if jq -e '.route.isVPN == true' "$E2E_LOG_DIR/pre-baseline.json" >/dev/null 2>&1; then
+  baseline_iface="$(jq -r .route.defaultInterface "$E2E_LOG_DIR/pre-baseline.json")"
+  e2e_log "!!! BASELINE HAS A VPN UP ($baseline_iface). Scenarios assume a clean baseline — EXPECTS_VPN=0 backends and restore assertions may be skewed. Consider disconnecting all VPNs and re-running."
+  echo -e "WARN\tbaseline\tvpn-already-up-$baseline_iface" >> "$E2E_LOG_DIR/scenarios.tsv"
+fi
 
 source ./assert.sh
 
@@ -59,7 +69,7 @@ run_backend_scenario() {  # NAME
   local name="$1" reason
   # Each backend sources fresh in a subshell-free context; unset optionals first.
   unset -f e2e_available e2e_up e2e_down e2e_describe 2>/dev/null || true
-  E2E_EXPECTED_VPN_NAME=""; E2E_EXPECTS_VPN=0
+  E2E_EXPECTED_VPN_NAME=""; E2E_EXPECTS_VPN=0; E2E_IFACE_PREFIX=""
   source "./backends/$name.sh"
   if ! reason="$(e2e_available)"; then
     e2e_log "SKIP $name: $reason"; echo -e "SKIP\t$name\t$reason" >> "$E2E_LOG_DIR/scenarios.tsv"; return 0
@@ -120,7 +130,7 @@ run_backend_scenario() {  # NAME
 
   # Layer 2: real detectors against this live state.
   local expect_vpn="$E2E_EXPECTS_VPN" iface_prefix=""
-  [ "$E2E_EXPECTS_VPN" = 1 ] && iface_prefix="utun"
+  [ "$E2E_EXPECTS_VPN" = 1 ] && iface_prefix="${E2E_IFACE_PREFIX:-utun}"
   (cd "$REPO_ROOT" && env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
       WHEREAMIP_E2E=1 E2E_EXPECT_VPN="$expect_vpn" E2E_EXPECT_IFACE_PREFIX="$iface_prefix" \
       E2E_BACKEND="$name" E2E_DUMP_DIR="$E2E_LOG_DIR" \
@@ -143,7 +153,7 @@ run_backend_scenario() {  # NAME
 # dry validation, the Task 9 acceptance run) can exclude prompt-mode backends
 # (purevpn-scutil waits on a manual app click) or restrict the run to a
 # specific subset without touching live VPN state.
-BACKENDS="${E2E_ONLY:-tailscale purevpn-scutil dns-swap warp windscribe purevpn-ovpn}"
+BACKENDS="${E2E_ONLY:-tailscale purevpn-scutil purevpn-ikev dns-swap warp windscribe windscribe-wg purevpn-ovpn}"
 for b in $BACKENDS; do run_backend_scenario "$b"; done
 
 # --- cross-backend: resolver change UNDER a VPN → escalation → 2nd full
@@ -210,7 +220,11 @@ run_cross_dnsswap_under_vpn() {
     cross_teardown; return 0
   fi
   dns_up=1
-  sleep 5                                           # escalated full refresh #2
+  # Bounded poll (was a fixed sleep 5) for the escalated full refresh #2 to land
+  # in the watch stream, carrying the new 9.9.9.9 resolver.
+  _cross_resolver_seen() { watch_last_json | jq -e '.dns.resolvers[].address | select(. == "9.9.9.9")' >/dev/null 2>&1; }
+  e2e_poll_until "cross: resolver escalation seen (9.9.9.9)" 30 _cross_resolver_seen \
+    || e2e_log "WARN: cross resolver escalation not observed within 30s poll — proceeding to assertion (will FAIL with evidence)"
   local w="$E2E_LOG_DIR/cross-after-swap.json"; watch_last_json > "$w"
   a_json_contains "$w" '.dns.resolvers[].address' 9.9.9.9 "cross-resolver-escalation-seen"
   a_record "$w" '.dns.leak' "cross-leak-after-2-full-refreshes"
