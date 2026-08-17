@@ -172,7 +172,7 @@ public enum MenuBuilder {
         let login = action("Launch at Login") { actions.toggleLaunchAtLogin() }
         login.state = launchAtLogin ? .on : .off
         settingsMenu.addItem(login)
-        let appsLink = action("Show in Applications") { actions.toggleApplicationsLink() }
+        let appsLink = action("Add to Applications folder") { actions.toggleApplicationsLink() }
         appsLink.state = applicationsLinked ? .on : .off
         settingsMenu.addItem(appsLink)
         let checkUpdates = action("Check for Updates") { actions.toggleUpdateChecks() }

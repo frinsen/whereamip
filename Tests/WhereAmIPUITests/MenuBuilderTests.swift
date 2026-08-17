@@ -149,29 +149,29 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertNotNil(restartIndex)
         XCTAssertEqual(restartIndex! + 1, quitIndex!)
     }
-    func testShowInApplicationsReflectsStateOn() {
+    func testAddToApplicationsFolderReflectsStateOn() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      applicationsLinked: true, actions: MenuActions())
         let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Show in Applications" }!
+        let item = settings.items.first { $0.title == "Add to Applications folder" }!
         XCTAssertEqual(item.state, .on)
     }
-    func testShowInApplicationsReflectsStateOff() {
+    func testAddToApplicationsFolderReflectsStateOff() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      applicationsLinked: false, actions: MenuActions())
         let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Show in Applications" }!
+        let item = settings.items.first { $0.title == "Add to Applications folder" }!
         XCTAssertEqual(item.state, .off)
     }
-    func testShowInApplicationsFiresAction() {
+    func testAddToApplicationsFolderFiresAction() {
         var fired = false
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false,
                                      actions: MenuActions(toggleApplicationsLink: { fired = true }))
         let settings = menu.items.first { $0.title == "Settings" }!.submenu!
-        let item = settings.items.first { $0.title == "Show in Applications" }!
+        let item = settings.items.first { $0.title == "Add to Applications folder" }!
         _ = item.target?.perform(item.action, with: item)
         XCTAssertTrue(fired)
     }

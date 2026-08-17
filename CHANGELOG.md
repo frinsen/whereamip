@@ -9,7 +9,7 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
-- **Show in Applications** toggle (Settings ▸ Show in Applications, and in the
+- **Add to Applications folder** toggle (Settings ▸ Add to Applications folder, and in the
   new first-start window): creates/removes a `/Applications/WhereAmIP.app`
   symlink pointing at the stable brew `opt` path, so the app shows up in
   Spotlight/Launchpad/Finder without the Homebrew formula itself writing
@@ -20,8 +20,8 @@ install-ready notes per version.
   already exist there.
 - **Welcome window**: shown once on first launch — what the app is, where it
   lives in the menu bar (with a note that notched MacBooks can hide it behind
-  the notch), and live-wired Launch at Login / Show in Applications / Notify
-  on exit-connectivity-changes checkboxes plus a privacy note. Only clicking
+  the notch), and live-wired Launch at Login / Add to Applications folder /
+  Notify on exit-connectivity-changes checkboxes plus a privacy note. Only clicking
   Done acknowledges it; closing it any other way shows it again next launch.
   Can also be reopened any time via **Settings ▸ Show Welcome Window**.
   - Re-shown on upgrade when a maintainer-controlled `welcomeMilestone`
@@ -37,6 +37,7 @@ install-ready notes per version.
     Settings-menu toggle hits the same previously-denied case by opening
     System Settings directly, since a menu has no inline-hint surface.
   - No other permission prompts, no network calls, from this window.
+- Welcome window polish per design review.
 
 ## [0.3.2] — 2026-08-17
 
