@@ -21,6 +21,7 @@ cp .build/release/WhereAmIPApp "$APP/Contents/MacOS/whereamip"
 for bundle in .build/release/*.bundle; do
   [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
+cp docs/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -33,6 +34,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
   <key>NSAppTransportSecurity</key><dict>
     <key>NSExceptionDomains</key><dict>
