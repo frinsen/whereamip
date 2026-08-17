@@ -29,6 +29,18 @@ final class WelcomeWindowController: NSWindowController {
     // inserted/removed), so the window's size never jumps depending on
     // whether an error or a permission hint happens to be showing right now
     // (field-reported bug — see toggleApplications()/toggleNotify()).
+    //
+    // Height alone isn't enough, though: a *width* that varies with content
+    // is just as capable of moving things around. NSStackView sizes a
+    // leading-aligned container (setupSection/checkboxStack) to its widest
+    // row; when notifyHintButton's width was only capped (<=) rather than
+    // fixed, it shrank to near-zero while empty and grew to ~350pt once
+    // populated — that changed checkboxStack's own intrinsic width, which
+    // shifted its centered parent (setupSection) sideways, dragging every
+    // checkbox's *left* edge with it (a horizontal jump, reported after the
+    // vertical one was fixed). So every conditionally-populated view in this
+    // window gets BOTH dimensions pinned to a constant — never just capped —
+    // so no sibling's layout can depend on this view's content at all.
     private static let reservedStatusLineHeight: CGFloat = 28
     // Approximates the leading edge of a standard AppKit checkbox's title
     // text (checkbox glyph + its gap before the label) — not pixel-exact
@@ -232,9 +244,13 @@ final class WelcomeWindowController: NSWindowController {
             $0.preferredMaxLayoutWidth = 372   // 420 window width - 24*2 edge insets
         }
         notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent
+        // Both axes pinned to a CONSTANT (not a ceiling) for every
+        // conditionally-populated view — see the reservedStatusLineHeight
+        // doc above for why a `<=` width still let the checkbox group jump.
         applicationsErrorLabel.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
+        applicationsErrorLabel.widthAnchor.constraint(equalToConstant: 372).isActive = true
         notifyHintButton.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
-        notifyHintButton.widthAnchor.constraint(lessThanOrEqualToConstant: 372 - Self.checkboxTextIndent).isActive = true
+        notifyHintButton.widthAnchor.constraint(equalToConstant: 372 - Self.checkboxTextIndent).isActive = true
 
         let contentView = NSView()
         contentView.addSubview(stack)
