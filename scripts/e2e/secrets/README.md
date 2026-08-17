@@ -17,15 +17,15 @@ Same setup as the windscribe backend above — this variant just forces the
 WireGuard protocol on connect (`windscribe-cli connect best wireguard`).
 
 ## purevpn-ikev backend
-Native IKEv2 profile, driven by `scutil --nc` — this is a *different* PureVPN
-service than the `purevpn-scutil`/NE-app backend, and unlike that one, CLI
-start/stop actually works against it.
-1. PureVPN member area → Manual Configuration → find the IKEv2 config
-   (server address, IPSec identifier/shared secret, username/password).
-2. macOS System Settings → Network → VPN → Add VPN → IKEv2, and fill in the
-   values from step 1.
-3. Name the service to match `E2E_PUREVPN_IKEV_SERVICE` (defaults to
-   `PureVPN IKEV` if unset — either name it exactly that, or export
-   `E2E_PUREVPN_IKEV_SERVICE=<your service name>` before running the suite).
-4. No further files needed here — the profile lives in System Settings, not
-   in this secrets directory.
+Native IKEv2 profile via System Settings — prompt-and-wait mode. FIELD FIND
+(2026-08-17): modern macOS manages personal VPNs via NetworkExtension, so they
+do NOT appear in `scutil --nc list` and CANNOT be CLI-started; the suite prompts
+you to toggle and detects state via the ipsec0 interface.
+1. No config file exists for IKEv2. Member area > Manual Configuration > IKEV
+   gives you a server hostname (e.g. sxNNNNNN-ikev.ptoserver.com).
+2. System Settings > VPN > Add VPN Configuration > IKEv2: Server address AND
+   Remote ID = that hostname; User authentication = Username, with the same
+   VPN credentials as purevpn.auth.
+3. Name it "PureVPN AR IKEv2" (the default) or export
+   E2E_PUREVPN_IKEV_SERVICE=<your name> before running the suite.
+4. Nothing to store in this directory — the profile lives in System Settings.
