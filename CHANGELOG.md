@@ -44,10 +44,12 @@ install-ready notes per version.
 - The bundle-ID VPN-name table only names a tunnel when exactly one known
   VPN app is running; two or more known apps running at once now show no
   name instead of guessing by table order.
-- Tailscale MagicDNS setups (resolver `100.100.100.100`) cap the DNS-leak
-  verdict at "suspected" — it never advances to "confirmed" and never
-  notifies, since MagicDNS's delegation to a user-configured upstream is the
-  product working as designed, not a leak.
+- Tailscale MagicDNS setups (resolver `100.100.100.100` present) cap the
+  DNS-leak verdict at "suspected" — never "confirmed", never a notification:
+  a mismatched egress can't be distinguished from MagicDNS's own intentional
+  delegation to a user-configured upstream, so the app declines to accuse.
+  (Known limit: while MagicDNS is present, an unrelated genuine leak is also
+  held at "suspected" — visible in the dropdown/CLI, but not notified.)
 - DNS-leak verdicts now recognize the VPN provider's own resolvers: when a
   resolver's egress IP is attributed — by ASN, or by an exact org-string
   match sourced from the same geo provider as the tunnel exit — to the same
