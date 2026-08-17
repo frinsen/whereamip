@@ -134,6 +134,37 @@ final class RenderJSONTests: XCTestCase {
         let line = StateRenderer.human(state).split(separator: "\n").first { $0.hasPrefix("dns: ") }
         XCTAssertEqual(line, "dns: 9.9.9.9")
     }
+    // MARK: - egress resolvers
+
+    func egressState() -> ExitState {
+        var state = ExitState(connectivity: .online)
+        state.dns.resolvers = [DNSResolver(address: "192.168.178.1", isIPv6: false)]
+        state.dns.egressResolvers = [
+            EgressResolver(ip: "185.44.108.99", port: 39071, operatorName: "WoodyNet, Inc.",
+                           location: "Berlin, State of Berlin, DE", transport: "UDP"),
+            EgressResolver(ip: "2620:171:57:f003::244", operatorName: "WoodyNet, Inc."),
+        ]
+        return state
+    }
+    func testHumanShowsEgressResolversIndentedUnderTheDNSLine() {
+        // Compact by design — IPs and operator only. Location/transport/port are dropdown
+        // detail; a status line that wraps in a terminal stops being glanceable.
+        let lines = StateRenderer.human(egressState()).split(separator: "\n").map(String.init)
+        let dnsIndex = lines.firstIndex { $0.hasPrefix("dns: ") }!
+        XCTAssertEqual(lines[dnsIndex + 1],
+                       "   egress: 185.44.108.99 (WoodyNet, Inc.), 2620:171:57:f003::244 (WoodyNet, Inc.)")
+    }
+    func testHumanEgressLineOmitsAnUnknownOperator() {
+        var state = egressState()
+        state.dns.egressResolvers = [EgressResolver(ip: "185.44.108.99")]
+        XCTAssertTrue(StateRenderer.human(state).contains("   egress: 185.44.108.99\n"))
+    }
+    func testHumanOmitsEgressLineWhenNothingWasDiscovered() {
+        var state = egressState()
+        state.dns.egressResolvers = []
+        XCTAssertFalse(StateRenderer.human(state).contains("egress:"))
+    }
+
     func testHumanShowsDNSLeakConfirmedLine() {
         var state = ExitState(connectivity: .online)
         state.dns.leak = .confirmed

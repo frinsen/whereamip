@@ -48,6 +48,15 @@ public enum StateRenderer {
             if state.dns.encryption == .dot { d += " · DoT" }
             lines.append(d)
         }
+        // Indented continuation of the dns line: where those queries actually came out. Kept to
+        // IPs plus operator — the dropdown's submenu carries location/transport, a status line
+        // that wraps in a terminal stops being glanceable. `--json` has the full records.
+        if !state.dns.egressResolvers.isEmpty {
+            let egress = state.dns.egressResolvers.map { r in
+                r.operatorName.map { "\(r.ip) (\($0))" } ?? r.ip
+            }
+            lines.append("   egress: \(egress.joined(separator: ", "))")
+        }
         // Leak surfacing matches the dropdown's warning-row spirit (MenuBuilder): visible even
         // when the resolvers list itself is empty, so it never depends on the line above.
         if state.dns.leak == .confirmed {
