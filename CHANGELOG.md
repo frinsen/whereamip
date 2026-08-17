@@ -43,6 +43,18 @@ install-ready notes per version.
   on exit/connectivity changes" in the window; the detail now lives in the
   window's caption instead. `whereamip config get/set notify` is unaffected
   (documented stable CLI key, untouched).
+- **Manual refresh now shows a transient loading cue**: clicking Refresh (⌘R)
+  briefly sets the menu bar title to "…" and clears the image — across all
+  three styles — while the check runs, then re-renders unconditionally so
+  the indicator never sticks even when the refresh confirms nothing changed.
+  Automatic triggers (timers, wake, path changes) stay indicator-free, per
+  the "silent vs manual refresh" field lesson: a spinner on every 30-second
+  probe would just be noise.
+- **"Checked:" row in the dropdown**, directly under "Since": a manual
+  refresh that finds nothing new no longer looks identical to no refresh at
+  all. Tracked app-locally (not part of `ExitState`/the JSON output) and
+  updated after every fullRefresh/probeTick; reuses the same date/time
+  formatter as "Since".
 
 ## [0.3.2] — 2026-08-17
 

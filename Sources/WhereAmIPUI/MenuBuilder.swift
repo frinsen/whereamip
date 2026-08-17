@@ -72,6 +72,7 @@ public enum MenuBuilder {
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
                              restartUpdate: String? = nil, applicationsLinked: Bool = false,
+                             lastChecked: Date? = nil,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -130,6 +131,15 @@ public enum MenuBuilder {
                 }
             }
             menu.addItem(info("Since \(timeFormatter.string(from: state.since))"))
+            // Proof of freshness even when nothing changed: "Since" only moves
+            // when the exit/connectivity/route actually differs (see Monitor
+            // .apply), so a manual Refresh that confirms "still the same"
+            // would otherwise look identical to no refresh ever happening.
+            // Same formatter as Since — one source of truth, not a second
+            // date-format decision to keep in sync.
+            if let lastChecked {
+                menu.addItem(info("Checked: \(timeFormatter.string(from: lastChecked))"))
+            }
         }
 
         // VPN / relay block — only applicable lines

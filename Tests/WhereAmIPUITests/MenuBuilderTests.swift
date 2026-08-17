@@ -73,6 +73,28 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(sinceItem.title.contains(expected))
     }
     var fixedDate: Date { Date(timeIntervalSince1970: 1_700_000_000) }
+    func testCheckedRowAbsentWhenLastCheckedNil() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains { $0.hasPrefix("Checked:") })
+    }
+    func testCheckedRowPresentDirectlyAfterSinceAndFormattedConsistently() {
+        // Same formatter as Since — proves the two rows can't drift into two
+        // different date formats over time (one source of truth).
+        let checkedDate = Date(timeIntervalSince1970: 1_700_000_500)
+        let expected = MenuBuilder.timeFormatter.string(from: checkedDate)
+
+        var state = vpnState()
+        state.since = fixedDate
+        let menu = MenuBuilder.build(state: state, style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     lastChecked: checkedDate, actions: MenuActions())
+        let all = titles(menu)
+        let sinceIndex = all.firstIndex { $0.hasPrefix("Since ") }!
+        let checkedIndex = all.firstIndex { $0.hasPrefix("Checked:") }!
+        XCTAssertEqual(checkedIndex, sinceIndex + 1)
+        XCTAssertTrue(all[checkedIndex].contains(expected))
+    }
     func testHijackWarningRow() {
         var s = vpnState()
         s.connectivity = .offline

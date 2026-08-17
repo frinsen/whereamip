@@ -16,6 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
     var welcomeWindowController: WelcomeWindowController?
+    // Proof-of-freshness for the dropdown's "Checked:" row — app-local only,
+    // never touches ExitState/Codable/the JSON golden files. Set exclusively
+    // by runMonitorRefresh() below, which every direct fullRefresh/probeTick
+    // call site is routed through so none of them is missed.
+    var lastChecked: Date?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -49,6 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pathMonitor = NWPathMonitor()
         pathMonitor.pathUpdateHandler = { [weak self] _ in
             guard let self else { return }
+            // Not routed through runMonitorRefresh(): pathChanged() debounces
+            // and calls fullRefresh() entirely *inside* the Monitor actor
+            // after a delay, with no completion hook back out to here — this
+            // one trigger's eventual refresh can't update lastChecked without
+            // a Monitor API change, which is out of scope for an app-local
+            // timestamp. Every trigger AppDelegate calls directly (below) is
+            // covered.
             Task { await self.monitor.pathChanged() }
         }
         pathMonitor.start(queue: DispatchQueue(label: "whereamip.path"))
@@ -56,15 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
 
-        Task { await monitor.fullRefresh() }
+        Task { await self.runMonitorRefresh(full: true) }
         checkForUpdates()
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let self else { return }
-            Task { await self.monitor.probeTick() }
+            Task { await self.runMonitorRefresh(full: false) }
         }
         Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             guard let self else { return }
-            Task { await self.monitor.fullRefresh() }
+            Task { await self.runMonitorRefresh(full: true) }
         }
         // Cadence per spec: launch + once per 24h + on manual Refresh.
         Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { [weak self] _ in
@@ -72,7 +84,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc func didWake() { Task { await monitor.fullRefresh() } }
+    @objc func didWake() { Task { await self.runMonitorRefresh(full: true) } }
+
+    // Every direct fullRefresh/probeTick call site is routed through this one
+    // helper so lastChecked (the dropdown's "Checked:" row) can never miss a
+    // trigger — see the pathMonitor callback above for the one exception and
+    // why it can't be covered here. @MainActor so the `lastChecked = Date()`
+    // write below always lands back on the main thread after the `await`,
+    // same as the existing `await MainActor.run { … }` pattern in
+    // checkForUpdates() uses for its own post-await property write.
+    @MainActor
+    func runMonitorRefresh(full: Bool) async {
+        if full {
+            await monitor.fullRefresh()
+        } else {
+            await monitor.probeTick()
+        }
+        lastChecked = Date()
+    }
+
+    // Manual-refresh-only loading cue (spec §2 field lesson: "silent vs
+    // manual refresh" — periodic/automatic triggers never emit a loading
+    // state, only a user-initiated Refresh click does). Sets the status
+    // button directly rather than going through StatusItemRenderer/Glyph,
+    // since "…" isn't a real glyph state and must render identically across
+    // all three menu bar styles (emoji/code/image) without new branching.
+    func showTransientRefreshIndicator() {
+        statusItem.button?.title = "…"
+        statusItem.button?.image = nil
+    }
 
     // Passive check only — never downloads or applies anything, just learns
     // whether a newer GitHub release exists. Respects the `updates` setting:
@@ -159,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
             restartUpdate: restartUpdate, applicationsLinked: ApplicationsLink.isLinked(),
+            lastChecked: lastChecked,
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -167,7 +208,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 refresh: { [weak self] in
                     guard let self else { return }
-                    Task { await self.monitor.fullRefresh() }
+                    self.showTransientRefreshIndicator()
+                    Task {
+                        await self.runMonitorRefresh(full: true)
+                        // Unconditional re-render: Monitor.apply() only calls
+                        // onChange when the new state actually differs from
+                        // the old one (`guard next != old else { return }`)
+                        // — a refresh that confirms "nothing changed" would
+                        // never fire onChange/stateChanged() on its own, and
+                        // the transient "…" set above would stick forever.
+                        // Always pull currentState() and re-render explicitly
+                        // instead of relying on onChange for this one path.
+                        self.stateChanged(await self.monitor.currentState())
+                    }
                     self.checkForUpdates()
                 },
                 setStyle: { [weak self] style in
