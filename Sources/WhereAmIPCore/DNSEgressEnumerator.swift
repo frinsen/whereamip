@@ -31,7 +31,9 @@ public extension EgressResolver {
     }
 
     /// "Berlin, State of Berlin, DE" → "Berlin, DE"; anything with fewer than three components
-    /// is already short enough and passes through untouched.
+    /// is already short enough and passes through untouched. Note that this keeps only the FIRST
+    /// and LAST component of a longer list, dropping any middle ones — theoretical, since the
+    /// service's format is "City, Region, CC", but it would silently lose a fourth field.
     var shortLocation: String? {
         guard let location else { return nil }
         let parts = location.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }

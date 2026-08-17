@@ -43,15 +43,16 @@ public enum DNSForwarderHint {
     /// — identical IPv6 interface identifier — so the second pass accepts an address whose
     /// low 64 bits match one of the resolvers the first pass already anchored to this machine.
     /// Anchors only ever come from pass one: a set of addresses sharing an identifier can never
-    /// bootstrap itself into being local, and a genuinely foreign resolver (2620:fe::fe, whose
-    /// identifier is `::fe`) still fails both passes.
+    /// bootstrap itself into being local, and a genuinely foreign resolver (2620:fe::fe) fails
+    /// both passes. Only identifiers that actually identify a box participate — see
+    /// `distinguishingIdentifier`.
     static func allRouterLocal(_ configured: [DNSResolver], localPrefixes: [InterfacePrefix]) -> Bool {
         let anchored = configured.filter { isRouterLocal($0.address, localPrefixes: localPrefixes) }
         guard !anchored.isEmpty else { return false }
-        let routerIdentifiers = Set(anchored.compactMap { interfaceIdentifier($0.address) })
+        let routerIdentifiers = Set(anchored.compactMap { distinguishingIdentifier($0.address) })
         return configured.allSatisfy { resolver in
             isRouterLocal(resolver.address, localPrefixes: localPrefixes)
-                || interfaceIdentifier(resolver.address).map(routerIdentifiers.contains) == true
+                || distinguishingIdentifier(resolver.address).map(routerIdentifiers.contains) == true
         }
     }
 
@@ -66,6 +67,23 @@ public enum DNSForwarderHint {
             prefix.prefixLength > 0
                 && DNSLeakDetector.ipMatches(address, prefixOrIP: "\(prefix.address)/\(prefix.prefixLength)")
         }
+    }
+
+    /// PURE. The interface identifier, but only when it plausibly identifies a specific box —
+    /// nil otherwise, which makes the same-box rule decline rather than guess.
+    ///
+    /// The gate is entropy in the identifier's UPPER four bytes. Auto-configured identifiers
+    /// always have it: EUI-64 carries the `ff:fe` marker in the middle, so its upper bytes are
+    /// never all zero, and a random privacy identifier misses by 2^-32. HAND-NUMBERED networks
+    /// (pfSense/MikroTik/ISP infrastructure convention) do not: gateways and public resolvers
+    /// alike end in `::1`, so `::1` says "somebody numbered this by hand", not "this box".
+    /// Without the gate, a router at fd00::1 would lend its identifier to a public resolver at
+    /// 2a02:abcd:1234::1 that this Mac queries DIRECTLY — inventing a forwarding hop that isn't
+    /// there. Applied to anchors as well as candidates (one function, so it cannot go on
+    /// asymmetrically): a low-entropy anchor stays router-local, it just vouches for nobody.
+    static func distinguishingIdentifier(_ address: String) -> [UInt8]? {
+        guard let identifier = interfaceIdentifier(address) else { return nil }
+        return identifier[0..<4].contains { $0 != 0 } ? identifier : nil
     }
 
     /// PURE. The low 64 bits of an IPv6 address — the part that identifies the interface itself

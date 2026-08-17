@@ -306,6 +306,9 @@ public enum MenuBuilder {
         }
         // Neutral attribution, never a claim about encryption and never a warning: whether the
         // router's own hop upstream is encrypted is configured there and unobservable from here.
+        // Fed from egressResolvers, which is deliberately empty on a beacon-only fallback round
+        // — so the row is absent on those refreshes rather than attributed from one lone
+        // measurement. Accepted: the enumeration is the normal path, the fallback the exception.
         if let provider = DNSForwarderHint.provider(configured: state.dns.resolvers,
                                                     egress: state.dns.egressResolvers), dnsProbeEnabled {
             egressRows.append("Router forwards to \(provider) — encryption of that hop is set on the router")

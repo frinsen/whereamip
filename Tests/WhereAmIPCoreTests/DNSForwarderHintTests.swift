@@ -121,6 +121,47 @@ final class DNSForwarderHintTests: XCTestCase {
         XCTAssertNil(DNSForwarderHint.provider(configured: foreign, egress: quad9Egress(),
                                                localPrefixes: hostPrefixes))
     }
+    // MARK: - the same-box rule only trusts identifiers that identify something
+
+    func testManuallyNumberedResolverDoesNotCollideWithAManuallyNumberedRouter() {
+        // Review finding: on hand-numbered networks (pfSense/MikroTik/ISP infra) both the local
+        // gateway and a genuinely public resolver commonly end in ::1. Trusting that identifier
+        // would let a resolver this Mac queries DIRECTLY masquerade as "the same box as my
+        // router" and produce a false forwarding hint.
+        let configured = [DNSResolver(address: "fd00::1", isIPv6: true),
+                          DNSResolver(address: "2a02:abcd:1234::1", isIPv6: true)]
+        XCTAssertNil(DNSForwarderHint.provider(configured: configured, egress: quad9Egress(),
+                                               localPrefixes: hostPrefixes))
+    }
+    func testRandomPrivacyIdentifierStillAnchorsARotatedPrefix() {
+        let configured = [DNSResolver(address: "fd6b:908e:1000:0:9c2a:41bd:7e05:af31", isIPv6: true),
+                          DNSResolver(address: "2001:9e8:a54:d400:9c2a:41bd:7e05:af31", isIPv6: true)]
+        XCTAssertEqual(DNSForwarderHint.provider(configured: configured, egress: quad9Egress(),
+                                                 localPrefixes: hostPrefixes), "Quad9")
+    }
+    func testDistinguishingIdentifierRequiresEntropyInItsUpperBytes() {
+        // EUI-64 always carries ff:fe in the middle, so its upper bytes are never all zero;
+        // random privacy identifiers miss that by 2^-32. Manual numbering fails it by design.
+        XCTAssertNotNil(DNSForwarderHint.distinguishingIdentifier("2001:9e8:a4d:d200:3e37:12ff:fef5:5abc"))
+        XCTAssertNotNil(DNSForwarderHint.distinguishingIdentifier("fd6b:908e:1000:0:9c2a:41bd:7e05:af31"))
+        for manual in ["fd00::1", "2a02:abcd:1234::1", "2001:db8::ff", "2001:db8::dead:beef"] {
+            XCTAssertNil(DNSForwarderHint.distinguishingIdentifier(manual), "\(manual)")
+        }
+        // Boundary: the gate looks at the identifier's UPPER four bytes only.
+        XCTAssertNil(DNSForwarderHint.distinguishingIdentifier("2001:db8:1:1:0:0:1:0"))
+        XCTAssertNotNil(DNSForwarderHint.distinguishingIdentifier("2001:db8:1:1:1:0:0:1"))
+        XCTAssertNil(DNSForwarderHint.distinguishingIdentifier("9.9.9.9"))
+    }
+    func testALowEntropyAnchorAcceptsNothingEither() {
+        // The gate applies to the anchor side too: a router at fd00::1 is still router-local by
+        // the private table, it just can't lend its identifier to anyone.
+        let configured = [DNSResolver(address: "fd00::1", isIPv6: true),
+                          DNSResolver(address: "2001:db8:9:9::1", isIPv6: true)]
+        XCTAssertFalse(DNSForwarderHint.allRouterLocal(configured, localPrefixes: hostPrefixes))
+        XCTAssertTrue(DNSForwarderHint.isRouterLocal("fd00::1", localPrefixes: hostPrefixes),
+                      "the anchor itself stays local — only its identifier is untrustworthy")
+    }
+
     func testInterfaceIdentifierIsTheLowSixtyFourBits() {
         XCTAssertEqual(DNSForwarderHint.interfaceIdentifier("2001:db8::1"),
                        DNSForwarderHint.interfaceIdentifier("fd00:1:2:3::1"))
