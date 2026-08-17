@@ -18,33 +18,44 @@ final class WelcomeWindowController: NSWindowController {
     private let settings: Settings
     private var launchAtLoginCheckbox: NSButton!
     private var applicationsCheckbox: NSButton!
-    private var applicationsErrorLabel: NSTextField!
     private var notifyCheckbox: NSButton!
-    private var notifyHintButton: NSButton!
 
-    // Fixed height for the two conditionally-populated status lines
-    // (applicationsErrorLabel, notifyHintButton) — EXACTLY two lines at their
-    // shared 10pt font (NSLayoutManager.defaultLineHeight(for: .systemFont(
-    // ofSize: 10)) measures 12pt/line, so 2 lines = 24pt; not a rounder but
-    // looser guess — a looser reservation is exactly what read as a "hole"
-    // in the second design review). Both views stay permanently in their
-    // stacks at this height; only their text/enabled state changes (never
-    // `.isHidden`, never inserted/removed), so the window's size never jumps
-    // depending on whether an error or a permission hint happens to be
-    // showing right now (field-reported bug — see
-    // toggleApplications()/toggleNotify()).
+    // The applications-link error and the notifications-denied hint used to
+    // be two separate reserved slots stacked on top of each other. Almost
+    // every real session has BOTH empty, so that was two ghost slots' worth
+    // of ~always-blank space — exactly the "hole" a design review flagged.
+    // They're now ONE shared slot (mergedStatusView) with a defined
+    // precedence: an applications error, when present, always wins over the
+    // notify hint (errors outrank hints); the notify hint reappears on its
+    // own the moment the error clears, since renderMergedStatus() re-derives
+    // the slot's content from both flags on every change to either.
+    private var mergedStatusView: NSButton!
+    private var applicationsErrorText: String? { didSet { renderMergedStatus() } }
+    private var notifyHintActive = false { didSet { renderMergedStatus() } }
+
+    // Fixed height for the shared conditionally-populated status slot
+    // (mergedStatusView) — EXACTLY two lines at its 10pt font
+    // (NSLayoutManager.defaultLineHeight(for: .systemFont(ofSize: 10))
+    // measures 12pt/line, so 2 lines = 24pt; not a rounder but looser guess —
+    // a looser reservation is exactly what read as a "hole" in the second
+    // design review). The view stays permanently in the stack at this
+    // height; only its text/tint/enabled state changes (never `.isHidden`,
+    // never inserted/removed), so the window's size never jumps depending on
+    // whether an error or a permission hint happens to be showing right now
+    // (field-reported bug — see toggleApplications()/toggleNotify()).
     //
     // Height alone isn't enough, though: a *width* that varies with content
     // is just as capable of moving things around. NSStackView sizes a
     // leading-aligned container (setupSection/checkboxStack) to its widest
-    // row; when notifyHintButton's width was only capped (<=) rather than
-    // fixed, it shrank to near-zero while empty and grew to ~350pt once
-    // populated — that changed checkboxStack's own intrinsic width, which
-    // shifted its centered parent (setupSection) sideways, dragging every
-    // checkbox's *left* edge with it (a horizontal jump, reported after the
-    // vertical one was fixed). So every conditionally-populated view in this
-    // window gets BOTH dimensions pinned to a constant — never just capped —
-    // so no sibling's layout can depend on this view's content at all.
+    // row; a capped-not-fixed width let a conditionally-populated view shrink
+    // to near-zero while empty and grow wide once populated, which changed
+    // checkboxStack's own intrinsic width and shifted its centered parent
+    // (setupSection) sideways, dragging every checkbox's *left* edge with it
+    // (a horizontal jump, reported after an earlier vertical-only fix). So
+    // this view gets BOTH dimensions pinned to a constant — never just
+    // capped — and setupSection ALSO gets an explicit fixed width (see
+    // buildContent) so its own leading edge no longer depends on which of
+    // its children happens to be widest.
     private static let reservedStatusLineHeight: CGFloat = 24
     // The one standard gap after a reserved status slot — replaces what was
     // an oversized, inconsistent custom-spacing value that (on top of the
@@ -179,36 +190,16 @@ final class WelcomeWindowController: NSWindowController {
         let notifyCaption = NSTextField(labelWithString: "Asks for macOS permission when enabled.")
         notifyCaption.font = .systemFont(ofSize: 10)
         notifyCaption.textColor = .secondaryLabelColor
+        notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent
 
-        // Denied-permission hint: starts cleared/disabled (not hidden — see
-        // reservedStatusLineHeight doc above). toggleNotify() only ever sets
-        // .title/.isEnabled, never touches visibility or stack membership.
-        notifyHintButton = NSButton(title: "", target: self, action: #selector(openNotificationSettings))
-        notifyHintButton.bezelStyle = .inline
-        notifyHintButton.isBordered = false
-        notifyHintButton.contentTintColor = .linkColor
-        notifyHintButton.font = .systemFont(ofSize: 10)
-        notifyHintButton.isEnabled = false
-        (notifyHintButton.cell as? NSButtonCell)?.wraps = true
-        (notifyHintButton.cell as? NSButtonCell)?.lineBreakMode = .byWordWrapping
-        // NSButton centers its title by default regardless of the button's
-        // own frame alignment — the frame was already leading-aligned (via
-        // the fixed-width constraint below + notifyCaptionColumn's
-        // `.leading`), but the *text inside it* still rendered centered,
-        // reading as if it floated on the window's axis instead of lining
-        // up with notifyCaption directly above it. Left-align the title
-        // itself to match.
-        (notifyHintButton.cell as? NSButtonCell)?.alignment = .left
-
-        // notifyCaption + notifyHintButton indented to align under the
-        // checkbox's *label* text, not its square (item: caption placement).
-        let notifyCaptionColumn = NSStackView(views: [notifyCaption, notifyHintButton])
-        notifyCaptionColumn.orientation = .vertical
-        notifyCaptionColumn.alignment = .leading
-        notifyCaptionColumn.spacing = 2
+        // Caption indented to align under the checkbox's *label* text, not
+        // its square. The shared status slot (mergedStatusView, built below
+        // as a sibling of setupSection) reuses this same checkboxTextIndent
+        // so both lines share one left edge, even though the slot itself no
+        // longer lives inside this row — see buildContent's assembly.
         let notifyIndentSpacer = NSView()
         notifyIndentSpacer.widthAnchor.constraint(equalToConstant: Self.checkboxTextIndent).isActive = true
-        let notifyCaptionRow = NSStackView(views: [notifyIndentSpacer, notifyCaptionColumn])
+        let notifyCaptionRow = NSStackView(views: [notifyIndentSpacer, notifyCaption])
         notifyCaptionRow.orientation = .horizontal
         notifyCaptionRow.alignment = .top
         notifyCaptionRow.spacing = 0
@@ -224,14 +215,38 @@ final class WelcomeWindowController: NSWindowController {
         setupSection.orientation = .vertical
         setupSection.alignment = .leading
         setupSection.spacing = 8
+        // Explicit fixed width (== the stack's full usable content width, see
+        // below) rather than relying on some child happening to be that
+        // wide: setupSection's leading edge must stay put regardless of
+        // what's inside it, and an internal child's width is not a
+        // dependable way to guarantee that (see reservedStatusLineHeight doc).
+        setupSection.widthAnchor.constraint(equalToConstant: 372).isActive = true
 
-        // Applications-link error: same reserved-slot treatment as the
-        // notify hint above — never hidden, only its text changes.
-        applicationsErrorLabel = NSTextField(wrappingLabelWithString: "")
-        applicationsErrorLabel.font = .systemFont(ofSize: 10)
-        applicationsErrorLabel.textColor = .systemRed
-        applicationsErrorLabel.maximumNumberOfLines = 2
-        applicationsErrorLabel.cell?.truncatesLastVisibleLine = true
+        // Shared conditional-status slot (applications-link error OR the
+        // notifications-denied hint — see the class-level doc above for the
+        // precedence rule). A plain NSButton so the notify-hint case can be
+        // clickable (opens System Settings); the error case just never fires
+        // its action (see openNotificationSettings()). Positioned as a
+        // sibling right after setupSection, indented to the same left edge
+        // as notifyCaption via its own spacer+fixed-width pairing below —
+        // the "directly under the setup section" placement from the design
+        // review, not nested inside checkboxStack.
+        mergedStatusView = NSButton(title: "", target: self, action: #selector(openNotificationSettings))
+        mergedStatusView.bezelStyle = .inline
+        mergedStatusView.isBordered = false
+        mergedStatusView.font = .systemFont(ofSize: 10)
+        (mergedStatusView.cell as? NSButtonCell)?.wraps = true
+        (mergedStatusView.cell as? NSButtonCell)?.lineBreakMode = .byWordWrapping
+        // NSButton centers its title by default regardless of the button's
+        // own frame alignment; left-align the text itself so it lines up
+        // with notifyCaption above it instead of floating on the window's axis.
+        (mergedStatusView.cell as? NSButtonCell)?.alignment = .left
+        let statusIndentSpacer = NSView()
+        statusIndentSpacer.widthAnchor.constraint(equalToConstant: Self.checkboxTextIndent).isActive = true
+        let statusRow = NSStackView(views: [statusIndentSpacer, mergedStatusView])
+        statusRow.orientation = .horizontal
+        statusRow.alignment = .top
+        statusRow.spacing = 0
 
         // MARK: commit band — privacy note + Done
 
@@ -251,7 +266,7 @@ final class WelcomeWindowController: NSWindowController {
         // MARK: assembly — three bands: pitch / setup / commit
 
         let stack = NSStackView(views: [iconView, heading, body, hint,
-                                         setupSection, applicationsErrorLabel,
+                                         setupSection, statusRow,
                                          privacy, doneButton])
         stack.orientation = .vertical
         stack.alignment = .centerX
@@ -264,22 +279,21 @@ final class WelcomeWindowController: NSWindowController {
         stack.setCustomSpacing(4, after: heading)
         stack.setCustomSpacing(6, after: body)          // tighten hint-to-body: one thought
         stack.setCustomSpacing(24, after: hint)         // air above the checkbox group: pitch → setup
-        stack.setCustomSpacing(4, after: setupSection)  // error status stays visually part of setup
-        stack.setCustomSpacing(Self.sectionGap, after: applicationsErrorLabel) // setup → commit
+        stack.setCustomSpacing(4, after: setupSection)  // status slot stays visually part of setup
+        stack.setCustomSpacing(Self.sectionGap, after: statusRow) // setup → commit
         stack.setCustomSpacing(Self.footerGap, after: privacy) // privacy → Done, equal to Done → bottom edge
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        [heading, body, hint, applicationsErrorLabel, privacy].forEach {
+        [heading, body, hint, privacy].forEach {
             $0.preferredMaxLayoutWidth = 372   // 420 window width - 24*2 edge insets
         }
-        notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent
-        // Both axes pinned to a CONSTANT (not a ceiling) for every
-        // conditionally-populated view — see the reservedStatusLineHeight
-        // doc above for why a `<=` width still let the checkbox group jump.
-        applicationsErrorLabel.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
-        applicationsErrorLabel.widthAnchor.constraint(equalToConstant: 372).isActive = true
-        notifyHintButton.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
-        notifyHintButton.widthAnchor.constraint(equalToConstant: 372 - Self.checkboxTextIndent).isActive = true
+        // Both axes pinned to a CONSTANT (not a ceiling) — see the
+        // reservedStatusLineHeight doc above for why a `<=` width still let
+        // the checkbox group jump.
+        mergedStatusView.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
+        mergedStatusView.widthAnchor.constraint(equalToConstant: 372 - Self.checkboxTextIndent).isActive = true
+        // Starts empty/cleared — see renderMergedStatus(), driven by the two
+        // didSet-observed flags above, both false/nil at construction time.
 
         let contentView = NSView()
         contentView.addSubview(stack)
@@ -313,12 +327,11 @@ final class WelcomeWindowController: NSWindowController {
         let turningOn = applicationsCheckbox.state == .on
         do {
             try ApplicationsLink.setLinked(turningOn, bundlePath: Bundle.main.bundlePath)
-            // Clear text only — the label itself stays in the stack at its
-            // reserved height (see reservedStatusLineHeight), so the window
-            // never resizes based on whether an error is showing.
-            applicationsErrorLabel.stringValue = ""
+            // Clearing this is what lets the notify hint (if any) reappear —
+            // see renderMergedStatus()'s precedence rule.
+            applicationsErrorText = nil
         } catch {
-            applicationsErrorLabel.stringValue = "\(error)"
+            applicationsErrorText = "\(error)"
             // Revert the checkbox to actual on-disk truth rather than trusting
             // the click — the operation didn't happen.
             applicationsCheckbox.state = ApplicationsLink.isLinked() ? .on : .off
@@ -330,32 +343,51 @@ final class WelcomeWindowController: NSWindowController {
         // fires, so `.state == .on` reflects the user's requested new state.
         guard notifyCheckbox.state == .on else {
             settings.notificationsEnabled = false
-            clearNotifyHint()
+            notifyHintActive = false
             return
         }
         NotificationPermissionFlow.requestEnable { [weak self] granted, needsSystemSettings in
             guard let self else { return }
             if needsSystemSettings {
                 self.notifyCheckbox.state = .off
-                self.notifyHintButton.title = "Notifications are disabled in System Settings — open Notifications settings"
-                self.notifyHintButton.isEnabled = true
+                self.notifyHintActive = true
             } else {
                 self.settings.notificationsEnabled = granted
                 self.notifyCheckbox.state = granted ? .on : .off
-                self.clearNotifyHint()
+                self.notifyHintActive = false
             }
         }
     }
 
-    // Text/enabled only — see reservedStatusLineHeight doc: notifyHintButton
-    // never leaves the stack and is never `.isHidden`, so clearing it can't
-    // change the window's layout.
-    private func clearNotifyHint() {
-        notifyHintButton.title = ""
-        notifyHintButton.isEnabled = false
+    // Single source of truth for the shared status slot's content —
+    // called from both didSet observers above, so the slot always reflects
+    // whichever flag is authoritative right now. An applications error, if
+    // present, always wins (errors outrank hints); with no error, the
+    // notify hint shows if active; otherwise the slot is genuinely empty.
+    // Text/tint/enabled only — mergedStatusView never leaves the stack and
+    // is never `.isHidden`, so re-rendering it can't change the window's
+    // layout (both axes are pinned to a constant — see
+    // reservedStatusLineHeight doc).
+    private func renderMergedStatus() {
+        if let error = applicationsErrorText {
+            mergedStatusView.title = error
+            mergedStatusView.contentTintColor = .systemRed
+        } else if notifyHintActive {
+            mergedStatusView.title = "Notifications are disabled in System Settings — open Notifications settings"
+            mergedStatusView.contentTintColor = .linkColor
+        } else {
+            mergedStatusView.title = ""
+        }
     }
 
     @objc private func openNotificationSettings() {
+        // mergedStatusView stays enabled at all times (so its text never
+        // dims/grays the way a disabled NSButton's does — the applications
+        // error needs to read as plain, full-color text, not a grayed-out
+        // control) — so this action can fire from a click landing on the
+        // slot while it's showing an error or is empty. Only actually open
+        // System Settings when the slot is genuinely showing the notify hint.
+        guard applicationsErrorText == nil, notifyHintActive else { return }
         NotificationPermissionFlow.openSystemSettings()
     }
 
