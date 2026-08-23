@@ -18,12 +18,23 @@ import WhereAmIPUI
 /// The two windows are independent objects with independent controllers, so opening
 /// one never touches the other, and Settings ▸ Show Welcome Window behaves exactly as
 /// it did before this window existed.
-final class HelpWindowController: NSWindowController {
+/// A document view whose origin is top-left. Without this, an NSScrollView lays its
+/// document out from the BOTTOM, so a document shorter than the window sits at the
+/// bottom edge and a longer one opens scrolled to its end — both wrong for text.
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+final class HelpWindowController: NSWindowController, NSWindowDelegate {
     // Wide enough for the shortcut lines not to wrap mid-chord, tall enough to show
     // a couple of sections at once; resizable because it's a document, not a dialog.
     private static let contentWidth: CGFloat = 480
     private static let contentHeight: CGFloat = 560
     private static let margin: CGFloat = 24
+    /// Kept so `windowDidResize` can re-wrap the body: an NSTextField only wraps at
+    /// its `preferredMaxLayoutWidth`, which does not follow its constraints on its
+    /// own, so a resized window would otherwise keep the width it was born with.
+    private var body: NSTextField!
 
     init() {
         let window = NSWindow(
@@ -39,7 +50,15 @@ final class HelpWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         super.init(window: window)
         buildContent()
+        window.delegate = self
         window.center()
+    }
+
+    /// Re-wrap on resize — see `body`'s doc for why this isn't automatic.
+    func windowDidResize(_ notification: Notification) {
+        guard let width = window?.contentView?.bounds.width else { return }
+        body.preferredMaxLayoutWidth = max(200, width - 2 * Self.margin)
+        body.invalidateIntrinsicContentSize()
     }
 
     @available(*, unavailable)
@@ -52,10 +71,11 @@ final class HelpWindowController: NSWindowController {
         // multi-section document with bullet lists, and centered prose at this
         // length is unreadable.
         let bodyFont = NSFont.systemFont(ofSize: 12)
-        let body = NSTextField(wrappingLabelWithString: "")
+        body = NSTextField(wrappingLabelWithString: "")
         body.font = bodyFont
         body.attributedStringValue = WelcomeContent.rendered(HelpContent.markdown(), font: bodyFont,
                                                              alignment: .left)
+        body.preferredMaxLayoutWidth = Self.contentWidth - 2 * Self.margin
         body.translatesAutoresizingMaskIntoConstraints = false
 
         // A document that outgrows its window scrolls rather than being clipped —
@@ -69,7 +89,7 @@ final class HelpWindowController: NSWindowController {
 
         // The label is pinned to the clip view's width so it wraps to whatever the
         // window is currently sized to, and grows downwards only.
-        let documentView = NSView()
+        let documentView = FlippedView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(body)
         scrollView.documentView = documentView
