@@ -39,7 +39,7 @@ final class L10nTests: XCTestCase {
     }
 
     func testKeysAreLowercaseDotSeparatedAndUnderAKnownPrefix() {
-        let prefixes = ["menu.", "settings.", "dns.", "notification.", "welcome."]
+        let prefixes = ["menu.", "settings.", "dns.", "notification.", "welcome.", "help."]
         for key in L10nKey.allCases {
             XCTAssertTrue(prefixes.contains { key.rawValue.hasPrefix($0) },
                           "unrecognised key namespace: \(key.rawValue)")

@@ -41,7 +41,14 @@
 "menu.privateRelay" = "Private Relay: ON — Safari exits%@ elsewhere";
 "menu.privateRelay.via" = " via %@";
 "menu.org.unknown" = "your ISP";
+/* ⌥⌘C alternate of the exit-IP row: copies BOTH exit addresses, so the label must
+   promise exactly two — the row is hidden entirely when there is no IPv6 exit */
+"menu.copyExitBoth" = "Copy both exit addresses";
+"menu.copyDiagnostics" = "Copy Diagnostics";
 "menu.refresh" = "Refresh";
+/* Apple's HIG naming pattern for a Help item, "<YourAppName> Help" — this app is
+   LSUIElement, so there is no real menu bar and no Help menu; this row stands in */
+"menu.help" = "WhereAmIP Help";
 "menu.settings" = "Settings";
 "menu.restart" = "Restart WhereAmIP";
 "menu.quit" = "Quit WhereAmIP";
@@ -73,6 +80,12 @@
 "dns.resolver.interfaces" = "%@ — %@";
 "dns.disabled" = "DNS check disabled";
 "dns.forwarder" = "Router forwards to %@ — encryption of that hop is set on the router";
+/* The two bulk-copy rows at the foot of the DNS submenu. Each names WHICH of the
+   two sections above it copies, echoing that section's own heading:
+   "Configured resolvers" → configured, "Queries answered by" → answering. The
+   clipboard payload is bare addresses, one per line — never the row's own text. */
+"dns.copy.configured" = "Copy configured resolvers";
+"dns.copy.answering" = "Copy answering resolvers";
 
 /* MARK: - notification */
 
@@ -116,3 +129,8 @@
 "welcome.notify.hint" = "Notifications are disabled in System Settings — open Notifications settings";
 "welcome.privacy" = "No tracking, no history, no logs.";
 "welcome.done" = "Done";
+
+/* MARK: - help window (body copy lives in Resources/help/help.md) */
+
+/* Matches the dropdown row that opens it, so the window is recognisable as its result */
+"help.window.title" = "WhereAmIP Help";
