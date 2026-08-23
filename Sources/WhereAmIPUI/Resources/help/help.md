@@ -38,7 +38,7 @@ cannot be observed from here.
 - **⌥⌘C** — copy both exit addresses, IPv4 and IPv6. Hold **⌥** with the dropdown
   open and the IP row turns into this wider copy; it only appears when an IPv6 exit
   was measured.
-- **⇧⌘C** — Copy Diagnostics: the whole dropdown as text, with the same warnings it
+- **⌘D** — Copy Diagnostics: the whole dropdown as text, with the same warnings it
   is showing you and no others, ready to paste into a bug report. It goes to your
   clipboard and nowhere else.
 - **⌘R** — Refresh. **⌘?** — this window. **⌘Q** — quit.
@@ -50,7 +50,7 @@ Everything the menu bar does, `whereamip` does too:
 - `whereamip status` — one glance, as text; `--json` for the full record.
 - `whereamip watch` — a new line whenever the exit, route, or connectivity changes.
   `whereamip watch --json >> somefile` is how you keep a history, if you want one.
-- `whereamip diagnostics` — the same report ⇧⌘C copies.
+- `whereamip diagnostics` — the same report ⌘D copies.
 - `whereamip debug` — live-streams the diagnostic log while you reproduce a problem.
   Nothing is written to disk, before or after.
 - `whereamip config get` / `set` — the same settings the dropdown shows.
@@ -58,5 +58,5 @@ Everything the menu bar does, `whereamip` does too:
 **Anything else**
 
 The README answers the longer questions, and bug reports are welcome — attach the
-output of `whereamip diagnostics`, or paste what ⇧⌘C copied:
+output of `whereamip diagnostics`, or paste what ⌘D copied:
 github.com/frinsen/whereamip

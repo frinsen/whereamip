@@ -260,16 +260,25 @@ public enum MenuBuilder {
 
         // Controls
         menu.addItem(.separator())
-        // ⇧⌘C — the whole dropdown as pasteable text, for a bug report. Rendered
+        // ⌘D — the whole dropdown as pasteable text, for a bug report. Rendered
         // from exactly the state (and the same "Checked" stamp and DNS-probe
         // setting) this menu was built with, by the shared Core formatter the CLI's
         // `whereamip diagnostics` uses; nothing extra is measured, and nothing is
         // sent anywhere but the local pasteboard.
-        let diagnostics = action(L10n.string(.menuCopyDiagnostics), key: "c") {
+        //
+        // Deliberately NOT ⇧⌘C, and do not "restore" it: that is Maccy's default
+        // global hotkey, and Maccy is one of the most widely installed macOS
+        // clipboard managers. Global hotkeys are registered below the level of menu
+        // key equivalents and are conventionally two-modifier combinations precisely
+        // to stay clear of app shortcuts — so a two-modifier ⇧⌘C is exactly the space
+        // they occupy, and ours would be silently swallowed on those machines
+        // (field-verified on the maintainer's). A single-modifier ⌘D sits in space
+        // global-hotkey apps avoid by design. Mnemonic: D for Diagnostics.
+        let diagnostics = action(L10n.string(.menuCopyDiagnostics), key: "d") {
             actions.copyText(DiagnosticsReport.text(for: state, checked: lastChecked,
                                                     dnsProbeEnabled: dnsProbeEnabled))
         }
-        diagnostics.keyEquivalentModifierMask = [.command, .shift]
+        diagnostics.keyEquivalentModifierMask = [.command]
         menu.addItem(diagnostics)
 
         let refresh = action(L10n.string(.menuRefresh), key: "r") { actions.refresh() }
@@ -392,8 +401,13 @@ public enum MenuBuilder {
         // names WHICH set it copies in that section's own vocabulary — "Configured
         // resolvers" → configured, "Queries answered by" → answering — because a
         // bare "Copy addresses" here would be ambiguous between the two lists it
-        // sits under. No key equivalents: the rows are visible where they matter,
-        // and a submenu is the wrong place to spend another ⌘-something.
+        // sits under.
+        //
+        // No key equivalents, and that is a settled DECISION rather than an omission:
+        // a shortcut only earns its keystroke if it can fire with the submenu closed,
+        // two rows would mean two more of them against the HIG's "avoid defining too
+        // many", and the bug-report case — the one that actually wants both lists at
+        // once — is already served by Copy Diagnostics, which carries them.
         //
         // Row text and clipboard text are different products: the rows above read
         // "192.168.178.1 — en0" and "185.44.108.99 — WoodyNet, Inc. (Berlin, DE) ·

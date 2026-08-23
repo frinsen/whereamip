@@ -9,7 +9,7 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
-- **Copy Diagnostics** (⇧⌘C, first row above Refresh): puts the whole dropdown
+- **Copy Diagnostics** (⌘D, first row above Refresh): puts the whole dropdown
   on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
   configured resolvers, answering resolvers — with every warning the dropdown is
   currently showing (offline, OpenVPN hijack routes while offline, confirmed

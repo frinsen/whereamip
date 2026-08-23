@@ -648,8 +648,10 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(all.firstIndex(of: L10n.string(.menuRefresh)), diagnosticsIndex + 1)
         XCTAssertTrue(menu.items[diagnosticsIndex - 1].isSeparatorItem)
         let item = menu.items[diagnosticsIndex]
-        XCTAssertEqual(item.keyEquivalent, "c")
-        XCTAssertEqual(item.keyEquivalentModifierMask, [.command, .shift])
+        // ⌘D, NOT ⇧⌘C: that combination is Maccy's default global hotkey and
+        // would be swallowed before the menu ever saw it (see MenuBuilder).
+        XCTAssertEqual(item.keyEquivalent, "d")
+        XCTAssertEqual(item.keyEquivalentModifierMask, [.command])
         XCTAssertTrue(item.isEnabled)
     }
 
@@ -762,7 +764,7 @@ final class MenuBuilderTests: XCTestCase {
 
     func testMenuAndDiagnosticsReportAgreeOnEveryWarningAcrossConnectivity() {
         // The anti-drift test for the shared predicates in ExitState: whatever the
-        // dropdown warns about, ⇧⌘C's text warns about, and nothing else. Both
+        // dropdown warns about, ⌘D's text warns about, and nothing else. Both
         // directions matter — a report that alarms where the menu is silent sends a
         // bug reporter chasing a contradiction with their own menu bar.
         var offlineHijack = vpnState()

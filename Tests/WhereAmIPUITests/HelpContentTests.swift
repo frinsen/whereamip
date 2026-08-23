@@ -20,7 +20,7 @@ final class HelpContentTests: XCTestCase {
         // the menu bar itself has no room to answer, which is why this window exists.
         let help = HelpContent.markdown()
         for topic in ["menu bar", "Since", "Checked", "Configured resolvers",
-                      "⌘C", "⌥⌘C", "⇧⌘C", "⌘R", "⌘Q",
+                      "⌘C", "⌥⌘C", "⌘D", "⌘R", "⌘Q",
                       "whereamip status", "whereamip watch", "whereamip diagnostics",
                       "whereamip debug", "github.com/frinsen/whereamip"] {
             XCTAssertTrue(help.contains(topic), "help.md never mentions \(topic)")
