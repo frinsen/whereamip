@@ -27,10 +27,10 @@ public enum VPNNamer {
         // help the CLI, which has no AppKit and passes empty runningBundleIDs.
         if localAddress == "172.16.0.2" { return "Cloudflare WARP" }
         // Classic daemon tunnels (OpenVPN etc.) register NOTHING in SCDynamicStore — after the
-        // State-key widening, a nameless tunnel plus a running openvpn/ovpnagent process is
-        // causal evidence (sibling-session field diagnosis 2026-08-17: office ovpnagent tunnel
+        // State-key widening, a nameless tunnel plus a running OpenVPN process is causal
+        // evidence (sibling-session field diagnosis 2026-08-17: office ovpnagent tunnel
         // misnamed "Tailscale" by bundle-table order).
-        if runningProcessNames.contains(where: { $0 == "openvpn" || $0 == "ovpnagent" }) { return "OpenVPN" }
+        if runningProcessNames.contains(where: isOpenVPNProcess) { return "OpenVPN" }
         // Only name from app presence when it's unambiguous — multiple known VPN apps running
         // means table ORDER would decide, and a wrong name shown confidently is worse than none.
         let matchedNames = Set(bundleIDNames.filter { runningBundleIDs.contains($0.id) }.map(\.name))
@@ -45,6 +45,31 @@ public enum VPNNamer {
         if interface.hasPrefix("ipsec") { return "IKEv2 VPN" }
         return nil
     }
+    /// OpenVPN's processes as an UNPRIVILEGED scanner can actually see them.
+    ///
+    /// The original tell here was `== "openvpn" || == "ovpnagent"`, and on a real machine it
+    /// was dead code: `proc_name` fails for processes owned by another user (see
+    /// ProcessScanner's doc), and `ovpnagent` runs as root out of the OpenVPN Connect
+    /// framework — so it is never in the set. Field measurement on the affected Mac: of 1284
+    /// pids, 282 returned no name, every one of them root-owned, `ovpnagent` among them. The
+    /// tunnel therefore showed as "VPN: unknown (utun18)" even though the route attribution
+    /// was correct, and the bundle table couldn't rescue it either — OpenVPN Connect,
+    /// Tailscale and WARP were all running, so the ambiguity guard correctly returned nil.
+    ///
+    /// What IS visible is the user-owned GUI side: "OpenVPN Connect" and its helpers. A
+    /// case-insensitive `openvpn` PREFIX covers all of those plus the bare daemon, and a
+    /// prefix rather than equality is required because `proc_name` returns a truncated short
+    /// name — the field sample "OpenVPN Connect Helper (Rendere" is cut mid-word. Never match
+    /// a full executable name here.
+    ///
+    /// The looseness is safe only because of WHERE this sits in the ladder: the SC service
+    /// name, the Tailscale CGNAT tell and the WARP 172.16.0.2 tell all run first, so a tunnel
+    /// positively identified as one of those can never be captured by a merely-running
+    /// OpenVPN Connect. Do not move this check earlier.
+    static func isOpenVPNProcess(_ name: String) -> Bool {
+        name.lowercased().hasPrefix("openvpn") || name == "ovpnagent"
+    }
+
     static func isCGNAT(_ ip: String) -> Bool {
         let parts = ip.split(separator: ".").compactMap { UInt8($0) }
         guard parts.count == 4 else { return false }

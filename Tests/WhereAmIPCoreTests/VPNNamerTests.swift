@@ -83,6 +83,55 @@ final class VPNNamerTests: XCTestCase {
                                      scServiceName: "PureVPN", runningBundleIDs: [],
                                      runningProcessNames: ["openvpn"]), "PureVPN")
     }
+    /// THE field bug (2026-08-23, maintainer's work tunnel): utun18 is OpenVPN Connect
+    /// — `inet 192.168.4.3 --> 192.168.4.1`, hijack pair present, route attribution
+    /// correct — but the menu said "VPN: unknown". `ovpnagent` runs as ROOT and is
+    /// therefore invisible to an unprivileged `proc_name` scan (282 of 1284 pids
+    /// returned nothing, all root-owned), so the daemon-name tell could never fire, and
+    /// the bundle table was correctly nil (OpenVPN Connect + Tailscale + WARP all
+    /// running → ambiguous). The user-owned GUI process is what's actually visible.
+    func testOpenVPNConnectNamedByItsVisibleUserSpaceProcess() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun18", localAddress: "192.168.4.3",
+                                     scServiceName: nil,
+                                     runningBundleIDs: ["net.openvpn.connect.app",
+                                                        "io.tailscale.ipn.macos",
+                                                        "com.cloudflare.1dot1dot1dot1.macos"],
+                                     runningProcessNames: ["OpenVPN Connect"]), "OpenVPN")
+    }
+
+    /// `proc_name` returns a truncated short name — this is the exact string observed in
+    /// the field, cut mid-word. Equality matching would miss it; the prefix must not.
+    func testTruncatedHelperProcessNameStillNamesTheTunnel() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun18", localAddress: "192.168.4.3",
+                                     scServiceName: nil, runningBundleIDs: [],
+                                     runningProcessNames: ["OpenVPN Connect Helper (Rendere"]),
+                       "OpenVPN")
+    }
+
+    /// The prefix is only safe because of its POSITION in the ladder: a tunnel positively
+    /// identified as Tailscale or WARP must never be captured by a merely-running OpenVPN
+    /// Connect — which is exactly the situation on the affected machine, where all three
+    /// apps run at once.
+    func testCGNATTunnelStaysTailscaleEvenWithOpenVPNConnectRunning() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun5", localAddress: "100.101.102.103",
+                                     scServiceName: nil, runningBundleIDs: [],
+                                     runningProcessNames: ["OpenVPN Connect", "OpenVPN Connect Helper"]),
+                       "Tailscale")
+    }
+    func testWARPTunnelStaysWARPEvenWithOpenVPNConnectRunning() {
+        XCTAssertEqual(VPNNamer.name(interface: "utun16", localAddress: "172.16.0.2",
+                                     scServiceName: nil, runningBundleIDs: [],
+                                     runningProcessNames: ["OpenVPN Connect"]), "Cloudflare WARP")
+    }
+
+    /// The prefix must not turn into "anything vaguely VPN-ish": an unrelated process set
+    /// still yields no name at all.
+    func testUnrelatedProcessesNamedNothing() {
+        XCTAssertNil(VPNNamer.name(interface: "utun18", localAddress: "192.168.4.3",
+                                   scServiceName: nil, runningBundleIDs: [],
+                                   runningProcessNames: ["Finder", "Slack Helper", "vpnkit", "ovpn"]))
+    }
+
     func testNoMatchingProcessesFallsThroughPastProcessTell() {
         XCTAssertNil(VPNNamer.name(interface: "utun17", localAddress: "192.168.4.4",
                                    scServiceName: nil, runningBundleIDs: [],
