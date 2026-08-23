@@ -8,7 +8,7 @@ struct WhereAmIP: AsyncParsableCommand {
         commandName: "whereamip",
         abstract: "Where am I(P)? Exit IP, geolocation, VPN route, and Private Relay status.",
         version: whereamipVersion,
-        subcommands: [Status.self, Watch.self, Config.self, Debug.self],
+        subcommands: [Status.self, Watch.self, Diagnostics.self, Config.self, Debug.self],
         defaultSubcommand: Status.self)
 }
 
@@ -61,6 +61,26 @@ struct Watch: AsyncParsableCommand {
         for await state in stream {
             print(json ? StateRenderer.json(state) : StateRenderer.human(state))
         }
+    }
+}
+
+/// The same paste-ready text the dropdown's "Copy Diagnostics" row puts on the
+/// clipboard — rendered by `DiagnosticsReport` in Core so the two frontends can
+/// never drift. Nothing extra is measured for it: one full refresh, then the
+/// current state formatted. `status`/`watch` and the JSON are untouched.
+struct Diagnostics: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Print a paste-ready diagnostics report for a bug report (exit, route, DNS, warnings).")
+    func run() async throws {
+        let m = makeMonitor()
+        await m.fullRefresh()
+        let state = await m.currentState()
+        // `checked` is now, by construction: the refresh above just happened.
+        // dnsProbeEnabled comes from the same setting Monitor consulted, so a
+        // report from an opted-out machine says "disabled" rather than reading
+        // as "nothing answered".
+        print(DiagnosticsReport.text(for: state, checked: Date(),
+                                     dnsProbeEnabled: Settings().dnsProbeEnabled))
     }
 }
 
