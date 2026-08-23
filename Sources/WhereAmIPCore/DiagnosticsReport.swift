@@ -44,7 +44,7 @@ public enum DiagnosticsReport {
         lines += warnings(state).flatMap { rows(label: "Warning", [$0]) }
         lines += rows(label: "Exit", exitValues(state, formatter: formatter))
         lines += rows(label: "IPv6", [state.exit6.map { detailLine(for: $0) } ?? "not detected"])
-        lines += rows(label: "Route", [routeValue(state.route)])
+        lines += rows(label: "Route", [routeValue(state)])
         if case .active(let ip, let country) = state.privateRelay {
             lines += rows(label: "Relay",
                           ["ON — Safari exits via \(ip ?? "?")\(country.map { " (\($0))" } ?? "")"])
@@ -64,19 +64,30 @@ public enum DiagnosticsReport {
 
     // MARK: - warnings
 
-    /// Every condition the UI badges, warns, or greys out — in a settled order
-    /// (connectivity first, then route, then the two leak kinds), so two reports of
-    /// the same situation are diffable against each other.
+    /// Exactly the warnings the dropdown itself would be showing for this state —
+    /// every gate comes from the shared predicates on `ExitState`, never from a
+    /// condition restated here. A pasted report that alarms about something the app
+    /// is not alarming about is worse than no report: it sends the reader chasing a
+    /// contradiction between the text and their own menu bar.
+    ///
+    /// Two gates matter in particular (both documented at the predicates):
+    /// hijack routes are an alarm only while offline — online they are reported as a
+    /// neutral fact on the Route line instead, see `routeValue` — and the two leak
+    /// verdicts are only shown while online, because `Monitor` deliberately carries
+    /// them across an offline refresh rather than recomputing them.
+    ///
+    /// Order is settled (connectivity, route, then the two leak kinds) so two reports
+    /// of the same situation are diffable against each other.
     private static func warnings(_ state: ExitState) -> [String] {
         var out: [String] = []
-        if state.connectivity == .offline { out.append("Offline — no internet connection") }
-        if state.route.hijackRoutePresent {
+        if state.showsOfflineWarning { out.append("Offline — no internet connection") }
+        if state.showsHijackWarning {
             out.append("OpenVPN hijack routes (0/1 + 128/1) present — tunnel likely dead")
         }
-        if state.ipv6Leak {
+        if state.showsIPv6LeakWarning {
             out.append("IPv6 leak — v6 exits via \(state.exit6?.org ?? "your ISP") (\(state.exit6?.countryCode ?? "?"))")
         }
-        switch state.dns.leak {
+        switch state.visibleDNSLeak {
         case .confirmed:
             let address = state.dns.egressIP ?? "?"
             if let org = state.dns.egressOrg, !org.isEmpty {
@@ -86,7 +97,7 @@ public enum DiagnosticsReport {
             }
         case .suspected:
             out.append("DNS leak suspected — resolver exits outside the tunnel")
-        case .none, .unknown:
+        case .none, .some:
             break
         }
         return out
@@ -111,11 +122,30 @@ public enum DiagnosticsReport {
         return ([exit.ip, place.isEmpty ? nil : place, exit.org].compactMap { $0 }).joined(separator: " · ")
     }
 
-    private static func routeValue(_ route: RouteInfo) -> String {
-        guard let iface = route.defaultInterface else { return "no default route" }
-        if route.isVPN { return "\(route.vpnName ?? "unknown VPN") (\(iface)) owns default route" }
-        if let kind = route.linkKind { return "\(kind) (\(iface))" }
-        return iface
+    /// The default route, plus — when the OpenVPN hijack pair is present on an
+    /// otherwise working connection — that pair as a neutral FACT.
+    ///
+    /// The fact is worth keeping: leftover 0/1 + 128/1 routes are a real, recurring
+    /// failure mode, and a bug report is exactly where someone should see them. What
+    /// it must not do is claim the tunnel is dead — the connection demonstrably
+    /// works, and the dropdown says nothing here either. The alarm version of this
+    /// line lives in `warnings`, gated on the machine actually being offline.
+    private static func routeValue(_ state: ExitState) -> String {
+        let route = state.route
+        var value: String
+        if let iface = route.defaultInterface {
+            if route.isVPN {
+                value = "\(route.vpnName ?? "unknown VPN") (\(iface)) owns default route"
+            } else if let kind = route.linkKind {
+                value = "\(kind) (\(iface))"
+            } else {
+                value = iface
+            }
+        } else {
+            value = "no default route"
+        }
+        if state.showsHijackFact { value += " · hijack pair (0/1 + 128/1) present" }
+        return value
     }
 
     /// Configured resolvers, deduped by address (`DNSConfigReader` emits the same

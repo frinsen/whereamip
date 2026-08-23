@@ -147,6 +147,17 @@ public actor Monitor {
         let dnsCfg = dnsConfig.snapshot()
         new.dns.resolvers = dnsCfg.resolvers
         new.dns.encryption = dnsCfg.encryption
+        // Everything below is gated on being online, which means `ipv6Leak` and
+        // `dns.leak` KEEP the values they came in with whenever this refresh finds the
+        // machine offline — deliberate (an unreachable network is not evidence that a
+        // leak was fixed, and re-deciding from a failed round would flap the verdict),
+        // and not to be "fixed" by clearing them here.
+        //
+        // The consequence belongs to whoever DISPLAYS them: an offline state's leak
+        // fields describe the last online moment, not now. That's why the shared
+        // warning-visibility predicates in ExitState.swift only expose the leak
+        // warnings while online, and why both the dropdown and the diagnostics report
+        // go through them rather than reading these flags directly.
         if new.connectivity != .offline {
             // Stack-pinned dual-stack measurement (IPv6 leak detector, Phase 1): api4/api6
             // force the request over each protocol family independently. Both are under

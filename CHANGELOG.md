@@ -11,13 +11,17 @@ install-ready notes per version.
 ### Added
 - **Copy Diagnostics** (⇧⌘C, first row above Refresh): puts the whole dropdown
   on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
-  configured resolvers, answering resolvers — with every active warning
-  (confirmed IPv6 leak, DNS leak confirmed or suspected, OpenVPN hijack routes,
-  offline) called out on its own labelled line at the top. Paste it into a bug
-  report. It writes to the local clipboard and sends nothing anywhere, collects
-  nothing new, and shows only what the dropdown already showed. `whereamip
-  diagnostics` prints exactly the same text; `status`, `watch`, `config`, and
-  the JSON are unchanged.
+  configured resolvers, answering resolvers — with every warning the dropdown is
+  currently showing (offline, OpenVPN hijack routes while offline, confirmed
+  IPv6 leak, DNS leak confirmed or suspected) called out on its own labelled
+  line at the top. It warns about exactly what the app itself is warning about
+  and nothing more: leftover hijack routes on a *working* connection are noted
+  as a neutral fact on the Route line instead ("· hijack pair (0/1 + 128/1)
+  present"), and the two leak verdicts — which are deliberately carried over
+  rather than re-measured while offline — are not asserted in an offline report.
+  Paste it into a bug report. It writes to the local clipboard, sends nothing
+  anywhere, and collects nothing new. `whereamip diagnostics` prints exactly the
+  same text; `status`, `watch`, `config`, and the JSON are unchanged.
 - **⌥⌘C copies both exit addresses.** Hold ⌥ with the dropdown open and the
   exit-IP row turns into "Copy both exit addresses" — IPv4 and IPv6, one per
   line, addresses only. It appears only when an IPv6 exit was actually

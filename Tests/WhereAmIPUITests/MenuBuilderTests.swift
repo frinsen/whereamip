@@ -757,4 +757,50 @@ final class MenuBuilderTests: XCTestCase {
         let sub = MenuBuilder.dnsSubmenu(state: state, dnsProbeEnabled: true)
         XCTAssertFalse(sub.items.map(\.title).contains(L10n.string(.dnsCopyConfigured)))
     }
+
+    // MARK: - the dropdown and the pasted report must agree on what is a warning
+
+    func testMenuAndDiagnosticsReportAgreeOnEveryWarningAcrossConnectivity() {
+        // The anti-drift test for the shared predicates in ExitState: whatever the
+        // dropdown warns about, ⇧⌘C's text warns about, and nothing else. Both
+        // directions matter — a report that alarms where the menu is silent sends a
+        // bug reporter chasing a contradiction with their own menu bar.
+        var offlineHijack = vpnState()
+        offlineHijack.connectivity = .offline
+        offlineHijack.route.hijackRoutePresent = true
+
+        var onlineHijack = vpnState()
+        onlineHijack.route.hijackRoutePresent = true
+
+        var staleLeaksOffline = vpnState()      // leak fields survive an offline refresh
+        staleLeaksOffline.connectivity = .offline
+        staleLeaksOffline.ipv6Leak = true
+        staleLeaksOffline.dns.leak = .confirmed
+        staleLeaksOffline.dns.egressIP = "8.8.8.8"
+
+        var liveLeaks = vpnState()
+        liveLeaks.ipv6Leak = true
+        liveLeaks.dns.leak = .confirmed
+        liveLeaks.dns.egressIP = "8.8.8.8"
+
+        var suspected = vpnState()
+        suspected.dns.leak = .suspected
+
+        for state in [vpnState(), offlineHijack, onlineHijack, staleLeaksOffline, liveLeaks, suspected] {
+            let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                         launchAtLogin: false, actions: MenuActions())
+            let rows = titles(menu).joined(separator: "|")
+            let report = DiagnosticsReport.text(for: state)
+            let context = "state: \(state.connectivity), report:\n\(report)"
+            XCTAssertEqual(rows.contains(L10n.string(.menuOffline)),
+                           report.contains("Warning Offline"), context)
+            XCTAssertEqual(rows.contains(stem(.menuOfflineHijack)),
+                           report.contains("Warning OpenVPN hijack"), context)
+            XCTAssertEqual(rows.contains(stem(.menuLeakIPv6)),
+                           report.contains("Warning IPv6 leak"), context)
+            XCTAssertEqual(rows.contains(stem(.menuLeakDNS))
+                            || rows.contains(L10n.string(.menuLeakDNSSuspected)),
+                           report.contains("Warning DNS leak"), context)
+        }
+    }
 }

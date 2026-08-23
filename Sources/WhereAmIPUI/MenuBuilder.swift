@@ -138,7 +138,10 @@ public enum MenuBuilder {
         // Header + warnings
         if state.connectivity == .offline {
             menu.addItem(info(L10n.string(.menuOffline)))
-            if state.route.hijackRoutePresent {
+            // Same predicate the pasted diagnostics report uses (ExitState, warning
+            // visibility) — identical behavior to the inline check this replaces,
+            // but the two frontends can no longer drift on what counts as a warning.
+            if state.showsHijackWarning {
                 menu.addItem(info(L10n.string(.menuOfflineHijack)))
             }
             if let exit = state.exit {
@@ -157,19 +160,26 @@ public enum MenuBuilder {
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
-            if state.ipv6Leak {
+            // Both gates come from the shared warning-visibility predicates in Core
+            // (see ExitState): this branch is already the online one, so behavior is
+            // unchanged — what's gained is that the diagnostics report reads the same
+            // rules instead of a second copy of them.
+            if state.showsIPv6LeakWarning {
                 let org = state.exit6?.org ?? L10n.string(.menuOrgUnknown)
                 let cc = state.exit6?.countryCode ?? "?"
                 menu.addItem(info(L10n.string(.menuLeakIPv6, org, cc)))
             }
-            if state.dns.leak == .confirmed {
+            switch state.visibleDNSLeak {
+            case .confirmed:
                 if let org = state.dns.egressOrg, !org.isEmpty {
                     menu.addItem(info(L10n.string(.menuLeakDNSWithOperator, org, state.dns.egressIP ?? "?")))
                 } else {
                     menu.addItem(info(L10n.string(.menuLeakDNS, state.dns.egressIP ?? "?")))
                 }
-            } else if state.dns.leak == .suspected {
+            case .suspected:
                 menu.addItem(info(L10n.string(.menuLeakDNSSuspected)))
+            case .none, .some:
+                break
             }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }

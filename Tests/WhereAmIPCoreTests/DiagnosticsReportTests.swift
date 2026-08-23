@@ -124,11 +124,74 @@ final class DiagnosticsReportTests: XCTestCase {
             "Warning DNS leak suspected — resolver exits outside the tunnel"), report(state))
     }
 
-    func testHijackRoutesAreAWarningLine() {
+    // MARK: - parity with the dropdown: an alarm here only where the app alarms
+
+    func testHijackRoutesWarnOnlyWhenTheMachineIsActuallyOffline() {
+        // The dropdown shows its hijack row exclusively inside the offline branch,
+        // where it EXPLAINS an already-established offline state. Standing alone it
+        // would be a claim ("tunnel likely dead") contradicted by the working
+        // connection described three lines below it.
+        var offline = fullState()
+        offline.connectivity = .offline
+        offline.route.hijackRoutePresent = true
+        XCTAssertTrue(lines(offline).contains(
+            "Warning OpenVPN hijack routes (0/1 + 128/1) present — tunnel likely dead"), report(offline))
+
+        var online = fullState()
+        online.route.hijackRoutePresent = true
+        XCTAssertFalse(report(online).contains("Warning"), report(online))
+    }
+
+    func testHijackPairIsKeptAsANeutralFactOnTheRouteLineWhileOnline() {
+        // Not lost, just demoted: leftover 0/1 + 128/1 routes are a real recurring
+        // failure mode and belong in a bug report — as a fact, with no health claim.
         var state = fullState()
         state.route.hijackRoutePresent = true
         XCTAssertTrue(lines(state).contains(
-            "Warning OpenVPN hijack routes (0/1 + 128/1) present — tunnel likely dead"), report(state))
+            "Route   Cloudflare WARP (utun17) owns default route · hijack pair (0/1 + 128/1) present"),
+                      report(state))
+        XCTAssertFalse(report(state).contains("likely dead"))
+    }
+
+    func testNoHijackFactWhenTheRoutesAreAbsent() {
+        XCTAssertFalse(report(fullState()).contains("hijack"))
+    }
+
+    func testOfflineHijackIsAWarningAndNotAlsoARouteFact() {
+        // One condition, stated once, in the register that fits the situation.
+        var state = fullState()
+        state.connectivity = .offline
+        state.route.hijackRoutePresent = true
+        let out = lines(state)
+        XCTAssertTrue(out.contains { $0.hasPrefix("Warning OpenVPN hijack") }, report(state))
+        XCTAssertFalse(out.contains { $0.hasPrefix("Route") && $0.contains("hijack pair") }, report(state))
+    }
+
+    func testStaleLeakVerdictsAreNeverAssertedWhileOffline() {
+        // Monitor.runFullRefresh recomputes ipv6Leak and dns.leak ONLY while online
+        // and otherwise carries the previous values forward (deliberate — see the
+        // comment there). Reporting them offline would assert a leak last measured
+        // before the connection dropped, and one the dropdown is not showing either.
+        var state = fullState()
+        state.connectivity = .offline
+        state.ipv6Leak = true
+        state.exit6 = ExitInfo(ip: "2003:e1:1234::1", countryCode: "DE", org: "Deutsche Telekom AG",
+                               provider: "ipwho.is", fetchedAt: since)
+        state.dns.leak = .confirmed
+        state.dns.egressIP = "8.8.8.8"
+        let text = report(state)
+        XCTAssertFalse(text.contains("IPv6 leak"), text)
+        XCTAssertFalse(text.contains("DNS leak"), text)
+        XCTAssertTrue(lines(state).contains("Warning Offline — no internet connection"), text)
+    }
+
+    func testCheckingCountsAsOnlineForWarningVisibility() {
+        // The dropdown branches on offline only, so a first-ever refresh still in
+        // flight renders the online layout — the report must agree.
+        var state = fullState()
+        state.connectivity = .checking
+        state.ipv6Leak = true
+        XCTAssertTrue(lines(state).contains { $0.hasPrefix("Warning IPv6 leak") }, report(state))
     }
 
     func testOfflineIsAWarningLineAndTheExitIsMarkedAsLastSeen() {
@@ -141,17 +204,31 @@ final class DiagnosticsReportTests: XCTestCase {
                       report(state))
     }
 
-    func testWarningsComeDirectlyAfterTheHeaderAndInASettledOrder() {
+    func testOfflineWarningsComeDirectlyAfterTheHeaderInASettledOrder() {
         var state = fullState()
         state.connectivity = .offline
         state.route.hijackRoutePresent = true
+        // Both leak fields are stale here by construction (see the test above) and
+        // must not join the list, however set they are.
+        state.ipv6Leak = true
+        state.dns.leak = .confirmed
+        let out = lines(state, checked: checked)
+        XCTAssertEqual(out.filter { $0.hasPrefix("Warning") },
+                       ["Warning Offline — no internet connection",
+                        "Warning OpenVPN hijack routes (0/1 + 128/1) present — tunnel likely dead"],
+                       report(state))
+        XCTAssertEqual(Array(out[1...2]).map { String($0.prefix(15)) },
+                       ["Warning Offline", "Warning OpenVPN"], report(state))
+    }
+
+    func testOnlineWarningsComeDirectlyAfterTheHeaderInASettledOrder() {
+        var state = fullState()
         state.ipv6Leak = true
         state.dns.leak = .confirmed
         state.dns.egressIP = "8.8.8.8"
         let out = lines(state, checked: checked)
-        XCTAssertEqual(Array(out[1...4]).map { String($0.prefix(15)) },
-                       ["Warning Offline", "Warning OpenVPN", "Warning IPv6 le", "Warning DNS lea"],
-                       report(state))
+        XCTAssertEqual(Array(out[1...2]).map { String($0.prefix(15)) },
+                       ["Warning IPv6 le", "Warning DNS lea"], report(state))
     }
 
     func testAHealthyStateCarriesNoWarningLinesAtAll() {

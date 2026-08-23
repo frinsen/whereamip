@@ -258,3 +258,43 @@ public extension ExitState {
         }
     }
 }
+
+/// Which warnings a frontend is entitled to SHOW — as opposed to which flags happen
+/// to be set on the state right now. Two facts make this a shared predicate rather
+/// than an `if` repeated at each call site:
+///
+///   - The hijack-route pair is only evidence of a dead tunnel when nothing actually
+///     loads. Leftover 0/1 + 128/1 routes next to a working connection are a real
+///     (and field-observed) condition, but they are not an alarm — the dropdown has
+///     always shown that row only inside its offline branch.
+///   - `ipv6Leak` and `dns.leak` are PRESERVED across an offline refresh (see
+///     `Monitor.runFullRefresh`, which recomputes both only while online), so an
+///     offline state's leak fields describe the last online moment, not now. Showing
+///     them offline would assert a leak last measured before the link dropped.
+///
+/// `MenuBuilder` and `DiagnosticsReport` both read these, so the dropdown and the
+/// pasted report cannot drift apart on what counts as a warning. `.checking` is
+/// treated as "not offline" throughout, exactly as the dropdown's own branching does.
+public extension ExitState {
+    /// The connection itself — the headline warning, and the gate for the rest.
+    var showsOfflineWarning: Bool { connectivity == .offline }
+
+    /// Hijack routes as an ALARM: only ever the explanation of an already-established
+    /// offline state ("tunnel likely dead"), never a standalone claim.
+    var showsHijackWarning: Bool { connectivity == .offline && route.hijackRoutePresent }
+
+    /// The same routes as a neutral FACT: present, attached to the route line they
+    /// belong to, with no claim about the tunnel's health. This is what keeps the
+    /// condition reportable while online without it becoming an alarm.
+    var showsHijackFact: Bool { connectivity != .offline && route.hijackRoutePresent }
+
+    /// A confirmed IPv6 leak, and only while that measurement can still be current.
+    var showsIPv6LeakWarning: Bool { connectivity != .offline && ipv6Leak }
+
+    /// The DNS verdict when it is both a warning and current; nil otherwise — so a
+    /// caller can switch on it without re-deriving the gate.
+    var visibleDNSLeak: DNSLeak? {
+        guard connectivity != .offline else { return nil }
+        return (dns.leak == .confirmed || dns.leak == .suspected) ? dns.leak : nil
+    }
+}

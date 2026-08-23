@@ -38,8 +38,9 @@ cannot be observed from here.
 - **⌥⌘C** — copy both exit addresses, IPv4 and IPv6. Hold **⌥** with the dropdown
   open and the IP row turns into this wider copy; it only appears when an IPv6 exit
   was measured.
-- **⇧⌘C** — Copy Diagnostics: the whole dropdown as text, including any warnings,
-  ready to paste into a bug report. It goes to your clipboard and nowhere else.
+- **⇧⌘C** — Copy Diagnostics: the whole dropdown as text, with the same warnings it
+  is showing you and no others, ready to paste into a bug report. It goes to your
+  clipboard and nowhere else.
 - **⌘R** — Refresh. **⌘?** — this window. **⌘Q** — quit.
 
 **The command line**
