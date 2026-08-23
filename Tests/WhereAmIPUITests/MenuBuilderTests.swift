@@ -582,4 +582,179 @@ final class MenuBuilderTests: XCTestCase {
         (row?.representedObject as? AnyObject as? NSObject)?.perform(#selector(ActionTarget.fire))
         XCTAssertTrue(called)
     }
+
+    // MARK: - copy actions: the exit-row alternate
+
+    func dualStackState() -> ExitState {
+        var state = vpnState()
+        state.exit6 = ExitInfo(ip: "2a09:bac5:27cd:2a0::43:80", countryCode: "NL", city: "Amsterdam",
+                               org: "M247 Europe SRL", provider: "ipwho.is", fetchedAt: Date())
+        return state
+    }
+
+    func testExitIPRowIsUnchangedAndStillCopiesTheIPv4() {
+        var fired = false
+        let menu = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyIP: { fired = true }))
+        let item = menu.items.first { $0.title == "185.107.56.123" }!
+        XCTAssertEqual(item.keyEquivalent, "c")
+        XCTAssertEqual(item.keyEquivalentModifierMask, [.command])
+        XCTAssertFalse(item.isAlternate)
+        (item.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertTrue(fired)
+    }
+
+    func testAlternateExitRowSitsDirectlyAfterTheIPRowAndSharesItsKey() {
+        let menu = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu)
+        let ipIndex = all.firstIndex(of: "185.107.56.123")!
+        let alternateIndex = all.firstIndex(of: L10n.string(.menuCopyExitBoth))!
+        // Adjacency is not cosmetic: AppKit only treats an item as the alternate of
+        // the one it directly follows, and only when both carry the same key.
+        XCTAssertEqual(alternateIndex, ipIndex + 1)
+        let alternate = menu.items[alternateIndex]
+        XCTAssertTrue(alternate.isAlternate)
+        XCTAssertEqual(alternate.keyEquivalent, menu.items[ipIndex].keyEquivalent)
+        XCTAssertEqual(alternate.keyEquivalentModifierMask, [.command, .option])
+        XCTAssertEqual(menu.items[ipIndex].keyEquivalentModifierMask, [.command])
+    }
+
+    func testAlternateExitRowCopiesBothAddressesAndNothingElse() {
+        var payload: String?
+        let menu = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyText: { payload = $0 }))
+        let alternate = menu.items.first { $0.title == L10n.string(.menuCopyExitBoth) }!
+        (alternate.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        // Addresses only — no city, no operator, no "IPv4:"/"IPv6:" label prefix.
+        XCTAssertEqual(payload, "185.107.56.123\n2a09:bac5:27cd:2a0::43:80")
+    }
+
+    func testNoAlternateExitRowWithoutAnIPv6Exit() {
+        // An alternate promising two addresses while copying one is the bug this avoids.
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        XCTAssertFalse(titles(menu).contains(L10n.string(.menuCopyExitBoth)))
+        XCTAssertFalse(menu.items.contains { $0.isAlternate })
+    }
+
+    // MARK: - copy diagnostics
+
+    func testCopyDiagnosticsIsTheFirstRowOfTheBottomActionBlock() {
+        let menu = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu)
+        let diagnosticsIndex = all.firstIndex(of: L10n.string(.menuCopyDiagnostics))!
+        XCTAssertEqual(all.firstIndex(of: L10n.string(.menuRefresh)), diagnosticsIndex + 1)
+        XCTAssertTrue(menu.items[diagnosticsIndex - 1].isSeparatorItem)
+        let item = menu.items[diagnosticsIndex]
+        XCTAssertEqual(item.keyEquivalent, "c")
+        XCTAssertEqual(item.keyEquivalentModifierMask, [.command, .shift])
+        XCTAssertTrue(item.isEnabled)
+    }
+
+    func testCopyDiagnosticsCopiesExactlyWhatTheReportRenders() {
+        var payload: String?
+        var state = dualStackState()
+        state.since = fixedDate
+        let checked = Date(timeIntervalSince1970: 1_700_000_500)
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, dnsProbeEnabled: false,
+                                     lastChecked: checked, actions: MenuActions(copyText: { payload = $0 }))
+        let item = menu.items.first { $0.title == L10n.string(.menuCopyDiagnostics) }!
+        (item.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        // The dropdown's own "Checked" stamp and DNS-probe setting travel into the
+        // report — a pasted report says what the menu said, opt-out included.
+        XCTAssertEqual(payload, DiagnosticsReport.text(for: state, checked: checked, dnsProbeEnabled: false))
+        XCTAssertTrue(payload!.contains("DNS check disabled"))
+    }
+
+    // MARK: - help row
+
+    func testHelpRowSitsDirectlyAboveSettingsAndFires() {
+        var fired = false
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(showHelpWindow: { fired = true }))
+        let all = titles(menu)
+        let helpIndex = all.firstIndex(of: L10n.string(.menuHelp))!
+        XCTAssertEqual(all.firstIndex(of: L10n.string(.menuSettings)), helpIndex + 1)
+        let item = menu.items[helpIndex]
+        XCTAssertEqual(item.keyEquivalent, "?")
+        XCTAssertEqual(item.keyEquivalentModifierMask, [.command])
+        (item.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertTrue(fired)
+    }
+
+    // MARK: - DNS bulk copy rows
+
+    func testDNSSubmenuCopyRowsCloseTheSubmenuAndCarryNoKeyEquivalents() {
+        let sub = dnsSubmenu(dnsState())!
+        let rows = sub.items.map(\.title)
+        let configuredCopy = rows.firstIndex(of: L10n.string(.dnsCopyConfigured))!
+        let answeringCopy = rows.firstIndex(of: L10n.string(.dnsCopyAnswering))!
+        XCTAssertEqual(answeringCopy, configuredCopy + 1)
+        XCTAssertEqual(answeringCopy, sub.items.count - 1, "copy rows close the submenu: \(rows)")
+        XCTAssertTrue(sub.items[configuredCopy - 1].isSeparatorItem)
+        // Deliberately dropped: the rows are visible in the submenu, and one more
+        // ⌘-something would compete with the shortcuts on the main dropdown.
+        XCTAssertEqual(sub.items[configuredCopy].keyEquivalent, "")
+        XCTAssertEqual(sub.items[answeringCopy].keyEquivalent, "")
+        XCTAssertTrue(sub.items[configuredCopy].isEnabled)
+        XCTAssertTrue(sub.items[answeringCopy].isEnabled)
+    }
+
+    func testConfiguredResolverCopyIsBareAddressesOnePerLine() {
+        var payload: String?
+        let menu = MenuBuilder.build(state: dnsState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyText: { payload = $0 }))
+        let sub = menu.items.first { $0.title.hasPrefix(stem(.dnsRow)) }!.submenu!
+        let row = sub.items.first { $0.title == L10n.string(.dnsCopyConfigured) }!
+        (row.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        // The ROW reads "192.168.178.1 — en0"; the PAYLOAD is the address alone, once.
+        XCTAssertEqual(payload, "192.168.178.1\n10.2.0.1")
+    }
+
+    func testAnsweringResolverCopyStripsOperatorLocationAndTransport() {
+        var payload: String?
+        let menu = MenuBuilder.build(state: dnsState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyText: { payload = $0 }))
+        let sub = menu.items.first { $0.title.hasPrefix(stem(.dnsRow)) }!.submenu!
+        let row = sub.items.first { $0.title == L10n.string(.dnsCopyAnswering) }!
+        (row.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertEqual(payload, "185.44.108.99\n2620:171:57:f003::244")
+    }
+
+    func testAnsweringResolverCopyFallsBackToTheBeaconEgress() {
+        var payload: String?
+        var state = dnsState()
+        state.dns.egressResolvers = []
+        state.dns.egressIP = "203.0.113.7"
+        let menu = MenuBuilder.build(state: state, style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyText: { payload = $0 }))
+        let sub = menu.items.first { $0.title.hasPrefix(stem(.dnsRow)) }!.submenu!
+        let row = sub.items.first { $0.title == L10n.string(.dnsCopyAnswering) }!
+        (row.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertEqual(payload, "203.0.113.7")
+    }
+
+    func testNoAnsweringCopyRowWhenTheProbeIsOffOrNothingAnswered() {
+        let offRows = dnsSubmenu(dnsState(), dnsProbeEnabled: false)!.items.map(\.title)
+        XCTAssertFalse(offRows.contains(L10n.string(.dnsCopyAnswering)), "got: \(offRows)")
+        XCTAssertTrue(offRows.contains(L10n.string(.dnsCopyConfigured)), "the local half stays copyable")
+
+        var state = dnsState()
+        state.dns.egressResolvers = []
+        state.dns.egressIP = nil
+        let rows = dnsSubmenu(state)!.items.map(\.title)
+        XCTAssertFalse(rows.contains(L10n.string(.dnsCopyAnswering)), "got: \(rows)")
+    }
+
+    func testNoConfiguredCopyRowWithoutConfiguredResolvers() {
+        // No resolvers at all means no DNS row to open in the first place, so this
+        // guard is exercised against the submenu builder directly.
+        var state = dnsState()
+        state.dns.resolvers = []
+        let sub = MenuBuilder.dnsSubmenu(state: state, dnsProbeEnabled: true)
+        XCTAssertFalse(sub.items.map(\.title).contains(L10n.string(.dnsCopyConfigured)))
+    }
 }

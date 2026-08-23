@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
     var welcomeWindowController: WelcomeWindowController?
+    // Separate from the welcome window's controller on purpose — the two windows
+    // are independent and may be open at the same time.
+    var helpWindowController: HelpWindowController?
     // Proof-of-freshness for the dropdown's "Checked:" row — app-local only,
     // never touches ExitState/Codable/the JSON golden files. Set exclusively
     // by runMonitorRefresh() below, which every direct fullRefresh/probeTick
@@ -244,6 +247,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(ip, forType: .string)
                 },
+                // Every other copy row hands its finished payload here — the text
+                // itself is derived in MenuBuilder from the same state this menu
+                // was built with (see MenuActions.copyText), so this end stays one
+                // pasteboard write and nothing else. Local clipboard only: no copy
+                // action in this app sends anything anywhere.
+                copyText: { text in
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                },
                 refresh: { [weak self] in
                     guard let self else { return }
                     self.setManualRefreshIndicator(true)
@@ -308,6 +320,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     guard let self else { return }
                     self.welcomeWindowController = WelcomeWindowController(settings: self.settings)
                     self.welcomeWindowController?.show()
+                },
+                showHelpWindow: { [weak self] in
+                    // Held in its own property, independent of the welcome
+                    // window's: the two coexist, and opening one must never
+                    // close, move, or reset the other. Re-created per open (like
+                    // the welcome window's manual re-show) so a closed window
+                    // reopens reliably rather than depending on a stale one.
+                    guard let self else { return }
+                    self.helpWindowController = HelpWindowController()
+                    self.helpWindowController?.show()
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {
