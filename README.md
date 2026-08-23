@@ -19,6 +19,8 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - iCloud Private Relay awareness — knows Safari may exit somewhere your apps don't
 - Dual-stack IPv6 leak detection — probes your IPv4 and IPv6 exits independently (stack-pinned lookups, not a single dual-stack host); when a VPN owns the v4 route but IPv6 still exits natively and the two genuinely differ, a confirmed ⚠️ IPv6 leak warning shows up everywhere (menu bar badge, dropdown row, notification, CLI). Found in the field: PureVPN profiles that tunnel only IPv4 while native IPv6 keeps leaking via the home ISP
 - DNS resolver display and leak detection — shows which resolvers macOS uses (per interface) and whether encrypted DNS (DoH/DoT profile) is in force; an optional active check discovers **all** of your load-balanced egress resolvers, not just one, via a round of six cache-busting TXT lookups (random names under `test.dnscheck.tools`, sent through mDNSResponder on each full refresh) and verifies that queries exit through the VPN tunnel. The dropdown's DNS row opens into the full picture: configured resolvers with their interface attribution, and every egress resolver with operator, location, and transport. `config set dns false` disables the check entirely, so no such query is ever sent
+- Copy what you're looking at: **⌘C** copies the exit IP, **⌥⌘C** (hold Option) copies both exit addresses, IPv4 and IPv6, and **⇧⌘C** copies a full diagnostics report — every row of the dropdown plus any active warning, as plain text, ready to paste into a bug report (`whereamip diagnostics` prints the same thing). The DNS submenu copies its resolver lists in bulk, bare addresses one per line
+- **⌘? opens a help window** — what the menu bar symbol means, Since vs Checked, how to read the DNS submenu, every keyboard shortcut, and the CLI. A menu bar accessory has no Help menu, so this row is the substitute
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications (off by default) — alerts on exit, route, or connectivity changes; launch at login
@@ -69,6 +71,17 @@ $ whereamip status --json
 $ whereamip watch            # prints a new status line whenever exit IP, route, or connectivity changes
 $ whereamip watch --json
 
+$ whereamip diagnostics      # paste-ready report for a bug report — same text the dropdown's ⇧⌘C copies
+WhereAmIP 0.4.2 — checked 17.08.26, 21:46:41
+Warning IPv6 leak — v6 exits via Deutsche Telekom AG (DE)
+Exit    104.28.225.96 · Berlin, DE · Cloudflare, Inc.
+IPv6    2a09:bac5:27cd:2a0::43:80 · Berlin, DE
+Route   Cloudflare WARP (utun17) owns default route
+Since   17.08.26, 21:40:13
+DNS     127.0.2.2, 127.0.2.3 (utun17)
+        192.168.178.1 (en0)
+Egress  162.158.245.7 · Cloudflare, Inc. (Berlin, DE) · UDP
+
 $ whereamip config get       # notify=false / style=emoji / updates=true / dns=true
 $ whereamip config set style code
 $ whereamip config set notify true
@@ -94,11 +107,11 @@ That's iCloud Private Relay: it carries Safari traffic through Apple's relay whi
 No — see Privacy below. No accounts, no API keys, no tracking.
 
 **How do I debug it / attach logs to a bug report?**
-Run `whereamip debug`, reproduce the issue, and paste the output into your bug report. It live-streams WhereAmIP's diagnostic log — nothing is written to disk, before or after you run it.
+Start with **⇧⌘C** in the dropdown (or `whereamip diagnostics`): that copies a compact report of everything the app currently sees, warnings included, straight to your clipboard — nothing leaves your Mac. For a live trace, run `whereamip debug`, reproduce the issue, and paste that too. It streams WhereAmIP's diagnostic log — nothing is written to disk, before or after you run it.
 
 ## Privacy — your data stays yours
 
-WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, the Private Relay check, and — for the dual-stack IPv6 leak detector — stack-pinned lookups to `api4.ipify.org`/`api6.ipify.org` over HTTPS) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
+WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothing is written to disk except your display-style preference. The copy actions (⌘C, ⌥⌘C, ⇧⌘C, and the DNS submenu's copy rows) write to your local clipboard and nowhere else — Copy Diagnostics assembles its report from what the dropdown is already showing, sends nothing anywhere, and triggers no extra lookup of any kind. The only network requests are the documented lookups needed to answer "where do I exit right now" (keyless public geo APIs, a connectivity probe, the Private Relay check, and — for the dual-stack IPv6 leak detector — stack-pinned lookups to `api4.ipify.org`/`api6.ipify.org` over HTTPS) — your IP is never sent anywhere else, and past states are gone the moment they change. If you *want* a history, you opt in yourself: `whereamip watch --json >> your-own-file` keeps it wherever you decide.
 
 The DNS leak check is the one part that sends DNS queries of its own: per full refresh it looks up the TXT record of up to six random names under `test.dnscheck.tools` (each name is used once, so nothing is cached and every lookup reaches that zone's authoritative server, which reports which resolver address asked). That server therefore sees your resolvers' egress addresses — the same thing every website you visit sees — and nothing else about you; the queries carry no identifier beyond the random label. If that service is unreachable, a single TXT lookup of Google's `o-o.myaddr.l.google.com` beacon serves as the fallback. Reading your resolver *configuration* needs no network at all and always works. Turn the check off with `whereamip config set dns false` (or the "Check for DNS Leaks" toggle in Settings) and no such query is ever sent.
 

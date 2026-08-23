@@ -14,6 +14,11 @@ No Swift needed for any of these:
   key and its `%@`/`%d` placeholders (count and order); everything else is free.
 - **The first-start onboarding text**:
   `Sources/WhereAmIPUI/Resources/welcome/intro.md`.
+- **The help window's body** (⌘? in the dropdown):
+  `Sources/WhereAmIPUI/Resources/help/help.md` — one evergreen document, edited in
+  place. Section titles are `**bold paragraphs**`, not `#` headings: the renderer
+  strips hashes without styling what's left. `HelpContentTests` asserts the topics
+  it must still cover, so dropping a section is caught.
 - **A new release's what's-new highlights**: add
   `Sources/WhereAmIPUI/Resources/welcome/<milestone>.md` (3–5 user-facing bullets)
   and bump `welcomeMilestone` in `Sources/WhereAmIPCore/Version.swift` to match.

@@ -9,6 +9,29 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
+- **Copy Diagnostics** (⇧⌘C, first row above Refresh): puts the whole dropdown
+  on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
+  configured resolvers, answering resolvers — with every active warning
+  (confirmed IPv6 leak, DNS leak confirmed or suspected, OpenVPN hijack routes,
+  offline) called out on its own labelled line at the top. Paste it into a bug
+  report. It writes to the local clipboard and sends nothing anywhere, collects
+  nothing new, and shows only what the dropdown already showed. `whereamip
+  diagnostics` prints exactly the same text; `status`, `watch`, `config`, and
+  the JSON are unchanged.
+- **⌥⌘C copies both exit addresses.** Hold ⌥ with the dropdown open and the
+  exit-IP row turns into "Copy both exit addresses" — IPv4 and IPv6, one per
+  line, addresses only. It appears only when an IPv6 exit was actually
+  measured. Plain ⌘C on the IP row is unchanged.
+- **Bulk copy in the DNS submenu**: "Copy configured resolvers" and "Copy
+  answering resolvers" at its foot, each copying bare addresses one per line —
+  no interface suffixes, operator names, locations, or transports. The
+  answering row is absent when the DNS check is off or nothing has answered
+  yet.
+- **WhereAmIP Help** (⌘?, directly above Settings) opens a help window: what
+  the menu bar symbol means, Since vs Checked, how to read the DNS submenu, the
+  keyboard shortcuts, and the CLI. The app is a menu bar accessory with no menu
+  bar of its own, so this row stands in for the Help menu. The welcome window is
+  unaffected and the two can be open at the same time.
 - **DNS egress enumeration**: the leak check now discovers *all* of your
   egress resolvers instead of one. Public resolvers are load-balanced across
   a pool, so a single lookup only ever reveals whichever member answered it;
