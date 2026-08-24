@@ -7,6 +7,23 @@ import XCTest
 /// still pass (key == key). These tests are the ones that would fail instead.
 final class L10nTests: XCTestCase {
 
+    // The literal assertions below pin ENGLISH values, so the language override
+    // must be pinned too: without this, a host Mac whose real app settings carry
+    // an explicit language choice (Settings ▸ Language ▸ Deutsch) leaks that
+    // choice into the suite — found in the field the first time the maintainer
+    // ended a picker test on Deutsch and five assertions went red. Same rule as
+    // pinning the system locale, one seam further up.
+    private var savedLanguageSetting: (() -> String)!
+    override func setUp() {
+        super.setUp()
+        savedLanguageSetting = L10n.languageSetting
+        L10n.languageSetting = { "en" }
+    }
+    override func tearDown() {
+        L10n.languageSetting = savedLanguageSetting
+        super.tearDown()
+    }
+
     // MARK: - the en bundle actually resolves
 
     func testEnglishBundleResolvesRealCopyNotTheKey() {
