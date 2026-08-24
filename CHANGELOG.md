@@ -8,6 +8,8 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+## [0.5] — 2026-08-24
+
 ### Added
 - **DNS egress enumeration**: the leak check now discovers *all* of your
   egress resolvers instead of one. Public resolvers are load-balanced across
