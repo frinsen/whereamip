@@ -152,15 +152,23 @@ final class WelcomeWindowController: NSWindowController {
         // so a longer "what's new" body resolves into a taller window at open
         // (the stack's fitting size, see the bottom constraint below) and never
         // resizes afterwards. Nothing re-renders this label at runtime.
+        // ReadingLabel, not the raw wrapping-label factory: that factory is SELECTABLE, and
+        // a click on selectable attributed text hands it to the window's field editor, which
+        // rebuilds it from the plain string and writes the flattened result back — bold gone,
+        // bullet indents collapsed, permanently (field-reported on 0.5.5, reproduced in
+        // ReadingLabelTests). Interactivity only; the font, alignment and width below are
+        // unchanged, so this moves nothing in the tuned layout.
         let bodyFont = NSFont.systemFont(ofSize: 12)
-        let body = NSTextField(wrappingLabelWithString: "")
-        body.font = bodyFont
+        let body = ReadingLabel.wrapping(font: bodyFont)
         body.attributedStringValue = WelcomeContent.rendered(copy.markdown, font: bodyFont,
                                                              alignment: .center)
 
-        let hint = NSTextField(wrappingLabelWithString: L10n.string(.welcomeHint))
+        // Plain strings, so they had nothing to lose to the field editor — but they are the
+        // same kind of thing (copy you read), and a caret blinking in the middle of a
+        // sentence is an affordance for an interaction that does nothing.
+        let hint = ReadingLabel.wrapping(font: .systemFont(ofSize: 11))
+        hint.stringValue = L10n.string(.welcomeHint)
         hint.alignment = .center
-        hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
 
         // MARK: setup band — header + the three live-state toggles
@@ -276,8 +284,8 @@ final class WelcomeWindowController: NSWindowController {
 
         // MARK: commit band — privacy note + Done
 
-        let privacy = NSTextField(wrappingLabelWithString: L10n.string(.welcomePrivacy))
-        privacy.font = .systemFont(ofSize: 10)
+        let privacy = ReadingLabel.wrapping(font: .systemFont(ofSize: 10))
+        privacy.stringValue = L10n.string(.welcomePrivacy)
         privacy.textColor = .secondaryLabelColor
         privacy.alignment = .center
 

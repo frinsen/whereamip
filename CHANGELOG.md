@@ -8,6 +8,15 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Fixed
+- Clicking in the welcome window no longer strips its formatting. The body text was a
+  selectable label, so a click handed it to the window's field editor, which rebuilt the
+  text from its plain contents and wrote the flattened version back — bold lead-ins turned
+  regular and the bullet indents collapsed into one run-together paragraph, permanently.
+  The welcome copy is now inert (it is text to read; ⌘D remains the way to copy live
+  state). The help window is unaffected: its body is a text view, which keeps its own text
+  and stays selectable so the GitHub link keeps working.
+
 ## [0.5.5] — 2026-08-24
 
 ### Added
