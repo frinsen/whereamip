@@ -178,7 +178,8 @@ public enum MenuBuilder {
                 }
             case .suspected:
                 menu.addItem(info(L10n.string(.menuLeakDNSSuspected)))
-            case .none, .some:
+            default:
+                // Both "no leak worth showing" and "gated off while offline".
                 break
             }
             if let exit = state.exit {
@@ -225,8 +226,15 @@ public enum MenuBuilder {
         // VPN / relay block — only applicable lines
         var block: [NSMenuItem] = []
         if state.route.isVPN, let iface = state.route.defaultInterface {
-            block.append(info(L10n.string(.menuRouteVPN,
-                              state.route.vpnName ?? L10n.string(.menuRouteVPNUnknown), iface)))
+            // Named or not, this row states the same fact; only the shape differs. The
+            // unnamed variant is a whole row of its own rather than the word "unknown"
+            // dropped into the named one — "VPN: unknown (utun4)" reads as a malfunction,
+            // "VPN (utun4)" reads as what it is: a tunnel we can't put a brand to.
+            if let vpnName = state.route.vpnName {
+                block.append(info(L10n.string(.menuRouteVPN, vpnName, iface)))
+            } else {
+                block.append(info(L10n.string(.menuRouteVPNUnnamed, iface)))
+            }
         } else if let iface = state.route.defaultInterface, let kind = state.route.linkKind {
             block.append(info(L10n.string(.menuRouteLink, kind, iface)))
         }

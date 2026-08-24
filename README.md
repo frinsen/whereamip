@@ -16,6 +16,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - 🇩🇪 Country flag of your exit IP in the menu bar — flips to 🇳🇱 the moment a VPN grabs your default route, ❌ when the internet is unreachable (even when Wi-Fi claims otherwise)
 - Real-reachability probe, not interface status — catches the "connected but blackholed" state
 - Dropdown: public IP (click to copy), city/country, ISP/org, which VPN interface owns the default route, last-change timestamp
+- Truthful VPN naming — the VPN that owns your default route is named from the macOS network service it registers (works for any client, including ones this app has never heard of), with fingerprints for Tailscale, Cloudflare WARP and OpenVPN on top. A tunnel it can't put a brand to shows as "VPN (utun4)" rather than a confident guess
 - iCloud Private Relay awareness — knows Safari may exit somewhere your apps don't
 - Dual-stack IPv6 leak detection — probes your IPv4 and IPv6 exits independently (stack-pinned lookups, not a single dual-stack host); when a VPN owns the v4 route but IPv6 still exits natively and the two genuinely differ, a confirmed ⚠️ IPv6 leak warning shows up everywhere (menu bar badge, dropdown row, notification, CLI). Found in the field: PureVPN profiles that tunnel only IPv4 while native IPv6 keeps leaking via the home ISP
 - DNS resolver display and leak detection — shows which resolvers macOS uses (per interface) and whether encrypted DNS (DoH/DoT profile) is in force; an optional active check discovers **all** of your load-balanced egress resolvers, not just one, via a round of six cache-busting TXT lookups (random names under `test.dnscheck.tools`, sent through mDNSResponder on each full refresh) and verifies that queries exit through the VPN tunnel. The dropdown's DNS row opens into the full picture: configured resolvers with their interface attribution, and every egress resolver with operator, location, and transport. `config set dns false` disables the check entirely, so no such query is ever sent
@@ -90,6 +91,9 @@ $ whereamip config set dns false
 ```
 
 ## FAQ
+
+**Why does my VPN show as "VPN (utun4)" instead of its name?**
+Because WhereAmIP would rather say less than say something wrong. Any VPN that registers a macOS network service is named automatically — that path is structural and vendor-neutral, so it works for clients this app has never heard of. On top of that, a few are recognised by fingerprint: Tailscale, Cloudflare WARP, OpenVPN/OpenVPN Connect, and the apps in the bundle-ID table (PureVPN, WireGuard, Mullvad, NordVPN, Proton VPN, ExpressVPN). Some tunnels — classic daemons, and native IKEv2 profiles — register no name anywhere reachable, and rather than guess a brand from a shared address range, WhereAmIP shows the honest generic label. If yours is unnamed, **⌘D** (Copy Diagnostics) already contains what's needed to fix that: it lists why naming failed and which known VPN apps were running. Paste it into an issue — or send a PR adding your client's fingerprint, see CONTRIBUTING.md.
 
 **Is my VPN actually working?**
 Look at the flag. WhereAmIP shows the country of your real exit IP in the macOS menu bar — the moment a VPN (Tailscale, OpenVPN, PureVPN, WireGuard, …) takes over your default route, the flag flips. The dropdown names the VPN that owns the route, based on the routing table, not on which apps happen to be running.

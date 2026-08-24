@@ -1,3 +1,24 @@
+/// Why naming a tunnel came up empty — recorded at measurement time, because the
+/// evidence (SC service name, running apps, running processes) exists only there and is
+/// gone by the time anything displays the state.
+///
+/// This is the contribution channel: an unnamed tunnel is a VPN this app has no
+/// fingerprint for, and the person seeing it is the only one who can supply one. Their
+/// Copy Diagnostics paste carrying "no service name; 2 known VPN apps running (…)" is
+/// exactly what turns "it says VPN (utun4)" into an actionable issue.
+public struct VPNNameDiagnosis: Equatable, Codable, Sendable {
+    /// Whether SCDynamicStore had a service name for the interface. False is the
+    /// SC-invisible classic-daemon case; a tunnel with a name never reaches here.
+    public var hasServiceName: Bool
+    /// Display names from the bundle-ID table whose apps were running — the input to the
+    /// ambiguity guard. Two or more means the table deliberately declined to guess.
+    public var knownVPNApps: [String]
+    public init(hasServiceName: Bool, knownVPNApps: [String]) {
+        self.hasServiceName = hasServiceName
+        self.knownVPNApps = knownVPNApps
+    }
+}
+
 public enum VPNNamer {
     static let bundleIDNames: [(id: String, name: String)] = [
         ("io.tailscale.ipn.macos", "Tailscale"), ("io.tailscale.ipn.macsys", "Tailscale"),
@@ -11,17 +32,44 @@ public enum VPNNamer {
         ("com.cloudflare.1dot1dot1dot1.macos", "Cloudflare WARP"),
     ]
     /// Precedence: (a) non-tunnel interface → nil; (b) `scServiceName` — the authoritative,
-    /// route-correlated answer from SCDynamicStore; (c) CGNAT 100.64/10 source address →
-    /// "Tailscale"; (d) classic daemon-tunnel process evidence (see below); (e) bundle-ID
+    /// route-correlated answer from SCDynamicStore; (c) CGNAT 100.64/10 source address
+    /// CORROBORATED by Tailscale's own evidence → "Tailscale"; (d) WARP's vendor-assigned
+    /// 172.16.0.2; (e) classic daemon-tunnel process evidence (see below); (f) bundle-ID
     /// presence table, as a last resort only (a running-but-disconnected VPN app must never
-    /// win over the route-owning service's real name).
+    /// win over the route-owning service's real name); (g) a generic label for native IKEv2.
+    ///
+    /// The rule the whole ladder encodes: STRUCTURAL evidence generalises (a registered
+    /// network service names any vendor's VPN, including ones this app has never heard of),
+    /// FINGERPRINTS do not. A fingerprint is a guess about one vendor, so it must either be
+    /// vendor-specific by construction (a value that vendor's client chose) or be
+    /// corroborated by that vendor's own presence — and when it doesn't fire, it must fail
+    /// DOWNWARD to the next evidence or to the honest generic label, never sideways into
+    /// another vendor's brand name.
     public static func name(interface: String, localAddress: String?,
                             scServiceName: String?, runningBundleIDs: [String],
                             runningProcessNames: Set<String> = []) -> String? {
         guard RouteInspector.isTunnelInterface(interface) else { return nil }
         if let scServiceName { return scServiceName }
-        // Tailscale tell: CGNAT 100.64.0.0/10 source address
-        if let addr = localAddress, isCGNAT(addr) { return "Tailscale" }
+        // Tailscale tell: a CGNAT 100.64.0.0/10 source address — but ONLY with Tailscale's
+        // own evidence next to it.
+        //
+        // The two address fingerprints in this ladder are NOT the same kind of claim, and
+        // that is why only one of them needs corroboration:
+        //   - 100.64/10 is RFC 6598 carrier-grade NAT space: public infrastructure that
+        //     Tailscale merely uses. Headscale, NetBird, Nebula and a plain CGNAT'd uplink
+        //     live there just as legitimately, so the address alone identifies a RANGE, not
+        //     a vendor. Naming Tailscale off it would confidently mislabel every other mesh
+        //     VPN — the exact "works on the maintainer's machine" failure this guards.
+        //   - 172.16.0.2 (below) is a constant the WARP client itself assigns, inside RFC
+        //     1918 space it picked. That is a vendor-chosen value, so it identifies the
+        //     vendor on its own and needs no second signal.
+        // Uncorroborated CGNAT falls THROUGH to the rest of the ladder: an unambiguous
+        // bundle table may still name it, and otherwise it stays honestly unnamed. Failing
+        // downward into a generic truth is always better than sideways into a wrong brand.
+        if let addr = localAddress, isCGNAT(addr),
+           hasTailscaleEvidence(runningBundleIDs: runningBundleIDs, runningProcessNames: runningProcessNames) {
+            return "Tailscale"
+        }
         // Cloudflare WARP tell: the client assigns 172.16.0.2 as its tunnel address
         // (fixed across installs; field-verified 2026-08-17). Bundle-ID lookup can't
         // help the CLI, which has no AppKit and passes empty runningBundleIDs.
@@ -45,6 +93,37 @@ public enum VPNNamer {
         if interface.hasPrefix("ipsec") { return "IKEv2 VPN" }
         return nil
     }
+    /// The diagnosis for a tunnel this namer could NOT name — nil for anything it named,
+    /// and for non-tunnel interfaces. Same inputs as `name`, so the two can never disagree
+    /// about whether a name was found.
+    public static func diagnosis(interface: String, localAddress: String?,
+                                 scServiceName: String?, runningBundleIDs: [String],
+                                 runningProcessNames: Set<String> = []) -> VPNNameDiagnosis? {
+        guard RouteInspector.isTunnelInterface(interface),
+              name(interface: interface, localAddress: localAddress, scServiceName: scServiceName,
+                   runningBundleIDs: runningBundleIDs, runningProcessNames: runningProcessNames) == nil
+        else { return nil }
+        let apps = Set(bundleIDNames.filter { runningBundleIDs.contains($0.id) }.map(\.name))
+        return VPNNameDiagnosis(hasServiceName: scServiceName != nil, knownVPNApps: apps.sorted())
+    }
+
+    /// Tailscale's own evidence, in either currency this namer has: its bundle ids (GUI
+    /// path, empty for the CLI) or a process name.
+    ///
+    /// Process names verified empirically on a machine running it (the unprivileged scanner
+    /// sees only user-owned processes — see ProcessScanner): "Tailscale" (the GUI app) and
+    /// "IPNExtension" (its network extension) are both visible. `tailscaled` is not, being
+    /// root-owned, so it is deliberately not listed — a check for it would be dead code.
+    /// The extension is matched exactly and by name because it is the one that survives when
+    /// the GUI app is quit but the tunnel stays up.
+    static func hasTailscaleEvidence(runningBundleIDs: [String], runningProcessNames: Set<String>) -> Bool {
+        let tailscaleIDs = bundleIDNames.filter { $0.name == "Tailscale" }.map(\.id)
+        if runningBundleIDs.contains(where: tailscaleIDs.contains) { return true }
+        return runningProcessNames.contains { name in
+            name.lowercased().hasPrefix("tailscale") || name == "IPNExtension"
+        }
+    }
+
     /// OpenVPN's processes as an UNPRIVILEGED scanner can actually see them.
     ///
     /// The original tell here was `== "openvpn" || == "ovpnagent"`, and on a real machine it

@@ -9,6 +9,15 @@
 - A small **⚠️ badge** next to the symbol means a confirmed leak — IPv6 or DNS
   traffic is escaping past the tunnel. The dropdown's first rows say which.
 
+**The VPN name**
+
+The tunnel that owns your default route is named from the network service the client
+registers with macOS, which works for any VPN, including ones this app has never heard of.
+A few clients register nothing at all; those are recognised by fingerprint where that can
+be done honestly. When neither works the row reads **VPN (utun4)** — the tunnel is real and
+the route is right, only the brand is unknown. ⌘D's report says why, and that is exactly
+what an issue needs to get your VPN named.
+
 **Since and Checked**
 
 *Since* is when the state you are looking at began — it only moves when the exit,

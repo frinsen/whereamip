@@ -50,6 +50,26 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertFalse(all.contains(stem(.menuRouteVPN)))
         XCTAssertFalse(all.contains(stem(.menuPrivateRelay)))
     }
+    /// The most-seen label in the whole feature: what a user whose VPN we have no
+    /// fingerprint for reads. "VPN (utun4)", not "VPN: unknown (utun4)" — a fact, not a
+    /// malfunction. Lookup-based, so the wording stays retunable.
+    func testUnnamedTunnelRowUsesTheHonestGenericLabel() {
+        var s = vpnState()
+        s.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil)
+        let menu = MenuBuilder.build(state: s, style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        let all = titles(menu)
+        XCTAssertTrue(all.contains(L10n.string(.menuRouteVPNUnnamed, "utun4")), "got: \(all)")
+        XCTAssertFalse(all.contains { $0.hasPrefix(stem(.menuRouteVPN)) },
+                       "the named row shape must not be used with a placeholder name: \(all)")
+    }
+
+    func testNamedTunnelRowIsUnchanged() {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
+        XCTAssertTrue(titles(menu).contains(L10n.string(.menuRouteVPN, "OpenVPN", "utun4")))
+    }
+
     func testNonVPNRouteShowsLinkKindRow() {
         var s = vpnState()
         s.route = RouteInfo(defaultInterface: "en0", isVPN: false, vpnName: nil,

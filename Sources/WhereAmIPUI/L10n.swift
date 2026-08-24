@@ -40,7 +40,7 @@ public enum L10nKey: String, CaseIterable {
     case menuSince = "menu.since"
     case menuChecked = "menu.checked"
     case menuRouteVPN = "menu.route.vpn"
-    case menuRouteVPNUnknown = "menu.route.vpn.unknown"
+    case menuRouteVPNUnnamed = "menu.route.vpn.unnamed"
     case menuRouteLink = "menu.route.link"
     case menuPrivateRelay = "menu.privateRelay"
     case menuPrivateRelayVia = "menu.privateRelay.via"

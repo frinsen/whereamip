@@ -44,7 +44,7 @@ public enum DiagnosticsReport {
         lines += warnings(state).flatMap { rows(label: "Warning", [$0]) }
         lines += rows(label: "Exit", exitValues(state, formatter: formatter))
         lines += rows(label: "IPv6", [state.exit6.map { detailLine(for: $0) } ?? "not detected"])
-        lines += rows(label: "Route", [routeValue(state)])
+        lines += rows(label: "Route", [routeValue(state)] + unnamedTunnelNotes(state.route))
         if case .active(let ip, let country) = state.privateRelay {
             lines += rows(label: "Relay",
                           ["ON — Safari exits via \(ip ?? "?")\(country.map { " (\($0))" } ?? "")"])
@@ -97,7 +97,8 @@ public enum DiagnosticsReport {
             }
         case .suspected:
             out.append("DNS leak suspected — resolver exits outside the tunnel")
-        case .none, .some:
+        default:
+            // Includes both "no leak worth showing" and "gated off while offline".
             break
         }
         return out
@@ -122,6 +123,31 @@ public enum DiagnosticsReport {
         return ([exit.ip, place.isEmpty ? nil : place, exit.org].compactMap { $0 }).joined(separator: " · ")
     }
 
+    /// Why an unnamed tunnel stayed unnamed, as a continuation of the Route block.
+    ///
+    /// This is diagnostic DEPTH, not a warning, and its absence from the dropdown does not
+    /// break the parity rule the warnings section follows: parity governs what may be
+    /// ALARMED about, and this line alarms about nothing — it states which evidence was
+    /// looked for and not found. The menu has no room for it and no use for it; a bug
+    /// report has both. An unnamed tunnel means this app has no fingerprint for someone's
+    /// VPN, and they are the only one who can supply it, so their paste carries what's
+    /// needed to add it.
+    private static func unnamedTunnelNotes(_ route: RouteInfo) -> [String] {
+        guard let diagnosis = route.vpnNameDiagnosis else { return [] }
+        var facts = [diagnosis.hasServiceName ? "service name present but empty" : "no service name",
+                     "no address or process tell matched"]
+        if diagnosis.knownVPNApps.isEmpty {
+            facts.append("no known VPN app running")
+        } else {
+            // The ambiguity guard's own input: two or more means the bundle table
+            // deliberately declined to guess rather than picking by table order.
+            facts.append("\(diagnosis.knownVPNApps.count) known VPN app"
+                         + (diagnosis.knownVPNApps.count == 1 ? "" : "s")
+                         + " running (\(diagnosis.knownVPNApps.joined(separator: ", ")))")
+        }
+        return ["unnamed: " + facts.joined(separator: "; ")]
+    }
+
     /// The default route, plus — when the OpenVPN hijack pair is present on an
     /// otherwise working connection — that pair as a neutral FACT.
     ///
@@ -135,7 +161,10 @@ public enum DiagnosticsReport {
         var value: String
         if let iface = route.defaultInterface {
             if route.isVPN {
-                value = "\(route.vpnName ?? "unknown VPN") (\(iface)) owns default route"
+                // "VPN (utun4)" when unnamed — never "unknown VPN", which reads as an
+                // error rather than as the honest limit of what we can identify.
+                value = route.vpnName.map { "\($0) (\(iface)) owns default route" }
+                    ?? "VPN (\(iface)) owns default route"
             } else if let kind = route.linkKind {
                 value = "\(kind) (\(iface))"
             } else {

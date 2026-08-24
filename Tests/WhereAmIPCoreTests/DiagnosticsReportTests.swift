@@ -276,10 +276,63 @@ final class DiagnosticsReportTests: XCTestCase {
         XCTAssertTrue(lines(state).contains("Route   en0"), report(state))
     }
 
-    func testUnnamedVPNStillReadsAsAVPNRoute() {
+    /// "VPN (utun4)", never "unknown VPN": this is the line every user whose VPN we have no
+    /// fingerprint for will read, and "unknown" reads as a malfunction rather than as the
+    /// honest limit of what can be identified.
+    func testUnnamedVPNReadsAsAPlainVPNRouteNotAsAnError() {
         var state = fullState()
         state.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil)
-        XCTAssertTrue(lines(state).contains("Route   unknown VPN (utun4) owns default route"), report(state))
+        XCTAssertTrue(lines(state).contains("Route   VPN (utun4) owns default route"), report(state))
+        XCTAssertFalse(report(state).contains("unknown"), report(state))
+    }
+
+    // MARK: - an unnamed tunnel reports why it is unnamed
+
+    func testUnnamedTunnelExplainsItselfOnTheLineBelowTheRoute() {
+        // Diagnostic depth, not a warning: this is what makes a stranger's paste actionable
+        // enough to add their VPN.
+        var state = fullState()
+        state.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil,
+                                vpnNameDiagnosis: VPNNameDiagnosis(
+                                    hasServiceName: false,
+                                    knownVPNApps: ["Cloudflare WARP", "OpenVPN", "Tailscale"]))
+        let out = lines(state)
+        let routeIndex = out.firstIndex { $0.hasPrefix("Route") }!
+        XCTAssertEqual(out[routeIndex + 1],
+                       "        unnamed: no service name; no address or process tell matched; "
+                       + "3 known VPN apps running (Cloudflare WARP, OpenVPN, Tailscale)",
+                       report(state))
+    }
+
+    func testUnnamedTunnelWithNoKnownAppsSaysThatPlainly() {
+        var state = fullState()
+        state.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil,
+                                vpnNameDiagnosis: VPNNameDiagnosis(hasServiceName: false,
+                                                                    knownVPNApps: []))
+        XCTAssertTrue(lines(state).contains(
+            "        unnamed: no service name; no address or process tell matched; "
+            + "no known VPN app running"), report(state))
+    }
+
+    func testSingleKnownAppIsNotPluralised() {
+        var state = fullState()
+        state.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil,
+                                vpnNameDiagnosis: VPNNameDiagnosis(hasServiceName: false,
+                                                                    knownVPNApps: ["Tailscale"]))
+        XCTAssertTrue(report(state).contains("1 known VPN app running (Tailscale)"), report(state))
+    }
+
+    func testNamedTunnelCarriesNoUnnamedLine() {
+        // fullState()'s route is a named VPN, so the diagnosis is nil by construction.
+        XCTAssertFalse(report(fullState()).contains("unnamed:"))
+    }
+
+    func testUnnamedLineIsNotAWarning() {
+        var state = fullState()
+        state.route = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: nil,
+                                vpnNameDiagnosis: VPNNameDiagnosis(hasServiceName: false,
+                                                                    knownVPNApps: []))
+        XCTAssertFalse(report(state).contains("Warning"), report(state))
     }
 
     // MARK: - DNS block

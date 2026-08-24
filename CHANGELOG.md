@@ -8,7 +8,30 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Changed
+- **Truthful VPN naming.** A tunnel WhereAmIP can't identify now reads "VPN (utun4)"
+  instead of "VPN: unknown (utun4)" — it is a real tunnel owning a real route, and
+  only the brand is missing, so the row says that rather than reading like a
+  malfunction. Naming from the macOS network service a client registers is unchanged
+  and remains the vendor-neutral path that works for clients this app has never heard
+  of.
+- The Tailscale fingerprint now needs corroboration. A 100.64/10 source address alone
+  no longer means Tailscale: that is RFC 6598 carrier-grade NAT — public space any
+  mesh VPN (Headscale, NetBird, Nebula) or a CGNAT'd uplink may use — so it names
+  Tailscale only alongside Tailscale's own bundle id or a visible Tailscale process.
+  Uncorroborated, it falls through to the rest of the ladder instead of guessing.
+  Cloudflare WARP's 172.16.0.2 keeps needing no corroboration: that constant is
+  assigned by WARP's own client, so it identifies the vendor by construction.
+- OpenVPN Connect tunnels are named again. The old check looked for the `ovpnagent`
+  daemon, which runs as root and is therefore invisible to an unprivileged process
+  scan — dead code that could never fire, leaving the tunnel unnamed. It now also
+  matches the user-owned "OpenVPN Connect" processes that the scanner really sees.
+
 ### Added
+- An unnamed tunnel explains itself in the diagnostics report: a line under Route
+  stating that no service name was found, that no address or process tell matched,
+  and which known VPN apps were running (the input to the ambiguity guard). If your
+  VPN shows as "VPN (utunN)", that line is what an issue needs in order to add it.
 - **Copy Diagnostics** (⌘D, first row above Refresh): puts the whole dropdown
   on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
   configured resolvers, answering resolvers — with every warning the dropdown is

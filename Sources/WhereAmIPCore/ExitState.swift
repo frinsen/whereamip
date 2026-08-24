@@ -45,10 +45,15 @@ public struct RouteInfo: Equatable, Codable, Sendable {
     // JSON, which never had these keys — see the manual init(from:) below.
     public var linkKind: String?
     public var linkName: String?
+    // Additive (truthful VPN naming): why `vpnName` came up empty, recorded at measurement
+    // time because the evidence only exists there. Non-nil ONLY for an unnamed tunnel, so it
+    // is absent from the JSON of every named or non-VPN route, and from all older JSON.
+    public var vpnNameDiagnosis: VPNNameDiagnosis?
     public init(defaultInterface: String? = nil, isVPN: Bool = false,
                 vpnName: String? = nil, hijackRoutePresent: Bool = false,
                 v6DefaultInterface: String? = nil, v6IsVPN: Bool = false,
-                linkKind: String? = nil, linkName: String? = nil) {
+                linkKind: String? = nil, linkName: String? = nil,
+                vpnNameDiagnosis: VPNNameDiagnosis? = nil) {
         self.defaultInterface = defaultInterface
         self.isVPN = isVPN
         self.vpnName = vpnName
@@ -57,11 +62,12 @@ public struct RouteInfo: Equatable, Codable, Sendable {
         self.v6IsVPN = v6IsVPN
         self.linkKind = linkKind
         self.linkName = linkName
+        self.vpnNameDiagnosis = vpnNameDiagnosis
     }
 
     private enum CodingKeys: String, CodingKey {
         case defaultInterface, isVPN, vpnName, hijackRoutePresent, v6DefaultInterface, v6IsVPN
-        case linkKind, linkName
+        case linkKind, linkName, vpnNameDiagnosis
     }
     // Manual init(from:) so older JSON (missing the v6 and linkKind/linkName keys) still
     // decodes; encode(to:) is left to synthesis using the same CodingKeys, which always writes
@@ -76,6 +82,7 @@ public struct RouteInfo: Equatable, Codable, Sendable {
         v6IsVPN = try c.decodeIfPresent(Bool.self, forKey: .v6IsVPN) ?? false
         linkKind = try c.decodeIfPresent(String.self, forKey: .linkKind)
         linkName = try c.decodeIfPresent(String.self, forKey: .linkName)
+        vpnNameDiagnosis = try c.decodeIfPresent(VPNNameDiagnosis.self, forKey: .vpnNameDiagnosis)
     }
 }
 

@@ -34,7 +34,10 @@
 "menu.checked" = "Checked: %@";
 /* %1 VPN name, %2 interface */
 "menu.route.vpn" = "VPN: %@ (%@) owns default route";
-"menu.route.vpn.unknown" = "unknown";
+/* Shown when the tunnel owns the route but no name could be established — the honest
+   generic, NOT "unknown", which reads as a malfunction. This is what every user whose
+   VPN we have no fingerprint for sees, so it must read as a plain fact. %1 interface */
+"menu.route.vpn.unnamed" = "VPN (%@) owns default route";
 /* %1 link kind (Wi-Fi/Ethernet/…), %2 interface */
 "menu.route.link" = "Route: %@ (%@)";
 /* %1 the "menu.privateRelay.via" fragment, or empty when the relay country is unknown */
