@@ -17,6 +17,7 @@ let package = Package(
     targets: [
         .target(name: "WhereAmIPCore", resources: [.copy("Resources")]),
         .target(name: "WhereAmIPUI", dependencies: ["WhereAmIPCore"], resources: [.copy("Resources/flags"), .copy("Resources/welcome"),
+                                       .copy("Resources/help"),
                                        .process("Resources/en.lproj")]),
         .executableTarget(name: "whereamip-cli",
                           dependencies: ["WhereAmIPCore",

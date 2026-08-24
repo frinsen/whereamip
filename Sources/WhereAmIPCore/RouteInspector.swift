@@ -228,6 +228,17 @@ public enum RouteInspector {
         let name = VPNNamer.name(interface: iface, localAddress: localIP,
                                  scServiceName: scServiceName, runningBundleIDs: runningBundleIDs,
                                  runningProcessNames: processNames)
+        // Only computed for a tunnel that stayed unnamed — see VPNNameDiagnosis: the
+        // evidence exists here and nowhere later, and this is what a stranger's Copy
+        // Diagnostics paste needs to carry for their VPN to become nameable.
+        let diagnosis = VPNNamer.diagnosis(interface: iface, localAddress: localIP,
+                                           scServiceName: scServiceName, runningBundleIDs: runningBundleIDs,
+                                           runningProcessNames: processNames)
+        if let diagnosis {
+            Log.route.debug("""
+                snapshot: tunnel \(iface, privacy: .public) unnamed —                 serviceName=\(diagnosis.hasServiceName, privacy: .public)                 knownVPNApps=\(diagnosis.knownVPNApps.joined(separator: ", "), privacy: .public)                 processes=\(processNames.count, privacy: .public)
+                """)
+        }
         // Connection-kind display (Wave A): only meaningful for the physical/underlay
         // interface actually carrying the default route. When a VPN tunnel owns it, its
         // "kind" is the tunnel itself (already named above) — attributing that back to
@@ -237,6 +248,7 @@ public enum RouteInspector {
         Log.route.debug("snapshot: interface=\(iface, privacy: .public) isVPN=\(isVPN, privacy: .public) vpnName=\(name ?? "nil", privacy: .public) linkKind=\(link?.kind ?? "nil", privacy: .public)")
         return RouteInfo(defaultInterface: iface, isVPN: isVPN, vpnName: name, hijackRoutePresent: hijack,
                          v6DefaultInterface: v6?.interface, v6IsVPN: v6IsVPN,
-                         linkKind: link?.kind, linkName: link?.displayName)
+                         linkKind: link?.kind, linkName: link?.displayName,
+                         vpnNameDiagnosis: diagnosis)
     }
 }

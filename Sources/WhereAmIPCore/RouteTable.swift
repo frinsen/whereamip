@@ -36,8 +36,13 @@ public enum RouteTable {
 
             let addrsFieldOffset = offset + rtmAddrsOffset
             guard addrsFieldOffset + 4 <= bytes.count else { break }
+            // loadUnaligned, not load: `addrsFieldOffset` is derived from a message offset
+            // walked out of a kernel byte dump, so nothing guarantees it lands on a 4-byte
+            // boundary — and `load` requires that alignment, with undefined behaviour (not a
+            // trap you'd notice in testing) when it doesn't hold. The unaligned load has the
+            // same cost here and no such precondition.
             let rtmAddrs: Int32 = dump.withUnsafeBytes { raw in
-                raw.load(fromByteOffset: addrsFieldOffset, as: Int32.self)
+                raw.loadUnaligned(fromByteOffset: addrsFieldOffset, as: Int32.self)
             }
 
             var saOffset = offset + hdrSize

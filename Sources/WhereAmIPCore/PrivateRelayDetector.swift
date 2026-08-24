@@ -51,10 +51,30 @@ public struct RelayRanges: Sendable {
             return (v & mask) == (range.network & mask)
         }
     }
+    /// Strict dotted-quad parse: exactly four components, every one a valid octet, or nil.
+    ///
+    /// This is a VALIDITY check, not a best-effort extraction, and it is load-bearing well
+    /// beyond relay ranges: DNSEgressProbe.parseAnswer, DNSEgressEnumerator.parseFrom and
+    /// DNSLeakDetector.isMeaningful all decide "is this an IPv4 address at all" through it,
+    /// on data that arrives from the network and is not ours to trust.
+    ///
+    /// The earlier version split and `compactMap`ped, which DROPPED unparseable components
+    /// instead of rejecting the string — "999.1.2.3.4" and "abc.1.2.3.4" both salvaged
+    /// themselves into 1.2.3.4. A malformed or spoofed TXT answer could therefore pass as a
+    /// real egress, then fail the textual comparison against the exit and manufacture a false
+    /// "DNS leak" verdict — and a notification — out of garbage. `omittingEmptySubsequences:
+    /// false` additionally rejects "1.2..3.4", ".1.2.3.4" and "1.2.3.4." rather than quietly
+    /// collapsing the empty component away.
     static func ipv4ToUInt32(_ s: String) -> UInt32? {
-        let parts = s.split(separator: ".").compactMap { UInt8($0) }
-        guard parts.count == 4 else { return nil }
-        return (UInt32(parts[0]) << 24) | (UInt32(parts[1]) << 16) | (UInt32(parts[2]) << 8) | UInt32(parts[3])
+        let components = s.split(separator: ".", omittingEmptySubsequences: false)
+        guard components.count == 4 else { return nil }
+        var octets: [UInt8] = []
+        for component in components {
+            guard let octet = UInt8(component) else { return nil }
+            octets.append(octet)
+        }
+        return (UInt32(octets[0]) << 24) | (UInt32(octets[1]) << 16)
+             | (UInt32(octets[2]) << 8) | UInt32(octets[3])
     }
 }
 

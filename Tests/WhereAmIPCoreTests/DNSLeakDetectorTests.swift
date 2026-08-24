@@ -228,6 +228,42 @@ final class DNSLeakDetectorTests: XCTestCase {
                                            intentionalDelegation: true)
         XCTAssertEqual(third, .suspected, "stays capped indefinitely, not just for one extra round")
     }
+    /// The cap has to work on an alarm that is ALREADY confirmed, not just on one on its way
+    /// up. Real sequence: a leak confirms, and only then does the user switch Tailscale's
+    /// "Override local DNS" on, putting 100.100.100.100 into the configured resolvers. From
+    /// that moment the egress is explained by a benign, positively identified cause — but the
+    /// old gate only looked at `.suspected`, so the ⚠️ alarm stayed confirmed forever,
+    /// contradicting the documented "never confirms, never notifies" policy for MagicDNS.
+    func testIntentionalDelegationDowngradesAnAlreadyConfirmedAlarm() {
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .confirmed,
+                                              intentionalDelegation: true),
+                       .suspected,
+                       "MagicDNS appearing after a confirmation must lower the alarm, not be ignored")
+    }
+
+    func testIntentionalDelegationDowngradeIsStableAcrossFurtherRounds() {
+        var verdict = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                             exit6: nil, route: vpn4, previous: .confirmed,
+                                             intentionalDelegation: true)
+        for _ in 0..<3 {
+            verdict = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                             exit6: nil, route: vpn4, previous: verdict,
+                                             intentionalDelegation: true)
+        }
+        XCTAssertEqual(verdict, .suspected, "must not climb back to confirmed on later rounds")
+    }
+
+    /// The downgrade is specific to a positively identified benign cause. A confirmed alarm
+    /// with no such explanation must still survive — that guarantee is what makes the
+    /// no-measurement guard above it trustworthy.
+    func testConfirmedAlarmWithoutDelegationIsNotDowngraded() {
+        XCTAssertEqual(DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
+                                              exit6: nil, route: vpn4, previous: .confirmed,
+                                              intentionalDelegation: false),
+                       .confirmed)
+    }
+
     func testIntentionalDelegationFalseConfirmsNormallyOnSecondMismatch() {
         let first = DNSLeakDetector.decide(egress: ("203.0.113.7", false), exit4: exitInfo("1.2.3.4"),
                                            exit6: nil, route: vpn4, previous: .none,

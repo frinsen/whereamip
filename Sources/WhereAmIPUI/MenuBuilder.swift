@@ -3,35 +3,49 @@ import WhereAmIPCore
 
 public struct MenuActions {
     public var copyIP: () -> Void
+    /// Every copy row added after the original exit-IP one hands its finished
+    /// payload to this single closure instead of getting a closure of its own:
+    /// the payload is derived purely from the state the builder already has
+    /// (`DiagnosticsReport.text`, the two exit addresses, the resolver lists), so
+    /// computing it HERE keeps it unit-testable without an AppDelegate, and leaves
+    /// the app with one trivial "put this string on the pasteboard" implementation
+    /// rather than four near-identical ones. `copyIP` stays as it was.
+    public var copyText: (String) -> Void
     public var refresh: () -> Void
     public var setStyle: (MenuBarStyle) -> Void
     public var toggleNotifications: () -> Void
     public var toggleLaunchAtLogin: () -> Void
     public var toggleApplicationsLink: () -> Void
     public var showWelcomeWindow: () -> Void
+    public var showHelpWindow: () -> Void
     public var quit: () -> Void
     public var copyUpdateCommand: () -> Void
     public var toggleUpdateChecks: () -> Void
     public var toggleDNSProbe: () -> Void
     public var restartAction: () -> Void
     public var restartApp: () -> Void
-    public init(copyIP: @escaping () -> Void = {}, refresh: @escaping () -> Void = {},
+    public init(copyIP: @escaping () -> Void = {},
+                copyText: @escaping (String) -> Void = { _ in },
+                refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
                 toggleApplicationsLink: @escaping () -> Void = {},
                 showWelcomeWindow: @escaping () -> Void = {},
+                showHelpWindow: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping () -> Void = {},
                 toggleUpdateChecks: @escaping () -> Void = {},
                 toggleDNSProbe: @escaping () -> Void = {},
                 restartAction: @escaping () -> Void = {},
                 restartApp: @escaping () -> Void = {}) {
-        self.copyIP = copyIP; self.refresh = refresh; self.setStyle = setStyle
+        self.copyIP = copyIP; self.copyText = copyText
+        self.refresh = refresh; self.setStyle = setStyle
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
         self.toggleApplicationsLink = toggleApplicationsLink
         self.showWelcomeWindow = showWelcomeWindow
+        self.showHelpWindow = showHelpWindow
         self.copyUpdateCommand = copyUpdateCommand
         self.toggleUpdateChecks = toggleUpdateChecks
         self.toggleDNSProbe = toggleDNSProbe
@@ -124,7 +138,10 @@ public enum MenuBuilder {
         // Header + warnings
         if state.connectivity == .offline {
             menu.addItem(info(L10n.string(.menuOffline)))
-            if state.route.hijackRoutePresent {
+            // Same predicate the pasted diagnostics report uses (ExitState, warning
+            // visibility) — identical behavior to the inline check this replaces,
+            // but the two frontends can no longer drift on what counts as a warning.
+            if state.showsHijackWarning {
                 menu.addItem(info(L10n.string(.menuOfflineHijack)))
             }
             if let exit = state.exit {
@@ -143,24 +160,49 @@ public enum MenuBuilder {
             menu.addItem(.separator())
             // Warning row goes first in the info area — before the IP row — so it's
             // impossible to miss when a leak is confirmed.
-            if state.ipv6Leak {
+            // Both gates come from the shared warning-visibility predicates in Core
+            // (see ExitState): this branch is already the online one, so behavior is
+            // unchanged — what's gained is that the diagnostics report reads the same
+            // rules instead of a second copy of them.
+            if state.showsIPv6LeakWarning {
                 let org = state.exit6?.org ?? L10n.string(.menuOrgUnknown)
                 let cc = state.exit6?.countryCode ?? "?"
                 menu.addItem(info(L10n.string(.menuLeakIPv6, org, cc)))
             }
-            if state.dns.leak == .confirmed {
+            switch state.visibleDNSLeak {
+            case .confirmed:
                 if let org = state.dns.egressOrg, !org.isEmpty {
                     menu.addItem(info(L10n.string(.menuLeakDNSWithOperator, org, state.dns.egressIP ?? "?")))
                 } else {
                     menu.addItem(info(L10n.string(.menuLeakDNS, state.dns.egressIP ?? "?")))
                 }
-            } else if state.dns.leak == .suspected {
+            case .suspected:
                 menu.addItem(info(L10n.string(.menuLeakDNSSuspected)))
+            default:
+                // Both "no leak worth showing" and "gated off while offline".
+                break
             }
             if let exit = state.exit {
                 let ipItem = action(exit.ip, key: "c") { actions.copyIP() }
                 ipItem.keyEquivalentModifierMask = [.command]
                 menu.addItem(ipItem)
+                // ⌥⌘C: the wider copy, revealed by holding Option. AppKit only
+                // treats an item as an alternate of the one it DIRECTLY follows,
+                // and only when both share a key equivalent — hence the exact
+                // placement here rather than anywhere else in the info block.
+                // Absent entirely without an IPv6 exit: a row promising two
+                // addresses that copies one would be a lie, not a shortcut.
+                if let exit6 = state.exit6 {
+                    let bothItem = action(L10n.string(.menuCopyExitBoth), key: "c") {
+                        // Addresses only, one per line. The rows above carry the
+                        // city/operator labelling; a clipboard payload someone
+                        // pastes into a terminal or a ticket must not.
+                        actions.copyText([exit.ip, exit6.ip].joined(separator: "\n"))
+                    }
+                    bothItem.keyEquivalentModifierMask = [.command, .option]
+                    bothItem.isAlternate = true
+                    menu.addItem(bothItem)
+                }
                 let place = [exit.city, countryName(exit.countryCode)].compactMap { $0 }.joined(separator: ", ")
                 if !place.isEmpty { menu.addItem(info(place)) }
                 if let org = exit.org { menu.addItem(info(org)) }
@@ -184,8 +226,15 @@ public enum MenuBuilder {
         // VPN / relay block — only applicable lines
         var block: [NSMenuItem] = []
         if state.route.isVPN, let iface = state.route.defaultInterface {
-            block.append(info(L10n.string(.menuRouteVPN,
-                              state.route.vpnName ?? L10n.string(.menuRouteVPNUnknown), iface)))
+            // Named or not, this row states the same fact; only the shape differs. The
+            // unnamed variant is a whole row of its own rather than the word "unknown"
+            // dropped into the named one — "VPN: unknown (utun4)" reads as a malfunction,
+            // "VPN (utun4)" reads as what it is: a tunnel we can't put a brand to.
+            if let vpnName = state.route.vpnName {
+                block.append(info(L10n.string(.menuRouteVPN, vpnName, iface)))
+            } else {
+                block.append(info(L10n.string(.menuRouteVPNUnnamed, iface)))
+            }
         } else if let iface = state.route.defaultInterface, let kind = state.route.linkKind {
             block.append(info(L10n.string(.menuRouteLink, kind, iface)))
         }
@@ -209,7 +258,7 @@ public enum MenuBuilder {
             // NOT an `info` row — a disabled item can't be opened, so this one stays enabled
             // (like Settings) while everything inside it is info.
             let dnsItem = NSMenuItem(title: line, action: nil, keyEquivalent: "")
-            dnsItem.submenu = dnsSubmenu(state: state, dnsProbeEnabled: dnsProbeEnabled)
+            dnsItem.submenu = dnsSubmenu(state: state, dnsProbeEnabled: dnsProbeEnabled, actions: actions)
             block.append(dnsItem)
         }
         if !block.isEmpty {
@@ -219,9 +268,40 @@ public enum MenuBuilder {
 
         // Controls
         menu.addItem(.separator())
+        // ⌘D — the whole dropdown as pasteable text, for a bug report. Rendered
+        // from exactly the state (and the same "Checked" stamp and DNS-probe
+        // setting) this menu was built with, by the shared Core formatter the CLI's
+        // `whereamip diagnostics` uses; nothing extra is measured, and nothing is
+        // sent anywhere but the local pasteboard.
+        //
+        // Deliberately NOT ⇧⌘C, and do not "restore" it: that is Maccy's default
+        // global hotkey, and Maccy is one of the most widely installed macOS
+        // clipboard managers. Global hotkeys are registered below the level of menu
+        // key equivalents and are conventionally two-modifier combinations precisely
+        // to stay clear of app shortcuts — so a two-modifier ⇧⌘C is exactly the space
+        // they occupy, and ours would be silently swallowed on those machines
+        // (field-verified on the maintainer's). A single-modifier ⌘D sits in space
+        // global-hotkey apps avoid by design. Mnemonic: D for Diagnostics.
+        let diagnostics = action(L10n.string(.menuCopyDiagnostics), key: "d") {
+            actions.copyText(DiagnosticsReport.text(for: state, checked: lastChecked,
+                                                    dnsProbeEnabled: dnsProbeEnabled))
+        }
+        diagnostics.keyEquivalentModifierMask = [.command]
+        menu.addItem(diagnostics)
+
         let refresh = action(L10n.string(.menuRefresh), key: "r") { actions.refresh() }
         refresh.keyEquivalentModifierMask = [.command]
         menu.addItem(refresh)
+
+        // ⌘? — Apple's own Help item is bound exactly like this. NO .shift, even
+        // though "?" is typed with Shift on both US (Shift-/) and German (Shift-ß)
+        // layouts: the HIG says not to add Shift to a shortcut using the upper
+        // character of a two-character key, and a key equivalent matches on the
+        // CHARACTER PRODUCED, Shift excepted. Adding .shift here would display as
+        // ⇧⌘? and deviate from the platform — don't "fix" it back.
+        let help = action(L10n.string(.menuHelp), key: "?") { actions.showHelpWindow() }
+        help.keyEquivalentModifierMask = [.command]
+        menu.addItem(help)
 
         let settings = NSMenuItem(title: L10n.string(.menuSettings), action: nil, keyEquivalent: "")
         let settingsMenu = NSMenu()
@@ -278,7 +358,8 @@ public enum MenuBuilder {
     /// probe). Two labelled sections rather than one flat list — the two halves are different
     /// kinds of fact, and confusing "my router" with "the resolver that saw my query" is exactly
     /// what makes split-DNS setups unreadable.
-    static func dnsSubmenu(state: ExitState, dnsProbeEnabled: Bool) -> NSMenu {
+    static func dnsSubmenu(state: ExitState, dnsProbeEnabled: Bool,
+                           actions: MenuActions = MenuActions()) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.addItem(info(L10n.string(.dnsSectionConfigured)))
@@ -323,7 +404,56 @@ public enum MenuBuilder {
             menu.addItem(info(L10n.string(.dnsSectionEgress)))
             egressRows.forEach { menu.addItem(info($0)) }
         }
+
+        // Bulk copy, one row per section above it, closing the submenu. Each label
+        // names WHICH set it copies in that section's own vocabulary — "Configured
+        // resolvers" → configured, "Queries answered by" → answering — because a
+        // bare "Copy addresses" here would be ambiguous between the two lists it
+        // sits under.
+        //
+        // No key equivalents, and that is a settled DECISION rather than an omission:
+        // a shortcut only earns its keystroke if it can fire with the submenu closed,
+        // two rows would mean two more of them against the HIG's "avoid defining too
+        // many", and the bug-report case — the one that actually wants both lists at
+        // once — is already served by Copy Diagnostics, which carries them.
+        //
+        // Row text and clipboard text are different products: the rows above read
+        // "192.168.178.1 — en0" and "185.44.108.99 — WoodyNet, Inc. (Berlin, DE) ·
+        // UDP"; the payload is the bare addresses, one per line, ready to paste
+        // into a resolver field or a ticket.
+        var copyRows: [NSMenuItem] = []
+        let configured = orderedUniqueAddresses(state.dns.resolvers)
+        if !configured.isEmpty {
+            copyRows.append(action(L10n.string(.dnsCopyConfigured)) {
+                actions.copyText(configured.joined(separator: "\n"))
+            })
+        }
+        // Mirrors exactly what the egress section above actually shows: nothing to
+        // copy when the probe is off (there is no measurement at all) or when
+        // neither the enumeration nor the beacon fallback produced an address.
+        var answering: [String] = []
+        if dnsProbeEnabled {
+            answering = state.dns.egressResolvers.map(\.ip)
+            if answering.isEmpty, let egressIP = state.dns.egressIP { answering = [egressIP] }
+        }
+        if !answering.isEmpty {
+            copyRows.append(action(L10n.string(.dnsCopyAnswering)) {
+                actions.copyText(answering.joined(separator: "\n"))
+            })
+        }
+        if !copyRows.isEmpty {
+            menu.addItem(.separator())
+            copyRows.forEach { menu.addItem($0) }
+        }
         return menu
+    }
+
+    /// Configured resolver addresses, each once, in the order they were read — the
+    /// same dedup rule the rows above apply (`DNSConfigReader` deliberately emits an
+    /// address once globally and once per service).
+    static func orderedUniqueAddresses(_ resolvers: [DNSResolver]) -> [String] {
+        var seen = Set<String>()
+        return resolvers.map(\.address).filter { seen.insert($0).inserted }
     }
 
     static func countryName(_ iso: String?) -> String? {

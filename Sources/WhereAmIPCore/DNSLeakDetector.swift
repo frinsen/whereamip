@@ -69,7 +69,14 @@ public enum DNSLeakDetector {
         // as designed, indistinguishable from a leak by operator comparison alone. Policy (user
         // decision 2026-08-17): visible as "suspected" in dropdown/CLI, never confirms, never
         // notifies. https://tailscale.com/kb/1081/magicdns
-        if intentionalDelegation, previous == .suspected { return .suspected }
+        // Downgrading a CONFIRMED alarm is safe here, and only here, because this branch has a
+        // positive identification of a benign cause (MagicDNS's documented resolver is in the
+        // configured set) — unlike the no-measurement guard above, which preserves .confirmed
+        // precisely because it has no information at all. Confirmed-then-capped is a real
+        // sequence, not a theoretical one: a leak confirms, and only afterwards does the user
+        // switch on Tailscale's "Override local DNS". Without this the ⚠️ would stay lit
+        // forever, contradicting the documented never-confirms policy.
+        if intentionalDelegation, previous == .suspected || previous == .confirmed { return .suspected }
         return (previous == .suspected || previous == .confirmed) ? .confirmed : .suspected
     }
 

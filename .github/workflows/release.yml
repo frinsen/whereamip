@@ -39,13 +39,22 @@ jobs:
 
           ---
           NOTES
-          gh release create "$GITHUB_REF_NAME" --generate-notes --notes-file /tmp/install-notes.md
+          # Idempotent: a rerun must be able to finish a release that half-happened. Our own
+          # v0.4.2 cut hit exactly this — `gh release create` 503'd after the release existed,
+          # and a rerun would then have died on "release already exists", permanently blocking
+          # the asset upload and the formula bump below.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — skipping create, continuing to upload"
+          else
+            gh release create "$GITHUB_REF_NAME" --generate-notes --notes-file /tmp/install-notes.md
+          fi
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - name: Build and attach app bundle
         run: |
           scripts/make-app-bundle.sh dist
           ditto -c -k --keepParent dist/WhereAmIP.app "dist/WhereAmIP.app.zip"
-          gh release upload "$GITHUB_REF_NAME" "dist/WhereAmIP.app.zip"
+          # --clobber so a rerun after a partial upload replaces the asset instead of failing.
+          gh release upload --clobber "$GITHUB_REF_NAME" "dist/WhereAmIP.app.zip"
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - name: Bump Homebrew formula
         env: { TAP_TOKEN: "${{ secrets.TAP_PUSH_TOKEN }}" }

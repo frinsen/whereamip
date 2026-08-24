@@ -8,7 +8,83 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Fixed
+- IPv6-only route changes now escalate a probe tick into a full refresh. A VPN that
+  tunnels only IPv4 while the native IPv6 default route appears mid-session (delayed
+  router advertisement, a re-attached cable) applied the new route next to an IPv6
+  exit measured before it existed — so an IPv6 leak stayed invisible until the next
+  scheduled full refresh, up to five minutes later.
+- Malformed IPv4 strings are rejected instead of being silently repaired. The parser
+  dropped unparseable components, so "999.1.2.3.4" became 1.2.3.4 — and since that
+  parser is what decides "is this an address at all" for DNS egress answers arriving
+  off the network, a malformed or spoofed answer could be judged a real egress and
+  produce a false DNS-leak warning out of garbage.
+- A confirmed DNS-leak alarm is now lowered when Tailscale's MagicDNS resolver later
+  appears in the configured set (switching on "Override local DNS" after a
+  confirmation). The documented policy for that case is "never confirms, never
+  notifies"; previously an already-lit ⚠️ stayed lit forever.
+- A full refresh that coalesces onto a probe tick which then escalates is satisfied by
+  that escalation instead of running a second, fully redundant refresh — it was
+  repeating every geo, DNS and relay call the escalation had just made.
+- Reopening the Welcome or Help window while it is already open now brings that window
+  forward instead of building a second one behind it. The old window stayed on screen
+  but its controller was released, leaving its buttons inert — a visibly dead Done
+  button.
+- The release workflow is idempotent: a rerun skips creating a release that already
+  exists and re-uploads assets with `--clobber`, so a half-finished release (as
+  happened when GitHub 503'd during v0.4.2) can be completed by rerunning it.
+
+### Changed
+- **Truthful VPN naming.** A tunnel WhereAmIP can't identify now reads "VPN (utun4)"
+  instead of "VPN: unknown (utun4)" — it is a real tunnel owning a real route, and
+  only the brand is missing, so the row says that rather than reading like a
+  malfunction. Naming from the macOS network service a client registers is unchanged
+  and remains the vendor-neutral path that works for clients this app has never heard
+  of.
+- The Tailscale fingerprint now needs corroboration. A 100.64/10 source address alone
+  no longer means Tailscale: that is RFC 6598 carrier-grade NAT — public space any
+  mesh VPN (Headscale, NetBird, Nebula) or a CGNAT'd uplink may use — so it names
+  Tailscale only alongside Tailscale's own bundle id or a visible Tailscale process.
+  Uncorroborated, it falls through to the rest of the ladder instead of guessing.
+  Cloudflare WARP's 172.16.0.2 keeps needing no corroboration: that constant is
+  assigned by WARP's own client, so it identifies the vendor by construction.
+- OpenVPN Connect tunnels are named again. The old check looked for the `ovpnagent`
+  daemon, which runs as root and is therefore invisible to an unprivileged process
+  scan — dead code that could never fire, leaving the tunnel unnamed. It now also
+  matches the user-owned "OpenVPN Connect" processes that the scanner really sees.
+
 ### Added
+- An unnamed tunnel explains itself in the diagnostics report: a line under Route
+  stating that no service name was found, that no address or process tell matched,
+  and which known VPN apps were running (the input to the ambiguity guard). If your
+  VPN shows as "VPN (utunN)", that line is what an issue needs in order to add it.
+- **Copy Diagnostics** (⌘D, first row above Refresh): puts the whole dropdown
+  on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
+  configured resolvers, answering resolvers — with every warning the dropdown is
+  currently showing (offline, OpenVPN hijack routes while offline, confirmed
+  IPv6 leak, DNS leak confirmed or suspected) called out on its own labelled
+  line at the top. It warns about exactly what the app itself is warning about
+  and nothing more: leftover hijack routes on a *working* connection are noted
+  as a neutral fact on the Route line instead ("· hijack pair (0/1 + 128/1)
+  present"), and the two leak verdicts — which are deliberately carried over
+  rather than re-measured while offline — are not asserted in an offline report.
+  Paste it into a bug report. It writes to the local clipboard, sends nothing
+  anywhere, and collects nothing new. `whereamip diagnostics` prints exactly the
+  same text; `status`, `watch`, `config`, and the JSON are unchanged.
+- **⌥⌘C copies both exit addresses.** Hold ⌥ with the dropdown open and the
+  exit-IP row turns into "Copy both exit addresses" — IPv4 and IPv6, one per
+  line, addresses only. It appears only when an IPv6 exit was actually
+  measured. Plain ⌘C on the IP row is unchanged.
+- **Bulk copy in the DNS submenu**: "Copy configured resolvers" and "Copy
+  answering resolvers" at its foot, each copying bare addresses one per line —
+  no interface suffixes, operator names, locations, or transports. The
+  answering row is absent when the DNS check is off or nothing has answered
+  yet.
+- **WhereAmIP Help** (⌘?, directly above Settings) opens a help window: what
+  the menu bar symbol means, Since vs Checked, how to read the DNS submenu, the
+  keyboard shortcuts, and the CLI. The app is a menu bar accessory with no menu
+  bar of its own, so this row stands in for the Help menu. The welcome window is
+  unaffected and the two can be open at the same time.
 - **DNS egress enumeration**: the leak check now discovers *all* of your
   egress resolvers instead of one. Public resolvers are load-balanced across
   a pool, so a single lookup only ever reveals whichever member answered it;

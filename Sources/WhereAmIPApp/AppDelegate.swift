@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
     var welcomeWindowController: WelcomeWindowController?
+    // Separate from the welcome window's controller on purpose — the two windows
+    // are independent and may be open at the same time.
+    var helpWindowController: HelpWindowController?
     // Proof-of-freshness for the dropdown's "Checked:" row — app-local only,
     // never touches ExitState/Codable/the JSON golden files. Set exclusively
     // by runMonitorRefresh() below, which every direct fullRefresh/probeTick
@@ -85,6 +88,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func didWake() { Task { await self.runMonitorRefresh(full: true) } }
+
+    /// One presentation rule for both auxiliary windows: if the one we already hold is still
+    /// on screen, focus THAT rather than building a second one.
+    ///
+    /// Replacing the controller unconditionally looked harmless because the old window stays
+    /// visible (`isReleasedWhenClosed = false`) — but only the window survives. Its controller
+    /// is released the moment this property is overwritten, and AppKit holds `target` weakly,
+    /// so every control on the orphan goes inert: the welcome window's Done button stops
+    /// storing the milestone and stops closing, and the help window stops re-wrapping its text
+    /// on resize. A dead-but-visible window is a worse outcome than either a fresh one or none.
+    ///
+    /// Returns the controller to store, so the caller's assignment stays a single expression.
+    func present<C: AuxiliaryWindowController>(_ existing: C?, make: () -> C) -> C {
+        if let existing, existing.window?.isVisible == true {
+            existing.show()   // re-focus: activate + makeKeyAndOrderFront
+            return existing
+        }
+        let fresh = make()
+        fresh.show()
+        return fresh
+    }
 
     // Every direct fullRefresh/probeTick call site is routed through this one
     // helper so lastChecked (the dropdown's "Checked:" row) can never miss a
@@ -244,6 +268,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(ip, forType: .string)
                 },
+                // Every other copy row hands its finished payload here — the text
+                // itself is derived in MenuBuilder from the same state this menu
+                // was built with (see MenuActions.copyText), so this end stays one
+                // pasteboard write and nothing else. Local clipboard only: no copy
+                // action in this app sends anything anywhere.
+                copyText: { text in
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                },
                 refresh: { [weak self] in
                     guard let self else { return }
                     self.setManualRefreshIndicator(true)
@@ -306,8 +339,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     // Done afterwards just re-stores the same milestone
                     // value, which is harmless.
                     guard let self else { return }
-                    self.welcomeWindowController = WelcomeWindowController(settings: self.settings)
-                    self.welcomeWindowController?.show()
+                    self.welcomeWindowController = self.present(self.welcomeWindowController) {
+                        WelcomeWindowController(settings: self.settings)
+                    }
+                },
+                showHelpWindow: { [weak self] in
+                    // Held in its own property, independent of the welcome
+                    // window's: the two coexist, and opening one must never
+                    // close, move, or reset the other.
+                    guard let self else { return }
+                    self.helpWindowController = self.present(self.helpWindowController) {
+                        HelpWindowController()
+                    }
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {

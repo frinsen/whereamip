@@ -10,7 +10,8 @@ import Foundation
 /// Keys are hierarchical and lowercase dot-separated, grouped by the surface they
 /// appear on (`menu.` dropdown rows, `settings.` submenu items, `dns.` the DNS row
 /// and its detail submenu, `notification.` banner titles/bodies, `welcome.` the
-/// welcome window). A raw-string API was deliberately NOT chosen: `CaseIterable`
+/// welcome window, `help.` the help window). A raw-string API was deliberately NOT
+/// chosen: `CaseIterable`
 /// over a typed key is what makes the completeness test mechanical — a key added
 /// here but forgotten in the .strings file fails the suite, and a typo at a call
 /// site fails the compiler.
@@ -39,12 +40,15 @@ public enum L10nKey: String, CaseIterable {
     case menuSince = "menu.since"
     case menuChecked = "menu.checked"
     case menuRouteVPN = "menu.route.vpn"
-    case menuRouteVPNUnknown = "menu.route.vpn.unknown"
+    case menuRouteVPNUnnamed = "menu.route.vpn.unnamed"
     case menuRouteLink = "menu.route.link"
     case menuPrivateRelay = "menu.privateRelay"
     case menuPrivateRelayVia = "menu.privateRelay.via"
     case menuOrgUnknown = "menu.org.unknown"
+    case menuCopyExitBoth = "menu.copyExitBoth"
+    case menuCopyDiagnostics = "menu.copyDiagnostics"
     case menuRefresh = "menu.refresh"
+    case menuHelp = "menu.help"
     case menuSettings = "menu.settings"
     case menuRestart = "menu.restart"
     case menuQuit = "menu.quit"
@@ -75,6 +79,14 @@ public enum L10nKey: String, CaseIterable {
     case dnsResolverInterfaces = "dns.resolver.interfaces"
     case dnsDisabled = "dns.disabled"
     case dnsForwarder = "dns.forwarder"
+    case dnsCopyConfigured = "dns.copy.configured"
+    case dnsCopyAnswering = "dns.copy.answering"
+
+    // MARK: - help: the help window's chrome only. Its BODY is bundled Markdown
+    // (Resources/help/help.md, see HelpContent) — prose, not a label, exactly like
+    // the welcome window's copy.
+
+    case helpWindowTitle = "help.window.title"
 
     // MARK: - notification: banner titles and bodies
 
