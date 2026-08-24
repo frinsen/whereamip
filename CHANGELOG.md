@@ -8,6 +8,16 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Added
+- **Deutsch.** The app now follows your Mac's language: every dropdown row, notification,
+  and both windows (welcome and help) are available in German, including the long-form
+  help and what's-new copy. English stays the default everywhere else. `whereamip`
+  output, `whereamip diagnostics` and the log are deliberately not translated — they are
+  a parseable interface, and reports written from them land in English-language issues.
+- The help window's closing GitHub pointer is a real link now: click it and the browser
+  opens. The help body moved from a text field to a non-editable text view to make that
+  possible, which also lets you select and copy any part of the help text.
+
 ### Fixed
 - The open dropdown no longer jumps when you hold or release ⌥. Two causes, both fixed:
   the app rebuilt every row on each keydown during menu tracking (AppKit calls

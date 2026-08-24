@@ -7,6 +7,12 @@ import Foundation
 /// recompile of intent, and no test breakage, because the tests assert against
 /// `L10n.string(.someKey)` rather than against literals.
 ///
+/// The same mechanism carries translations: `de.lproj` sits beside `en.lproj` and macOS
+/// picks between them on its own — nothing in this file or at any call site knows which
+/// language it is serving. Adding a locale is a folder plus one entry in
+/// `L10nTests.shippedLocales`, which then holds it to the same completeness and
+/// placeholder-parity bar as English.
+///
 /// Keys are hierarchical and lowercase dot-separated, grouped by the surface they
 /// appear on (`menu.` dropdown rows, `settings.` submenu items, `dns.` the DNS row
 /// and its detail submenu, `notification.` banner titles/bodies, `welcome.` the

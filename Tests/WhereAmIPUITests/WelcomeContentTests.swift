@@ -35,7 +35,7 @@ final class WelcomeContentTests: XCTestCase {
     // MARK: - bundled markdown
 
     func testIntroMarkdownIsBundledAndIsRealCopy() {
-        let intro = WelcomeContent.markdown(milestone: nil)
+        let intro = WelcomeContent.markdown(milestone: nil, preferredLanguages: ["en"])
         XCTAssertFalse(intro.isEmpty)
         XCTAssertNotEqual(intro, WelcomeContent.fallbackPitch, "intro.md did not resolve from the bundle")
         XCTAssertFalse(intro.contains("/"), "a path leaked into the body copy: \(intro)")
@@ -44,19 +44,19 @@ final class WelcomeContentTests: XCTestCase {
     func testCurrentMilestoneShipsHighlights() {
         // Guards the release checklist: bumping welcomeMilestone without adding
         // its .md would silently re-show the first-run pitch to every upgrader.
-        XCTAssertNotEqual(WelcomeContent.markdown(milestone: welcomeMilestone),
-                          WelcomeContent.markdown(milestone: nil),
+        XCTAssertNotEqual(WelcomeContent.markdown(milestone: welcomeMilestone, preferredLanguages: ["en"]),
+                          WelcomeContent.markdown(milestone: nil, preferredLanguages: ["en"]),
                           "Resources/welcome/\(welcomeMilestone).md is missing")
     }
 
     func testUnknownMilestoneFallsBackToTheIntroCopy() {
-        XCTAssertEqual(WelcomeContent.markdown(milestone: "42.0"),
-                       WelcomeContent.markdown(milestone: nil))
+        XCTAssertEqual(WelcomeContent.markdown(milestone: "42.0", preferredLanguages: ["en"]),
+                       WelcomeContent.markdown(milestone: nil, preferredLanguages: ["en"]))
     }
 
     func testUnsafeMilestoneNameCannotEscapeTheWelcomeDirectory() {
-        XCTAssertEqual(WelcomeContent.markdown(milestone: "../../Info"),
-                       WelcomeContent.markdown(milestone: nil))
+        XCTAssertEqual(WelcomeContent.markdown(milestone: "../../Info", preferredLanguages: ["en"]),
+                       WelcomeContent.markdown(milestone: nil, preferredLanguages: ["en"]))
     }
 
     // MARK: - markdown rendering
@@ -90,8 +90,14 @@ final class WelcomeContentTests: XCTestCase {
     }
 
     func testEveryBundledFileRendersWithoutLeavingMarkupBehind() {
-        for markdown in [WelcomeContent.markdown(milestone: nil),
-                         WelcomeContent.markdown(milestone: welcomeMilestone)] {
+        // Every shipped file in every shipped language: a translation is just as capable of
+        // leaving a stray ** or a broken bullet behind as the original.
+        let files = ["en", "de"].flatMap { language in
+            [WelcomeContent.markdown(milestone: nil, preferredLanguages: [language]),
+             WelcomeContent.markdown(milestone: welcomeMilestone, preferredLanguages: [language]),
+             HelpContent.markdown(preferredLanguages: [language])]
+        }
+        for markdown in files {
             let rendered = plain(markdown)
             XCTAssertFalse(rendered.isEmpty)
             XCTAssertFalse(rendered.contains("**"), "unrendered bold markup: \(rendered)")

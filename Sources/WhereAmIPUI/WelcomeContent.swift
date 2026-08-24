@@ -34,27 +34,33 @@ public enum WelcomeContent {
     /// release earned it, and the running build may already be several patch
     /// releases past it. A milestone with no bundled highlights falls back to the
     /// intro copy rather than showing an empty window (or, worse, a file path).
-    public static func copy(for storedMilestone: String) -> Copy {
+    public static func copy(for storedMilestone: String,
+                            preferredLanguages: [String] = Locale.preferredLanguages) -> Copy {
         guard !storedMilestone.isEmpty else {
             return Copy(heading: L10n.string(.welcomeHeadingFirst, whereamipVersion),
-                        markdown: markdown(milestone: nil))
+                        markdown: markdown(milestone: nil, preferredLanguages: preferredLanguages))
         }
         return Copy(heading: L10n.string(.welcomeHeadingMilestone, welcomeMilestone),
-                    markdown: markdown(milestone: welcomeMilestone))
+                    markdown: markdown(milestone: welcomeMilestone,
+                                       preferredLanguages: preferredLanguages))
     }
 
     /// Bundled Markdown for `milestone`, or the intro pitch (nil milestone, missing
     /// file, empty file).
-    public static func markdown(milestone: String?) -> String {
-        if let milestone, isSafeFileStem(milestone), let text = load(milestone) { return text }
-        return load("intro") ?? fallbackPitch
+    /// `preferredLanguages` is injected only so the tests can pin the language rules; the
+    /// app always passes the real preference. A milestone with no translation still shows
+    /// its English highlights rather than silently dropping to the intro pitch — see
+    /// LocalizedMarkdown for why per-file fallback beats per-locale all-or-nothing.
+    public static func markdown(milestone: String?,
+                                preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+        if let milestone, isSafeFileStem(milestone),
+           let text = load(milestone, preferredLanguages: preferredLanguages) { return text }
+        return load("intro", preferredLanguages: preferredLanguages) ?? fallbackPitch
     }
 
-    private static func load(_ name: String) -> String? {
-        guard let url = uiResourceBundle.url(forResource: "welcome/\(name)", withExtension: "md"),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+    private static func load(_ name: String, preferredLanguages: [String]) -> String? {
+        LocalizedMarkdown.load(folder: "welcome", name: name, bundle: uiResourceBundle,
+                               preferredLanguages: preferredLanguages)
     }
 
     /// `welcomeMilestone` is a maintainer-set constant, not user input — this is
@@ -103,6 +109,16 @@ public enum WelcomeContent {
             let rendered = NSMutableAttributedString(attributedString: inline(text, font: font))
             let range = NSRange(location: 0, length: rendered.length)
             rendered.addAttributes([.paragraphStyle: style, .foregroundColor: color], range: range)
+            // Links have to be re-styled AFTER that blanket colour, which would otherwise
+            // paint them the same as body text — clickable but indistinguishable, which is
+            // the worst of both. NSTextView applies its own linkTextAttributes on top; these
+            // explicit ones mean the string also reads as a link anywhere else it is drawn.
+            rendered.enumerateAttribute(.link, in: range) { value, linkRange, _ in
+                guard value != nil else { return }
+                rendered.addAttributes([.foregroundColor: NSColor.linkColor,
+                                        .underlineStyle: NSUnderlineStyle.single.rawValue],
+                                       range: linkRange)
+            }
             out.append(rendered)
         }
         return out

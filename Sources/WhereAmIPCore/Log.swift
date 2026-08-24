@@ -5,6 +5,11 @@ import os
 // — rather than standing up a second, disconnected Logger. `whereamip debug`
 // streams the whole subsystem regardless of which module emitted an entry,
 // so this doesn't change what's visible, only who's allowed to write to it.
+//
+// Never localized, deliberately: log lines are read by whoever is debugging — through
+// `whereamip debug` or Console.app — and end up quoted in issues. English keeps them
+// greppable and comparable across machines. The app's UI speaks the user's language; its
+// diagnostics speak the project's (same rule as StateRenderer and DiagnosticsReport).
 public enum Log {
     static let subsystem = "io.github.frinsen.whereamip"
     public static let monitor = Logger(subsystem: subsystem, category: "monitor")

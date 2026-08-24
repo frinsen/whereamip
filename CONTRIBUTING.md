@@ -80,3 +80,44 @@ the positive case; the uncorroborated/negative case proving it does NOT fire; pr
 doesn't capture a tunnel another tell already identifies; and the diagnosis case if
 relevant. If you can't test it, say so in the PR — a real `whereamip diagnostics` paste
 from the affected machine is good evidence.
+
+## Adding a translation
+
+Two halves, and only one of them is automatic.
+
+**The strings** are automatic: copy `Sources/WhereAmIPUI/Resources/en.lproj/Localizable.strings`
+to `<code>.lproj/Localizable.strings`, translate the values, and macOS picks the file when
+the system language matches. No Swift, no call-site change.
+
+- Keys stay untouched — a key is a code identifier, not text.
+- `%@` / `%d` keep their **count and order** from the English value. `String(format:)` fills
+  them positionally, so a dropped placeholder is a crash that only speakers of that language
+  would ever hit; `L10nTests.testPlaceholdersMatchTheBaseLocaleExactly` enforces it.
+- Use the platform's own vocabulary rather than a literal translation — what German macOS
+  calls "Mitteilungen", not "Benachrichtigungen". Check System Settings, not a dictionary.
+- Sibling grammar applies **per locale**: the labels must be parallel to each other in the
+  target language, not to the English source.
+- Watch fixed-width labels. `welcome.notify.caption` is a single-line slot that truncates
+  rather than wraps; `L10nTests.testNotifyCaptionFitsItsSingleLineSlotInEveryLocale`
+  measures it in every locale for exactly that reason.
+
+**The bundled Markdown** is not automatic: `welcome/` and `help/` are `.copy`'d resources,
+not localized ones. Put a translation in a language subfolder beside the English file —
+`welcome/de/intro.md`, `welcome/de/<milestone>.md`, `help/de/help.md` — and
+`LocalizedMarkdown` will prefer it. Fallback is **per file**, so a partial translation is
+fine: any file you haven't translated is served in English rather than dropping the whole
+locale.
+
+Then:
+
+- add the language code to `L10nTests.shippedLocales` — that is what subjects it to the
+  completeness and placeholder checks;
+- add it to `CFBundleLocalizations` in `scripts/make-app-bundle.sh`, or macOS treats the app
+  as English-only (the strings live in a nested SPM bundle, so it cannot infer them);
+- run `plutil -lint` on your `.strings` file. German quotation marks are a trap: the closing
+  „…“ must be U+201C, and a straight `"` inside a value silently ends the string early.
+
+Not translated, deliberately: `whereamip` output, the JSON, `whereamip diagnostics` / the ⌘D
+report, and log messages. Those are a parseable interface, and reports written in them land
+in English-language issues — the UI speaks the user's language, the diagnostics speak the
+project's.

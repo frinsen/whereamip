@@ -23,15 +23,17 @@ public enum HelpContent {
         "Help is unavailable in this build. The full documentation lives at "
         + "github.com/frinsen/whereamip."
 
-    /// Bundled help copy, or `fallback` when the file is missing or empty.
-    public static func markdown() -> String { markdown(in: uiResourceBundle) }
+    /// Bundled help copy in the user's language, or `fallback` when even the English file
+    /// is missing or empty.
+    public static func markdown(preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+        markdown(in: uiResourceBundle, preferredLanguages: preferredLanguages)
+    }
 
-    /// Bundle-injecting variant, so the missing/empty cases are testable against a
-    /// bundle that genuinely resolves nothing.
-    static func markdown(in bundle: Bundle) -> String {
-        guard let url = bundle.url(forResource: "help/help", withExtension: "md"),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return fallback }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? fallback : trimmed
+    /// Bundle- and language-injecting variant, so the missing/empty and language-selection
+    /// cases are testable against a bundle that genuinely resolves nothing.
+    static func markdown(in bundle: Bundle,
+                         preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+        LocalizedMarkdown.load(folder: "help", name: "help", bundle: bundle,
+                               preferredLanguages: preferredLanguages) ?? fallback
     }
 }

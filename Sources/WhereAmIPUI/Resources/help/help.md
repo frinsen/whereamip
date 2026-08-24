@@ -64,8 +64,11 @@ Everything the menu bar does, `whereamip` does too:
   Nothing is written to disk, before or after.
 - `whereamip config get` / `set` — the same settings the dropdown shows.
 
+`whereamip` output stays English on purpose: it is a parseable interface, and bug reports
+land in English-language GitHub issues.
+
 **Anything else**
 
 The README answers the longer questions, and bug reports are welcome — attach the
 output of `whereamip diagnostics`, or paste what ⌘D copied:
-github.com/frinsen/whereamip
+[github.com/frinsen/whereamip](https://github.com/frinsen/whereamip)

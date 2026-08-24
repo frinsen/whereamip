@@ -8,27 +8,43 @@ import WhereAmIPCore
 final class HelpContentTests: XCTestCase {
     let font = NSFont.systemFont(ofSize: 12)
 
+    /// Every assertion below pins the language explicitly. `HelpContent.markdown()` with no
+    /// argument follows the HOST's language, so an English-content assertion would pass on an
+    /// English Mac and fail on the maintainer's German one — a test that depends on whose
+    /// machine runs it is worse than no test.
     func testHelpMarkdownIsBundledAndIsRealCopy() {
-        let help = HelpContent.markdown()
+        let help = HelpContent.markdown(preferredLanguages: ["en"])
         XCTAssertFalse(help.isEmpty)
         XCTAssertNotEqual(help, HelpContent.fallback, "help.md did not resolve from the bundle")
         XCTAssertFalse(help.contains(".md"), "a file name leaked into the copy: \(help)")
     }
 
+    /// Not wording assertions — presence assertions. Each topic is a question the menu bar
+    /// itself has no room to answer, which is why this window exists. Checked per locale, so
+    /// a translation cannot quietly drop a section: the topics differ by language, the
+    /// obligation does not.
     func testHelpCoversTheThingsTheDropdownCannotExplainItself() {
-        // Not wording assertions — presence assertions. Each of these is a question
-        // the menu bar itself has no room to answer, which is why this window exists.
-        let help = HelpContent.markdown()
-        for topic in ["menu bar", "Since", "Checked", "Configured resolvers",
-                      "⌘C", "⌥⌘C", "⌘D", "⌘R", "⌘Q",
-                      "whereamip status", "whereamip watch", "whereamip diagnostics",
-                      "whereamip debug", "github.com/frinsen/whereamip"] {
-            XCTAssertTrue(help.contains(topic), "help.md never mentions \(topic)")
+        let topicsByLocale = [
+            "en": ["menu bar", "Since", "Checked", "Configured resolvers",
+                   "⌘C", "⌥⌘C", "⌘D", "⌘R", "⌘Q",
+                   "whereamip status", "whereamip watch", "whereamip diagnostics",
+                   "whereamip debug", "github.com/frinsen/whereamip"],
+            "de": ["Menüleiste", "Seit", "Geprüft", "Konfigurierte Resolver",
+                   "⌘C", "⌥⌘C", "⌘D", "⌘R", "⌘Q",
+                   "whereamip status", "whereamip watch", "whereamip diagnostics",
+                   "whereamip debug", "github.com/frinsen/whereamip"],
+        ]
+        for (locale, topics) in topicsByLocale {
+            let help = HelpContent.markdown(preferredLanguages: [locale])
+            for topic in topics {
+                XCTAssertTrue(help.contains(topic), "\(locale) help never mentions \(topic)")
+            }
         }
     }
 
     func testHelpRendersWithoutLeavingMarkupBehind() {
-        let rendered = WelcomeContent.rendered(HelpContent.markdown(), font: font, alignment: .left).string
+        let rendered = WelcomeContent.rendered(HelpContent.markdown(preferredLanguages: ["en"]),
+                                               font: font, alignment: .left).string
         XCTAssertFalse(rendered.isEmpty)
         XCTAssertFalse(rendered.contains("**"), "unrendered bold markup: \(rendered)")
         XCTAssertFalse(rendered.contains("\n- "), "unrendered bullet markup: \(rendered)")
@@ -38,7 +54,7 @@ final class HelpContentTests: XCTestCase {
 
     func testMissingFileFallsBackToASentenceRatherThanAPathOrAnEmptyWindow() {
         let empty = try! emptyBundle()
-        let text = HelpContent.markdown(in: empty)
+        let text = HelpContent.markdown(in: empty, preferredLanguages: ["en"])
         XCTAssertEqual(text, HelpContent.fallback)
         // A true sentence, not a file path and not a lookup key. (The URL it points
         // at is copy, which is why this checks for path/bundle debris specifically.)
@@ -57,7 +73,8 @@ final class HelpContentTests: XCTestCase {
         try "   \n\n".write(to: bundleURL.appendingPathComponent("help.md"),
                             atomically: true, encoding: .utf8)
         let bundle = try XCTUnwrap(Bundle(url: root.appendingPathComponent("resources.bundle")))
-        XCTAssertEqual(HelpContent.markdown(in: bundle), HelpContent.fallback)
+        XCTAssertEqual(HelpContent.markdown(in: bundle, preferredLanguages: ["en"]),
+                       HelpContent.fallback)
     }
 
     private func emptyBundle() throws -> Bundle {

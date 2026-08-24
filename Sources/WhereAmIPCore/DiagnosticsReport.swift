@@ -10,10 +10,15 @@ import Foundation
 /// stamp, and the date formatter all come in as arguments, so every permutation is
 /// unit-testable and nothing here reads the clock, the defaults, or the network.
 ///
-/// Deliberately NOT routed through `L10n`: like `StateRenderer`, this is CLI output
-/// and a clipboard payload someone pastes into a bug report — a stable artifact,
-/// not copy to be retuned per release. It also shows only what the UI already
-/// shows; no new measurement is taken to produce it.
+/// Deliberately NOT routed through `L10n`, and deliberately NOT translated even though the
+/// app itself is: like `StateRenderer`, this is CLI output and a clipboard payload someone
+/// pastes into a bug report — a stable artifact, not copy to be retuned per release. The
+/// destination decides the language: these reports land in GitHub issues that the maintainer
+/// and other contributors read in English, so a German rendering of the same facts would
+/// make a German user's report LESS useful to the project, not more. The app's own UI is
+/// what speaks the user's language; the report speaks the project's. (Same reasoning covers
+/// the JSON and the log messages.) It also shows only what the UI already shows; no new
+/// measurement is taken to produce it.
 public enum DiagnosticsReport {
     /// Same locale-aware dateStyle/timeStyle pairing the dropdown's "Since"/"Checked"
     /// rows use (see `MenuBuilder.timeFormatter`) — a report pasted by a German user

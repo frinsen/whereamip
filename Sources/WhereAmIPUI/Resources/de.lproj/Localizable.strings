@@ -1,0 +1,145 @@
+/* WhereAmIP — deutsche UI-Texte.
+
+   Schwesterdatei zu en.lproj/Localizable.strings; die Schlüssel sind in
+   Sources/WhereAmIPUI/L10n.swift deklariert. macOS wählt diese Datei automatisch,
+   sobald die Systemsprache Deutsch ist — im Code ist dafür nichts zu tun.
+
+   Regeln, die nicht frei änderbar sind:
+     - Schlüssel sind stabil; einen Schlüssel umzubenennen ist eine Code-Änderung
+     - %@ / %d behalten Anzahl UND Reihenfolge aus en.lproj (String(format:) füllt
+       positionsabhängig) — ein fehlendes %@ hier wäre ein Absturz, den nur deutsche
+       Nutzer sehen; L10nTests prüft die Parität
+     - führende/abschließende Leerzeichen in den Fragmenten (dns.row.*,
+       menu.privateRelay.via, notification.dns.body.egress) sind Absicht
+
+   Vokabular: deutsche macOS-Systembegriffe statt wörtlicher Übersetzungen —
+   „Mitteilungen" (nicht „Benachrichtigungen"), „Beenden", „Aktualisieren",
+   Ordner „Programme", „Nach Updates suchen".
+
+   NICHT hier: Ausgaben von `whereamip`, JSON-Schlüssel, Log-Meldungen. Das ist eine
+   auswertbare Schnittstelle, kein UI-Text.
+*/
+
+/* MARK: - menu */
+
+"menu.header" = "WhereAmIP v%@";
+"menu.update.restart" = "↻ Zum Abschließen des Updates neu starten (v%@)";
+"menu.update.available" = "⬆︎ Update v%@ verfügbar (brew upgrade whereamip)";
+"menu.offline" = "Keine Internetverbindung";
+"menu.offline.hijack" = "⚠️ OpenVPN-Hijack-Routen vorhanden — Tunnel vermutlich tot";
+/* %1 Zeitstempel, %2 Länderflagge (kann leer sein), %3 Betreiber (kann leer sein) */
+"menu.offline.lastSeen" = "Zuletzt online: %@ über %@ %@";
+/* %1 Betreiber, %2 ISO-Ländercode */
+"menu.leak.ipv6" = "⚠️ IPv6-Leck — v6 tritt über %@ (%@) aus";
+"menu.leak.dns" = "⚠️ DNS-Leck — Anfragen werden über %@ beantwortet";
+/* %1 Resolver-Betreiber, %2 Austritts-IP */
+"menu.leak.dns.withOperator" = "⚠️ DNS-Leck — Anfragen werden über %@ (%@) beantwortet";
+"menu.leak.dns.suspected" = "DNS-Leck vermutet — Resolver tritt außerhalb des Tunnels aus";
+"menu.since" = "Seit %@";
+"menu.checked" = "Geprüft: %@";
+/* %1 VPN-Name, %2 Schnittstelle */
+"menu.route.vpn" = "VPN: %@ (%@) hat die Standardroute";
+/* Wenn der Tunnel die Route hat, aber kein Name zu ermitteln war — bewusst nicht
+   „unbekannt", das läse sich wie ein Fehler. %1 Schnittstelle */
+"menu.route.vpn.unnamed" = "VPN (%@) hat die Standardroute";
+/* %1 Verbindungsart (WLAN/Ethernet/…), %2 Schnittstelle */
+"menu.route.link" = "Route: %@ (%@)";
+/* %1 das Fragment „menu.privateRelay.via", oder leer wenn das Land unbekannt ist */
+"menu.privateRelay" = "Privat-Relay: EIN — Safari tritt%@ woanders aus";
+"menu.privateRelay.via" = " über %@";
+"menu.org.unknown" = "deinen Internetanbieter";
+/* ⌥⌘C-Alternative zur Austritts-IP-Zeile: kopiert BEIDE Adressen, der Text muss also
+   genau zwei versprechen — ohne IPv6-Austritt fehlt die Zeile ganz */
+"menu.copyExitBoth" = "Beide Austrittsadressen kopieren";
+/* Nimmt denselben ⌥-Platz ein, wenn es keinen IPv6-Austritt gibt, als DEAKTIVIERTE
+   Zeile: ⌥ muss immer antworten — entweder mit der Kopie oder mit dem Grund dafür,
+   dass es keine gibt. */
+"menu.copyExitBoth.unavailable" = "Keine IPv6-Adresse zum Kopieren";
+"menu.copyDiagnostics" = "Diagnose kopieren";
+"menu.refresh" = "Aktualisieren";
+/* Apples Namensmuster für Hilfeeinträge, „<Programmname>-Hilfe" (wie „Safari-Hilfe").
+   Die App ist LSUIElement, hat also keine echte Menüleiste — diese Zeile ersetzt sie. */
+"menu.help" = "WhereAmIP-Hilfe";
+"menu.settings" = "Einstellungen";
+"menu.restart" = "WhereAmIP neu starten";
+"menu.quit" = "WhereAmIP beenden";
+
+/* MARK: - settings (zugleich die Beschriftungen im Willkommensfenster) */
+
+"settings.style" = "Menüleistenstil";
+"settings.style.emoji" = "Emoji-Flagge";
+"settings.style.code" = "ISO-Ländercode";
+"settings.style.image" = "Flaggenbild";
+"settings.notifications" = "Mitteilungen anzeigen";
+"settings.launchAtLogin" = "Bei der Anmeldung starten";
+"settings.applicationsLink" = "Zum Ordner „Programme“ hinzufügen";
+"settings.updates" = "Nach Updates suchen";
+"settings.dnsProbe" = "Auf DNS-Lecks prüfen";
+"settings.welcome" = "Willkommensfenster anzeigen";
+
+/* MARK: - dns */
+
+"dns.row" = "DNS: %@";
+"dns.row.interface" = " über %@";
+"dns.row.doh" = " · DoH";
+"dns.row.dot" = " · DoT";
+"dns.row.plaintext" = " · unverschlüsselt";
+"dns.row.more" = "  (+%d weitere)";
+"dns.section.configured" = "Konfigurierte Resolver";
+"dns.section.egress" = "Anfragen beantwortet von";
+/* %1 Resolver-Adresse, %2 Schnittstellen (kommagetrennt), denen sie zugeordnet ist */
+"dns.resolver.interfaces" = "%@ — %@";
+"dns.disabled" = "DNS-Prüfung deaktiviert";
+"dns.forwarder" = "Router leitet an %@ weiter — ob dieser Abschnitt verschlüsselt ist, wird am Router eingestellt";
+/* Die beiden Kopierzeilen am Ende des DNS-Untermenüs. Jede benennt, WELCHE der beiden
+   Listen darüber sie kopiert, im Vokabular der jeweiligen Überschrift. */
+"dns.copy.configured" = "Konfigurierte Resolver kopieren";
+"dns.copy.answering" = "Antwortende Resolver kopieren";
+
+/* MARK: - notification */
+
+/* %1 bisherige Flagge, %2 neue Flagge */
+"notification.countryChanged.title" = "Austritt geändert: %@ → %@";
+"notification.countryChanged.body" = "Austrittsland geändert";
+"notification.countryChanged.body.vpn" = "%@ hat die Standardroute übernommen";
+"notification.ipChanged.title" = "Neue Austritts-IP in %@";
+"notification.offline.title" = "Internet nicht erreichbar";
+"notification.offline.body" = "Netzwerk aktiv, Prüfungen schlagen fehl";
+"notification.offline.body.hijack" = "OpenVPN-Hijack-Routen vorhanden — Tunnel vermutlich tot";
+/* %1 Flagge, %2 Stadt (kann leer sein) */
+"notification.online.title" = "Wieder online: %@ %@";
+"notification.leak.title" = "⚠️ Mögliches VPN-Leck";
+"notification.leak.body" = "VPN-Route aktiv, Datenverkehr tritt weiterhin über %@ aus";
+"notification.relay.on.title" = "Privat-Relay EIN";
+"notification.relay.on.body" = "Safari-Datenverkehr tritt über Apples Relay aus";
+"notification.relay.off.title" = "Privat-Relay AUS";
+"notification.relay.off.body" = "Safari-Datenverkehr folgt der Systemroute";
+"notification.ipv6.title" = "⚠️ IPv6-Leck erkannt";
+"notification.ipv6.body" = "IPv6-Datenverkehr tritt über %@ aus — dein VPN tunnelt nur IPv4";
+"notification.dns.title" = "⚠️ DNS-Leck erkannt";
+"notification.dns.body" = "DNS-Anfragen werden außerhalb deines VPN-Tunnels beantwortet";
+"notification.dns.body.egress" = " — Resolver-Austritt %@";
+"notification.flag.unknown" = "❓";
+"notification.org.unknown" = "deinen Internetanbieter";
+
+/* MARK: - Willkommensfenster (Fließtext liegt in Resources/welcome/de/*.md) */
+
+"welcome.window.title" = "WhereAmIP";
+"welcome.heading.first" = "Willkommen bei WhereAmIP v%@";
+/* %1 ist der WILLKOMMENS-MEILENSTEIN, nicht die laufende Version — das Fenster ist
+   für diese Version wieder aufgegangen, also nennt es sie */
+"welcome.heading.milestone" = "WhereAmIP v%@ — Neuerungen";
+"welcome.hint" = "Flagge nicht zu sehen? In einer vollen Menüleiste verschwindet sie leicht hinter der Notch.";
+"welcome.setup.header" = "Deine Einrichtung";
+"welcome.setup.caption" = "(zeigt die aktuellen Einstellungen)";
+/* Einzeilig: muss bei 10 pt in 353 pt passen, sonst wird abgeschnitten. Deutsche Sätze
+   sind länger als englische, deshalb hier bewusst knapp — gemessen von
+   L10nTests.testNotifyCaptionFitsItsSingleLineSlotInEveryLocale, nicht geschätzt. */
+"welcome.notify.caption" = "Meldet Austritts-, Routen- und Verbindungswechsel. Fragt macOS.";
+"welcome.notify.hint" = "Mitteilungen sind in den Systemeinstellungen deaktiviert — Einstellungen öffnen";
+"welcome.privacy" = "Kein Tracking, kein Verlauf, keine Logs.";
+"welcome.done" = "Fertig";
+
+/* MARK: - Hilfefenster (Fließtext liegt in Resources/help/de/help.md) */
+
+"help.window.title" = "WhereAmIP-Hilfe";

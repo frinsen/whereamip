@@ -18,24 +18,12 @@ import WhereAmIPUI
 /// The two windows are independent objects with independent controllers, so opening
 /// one never touches the other, and Settings ▸ Show Welcome Window behaves exactly as
 /// it did before this window existed.
-/// A document view whose origin is top-left. Without this, an NSScrollView lays its
-/// document out from the BOTTOM, so a document shorter than the window sits at the
-/// bottom edge and a longer one opens scrolled to its end — both wrong for text.
-private final class FlippedView: NSView {
-    override var isFlipped: Bool { true }
-}
-
-final class HelpWindowController: NSWindowController, NSWindowDelegate {
+final class HelpWindowController: NSWindowController {
     // Wide enough for the shortcut lines not to wrap mid-chord, tall enough to show
     // a couple of sections at once; resizable because it's a document, not a dialog.
     private static let contentWidth: CGFloat = 480
     private static let contentHeight: CGFloat = 560
     private static let margin: CGFloat = 24
-    /// Kept so `windowDidResize` can re-wrap the body: an NSTextField only wraps at
-    /// its `preferredMaxLayoutWidth`, which does not follow its constraints on its
-    /// own, so a resized window would otherwise keep the width it was born with.
-    private var body: NSTextField!
-
     init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.contentWidth, height: Self.contentHeight),
@@ -50,15 +38,7 @@ final class HelpWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         super.init(window: window)
         buildContent()
-        window.delegate = self
         window.center()
-    }
-
-    /// Re-wrap on resize — see `body`'s doc for why this isn't automatic.
-    func windowDidResize(_ notification: Notification) {
-        guard let width = window?.contentView?.bounds.width else { return }
-        body.preferredMaxLayoutWidth = max(200, width - 2 * Self.margin)
-        body.invalidateIntrinsicContentSize()
     }
 
     @available(*, unavailable)
@@ -67,32 +47,52 @@ final class HelpWindowController: NSWindowController, NSWindowDelegate {
     private func buildContent() {
         guard let window else { return }
 
-        // Left-aligned, unlike the welcome window's centered pitch: this is a
-        // multi-section document with bullet lists, and centered prose at this
-        // length is unreadable.
-        let bodyFont = NSFont.systemFont(ofSize: 12)
-        body = NSTextField(wrappingLabelWithString: "")
-        body.font = bodyFont
-        body.attributedStringValue = WelcomeContent.rendered(HelpContent.markdown(), font: bodyFont,
-                                                             alignment: .left)
-        body.preferredMaxLayoutWidth = Self.contentWidth - 2 * Self.margin
-        body.translatesAutoresizingMaskIntoConstraints = false
-
-        // A document that outgrows its window scrolls rather than being clipped —
-        // the one structural difference from the welcome window, whose content is
-        // sized to always fit.
+        // A document that outgrows its window scrolls rather than being clipped — the one
+        // structural difference from the welcome window, whose content is sized to fit.
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        // The label is pinned to the clip view's width so it wraps to whatever the
-        // window is currently sized to, and grows downwards only.
-        let documentView = FlippedView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        documentView.addSubview(body)
-        scrollView.documentView = documentView
+        // NSTextView, not the NSTextField this used to be, for one reason: the closing
+        // GitHub pointer is a real link, and a text field will not act on a `.link`
+        // attribute no matter how correctly the attributed string carries it. A text view
+        // opens it, shows the pointing-hand cursor over it, and lets the reader select and
+        // copy any of this text — all for free.
+        //
+        // Left-aligned, unlike the welcome window's centered pitch: this is a multi-section
+        // document with bullet lists, and centered prose at that length is unreadable.
+        let bodyFont = NSFont.systemFont(ofSize: 12)
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0,
+                                                width: Self.contentWidth, height: Self.contentHeight))
+        textView.isEditable = false
+        textView.isSelectable = true          // required for links to be clickable at all
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: Self.margin, height: Self.margin)
+        // Classic autoresizing text-view-in-scroll-view setup rather than Auto Layout: with
+        // `widthTracksTextView` the container re-wraps itself on every window resize, which
+        // is exactly what the old text field needed a windowDidResize hook to fake.
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: Self.contentWidth,
+                                                       height: CGFloat.greatestFiniteMagnitude)
+        // Link appearance is already carried by the attributed string (WelcomeContent
+        // .rendered); this makes the text view agree rather than override it with its own
+        // default blue, and adds the underline on hover the platform expects.
+        textView.linkTextAttributes = [
+            .foregroundColor: NSColor.linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .cursor: NSCursor.pointingHand,
+        ]
+        textView.textStorage?.setAttributedString(
+            WelcomeContent.rendered(HelpContent.markdown(), font: bodyFont, alignment: .left))
+        scrollView.documentView = textView
 
         let contentView = NSView()
         contentView.addSubview(scrollView)
@@ -103,15 +103,6 @@ final class HelpWindowController: NSWindowController, NSWindowDelegate {
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-
-            documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
-            documentView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
-            documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-
-            body.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: Self.margin),
-            body.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -Self.margin),
-            body.topAnchor.constraint(equalTo: documentView.topAnchor, constant: Self.margin),
-            body.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -Self.margin),
         ])
     }
 

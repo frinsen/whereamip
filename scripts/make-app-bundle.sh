@@ -49,6 +49,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIconName</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
+  <!-- The UI strings live in the nested SPM resource bundle's en.lproj/de.lproj, NOT in
+       Contents/Resources/*.lproj, so macOS cannot infer this app's languages by looking at
+       the app bundle: without this key it treats WhereAmIP as English-only, which both hides
+       it from System Settings > Language & Region > Applications (the per-app language
+       picker) and risks the app's effective AppleLanguages list being narrowed to English
+       before the nested bundle is ever consulted. Declaring them explicitly is the
+       documented way to say what a bundle can speak. Keep this list in step with the
+       .lproj folders under Sources/WhereAmIPUI/Resources — L10nTests.shippedLocales is the
+       same list on the test side. -->
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>de</string></array>
   <key>NSAppTransportSecurity</key><dict>
     <key>NSExceptionDomains</key><dict>
       <key>api.ipify.org</key><dict>

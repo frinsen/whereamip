@@ -25,16 +25,101 @@ final class L10nTests: XCTestCase {
         XCTAssertEqual(L10n.string(.dnsRowMore, 3), "  (+3 more)")
     }
 
-    // MARK: - completeness
+    // MARK: - completeness, per locale
 
-    func testEveryDeclaredKeyExistsInTheStringsFile() {
-        // CaseIterable is the whole reason keys are a typed enum: adding a case
-        // without adding the line to Localizable.strings fails right here, and no
-        // hand-maintained list can drift out of sync with the call sites.
-        for key in L10nKey.allCases {
-            let value = L10n.string(key)
-            XCTAssertNotEqual(value, key.rawValue, "missing from en.lproj/Localizable.strings: \(key.rawValue)")
-            XCTAssertFalse(value.isEmpty, "empty value for \(key.rawValue)")
+    /// Every localization this app ships. Parameterizing the completeness check over this
+    /// list (rather than copying the test per language) is what keeps adding a locale a
+    /// matter of adding a folder and one entry here.
+    static let shippedLocales = ["en", "de"]
+
+    /// The `.lproj` bundle for `locale`, resolved out of the located UI bundle. Deliberately
+    /// NOT `L10n.string`, which answers in whatever language the test HOST prefers — these
+    /// assertions have to hold on every machine, including an English one checking German.
+    func bundle(for locale: String) throws -> Bundle {
+        let path = try XCTUnwrap(uiResourceBundle.path(forResource: locale, ofType: "lproj"),
+                                 "\(locale).lproj is missing from the resource bundle")
+        return try XCTUnwrap(Bundle(path: path))
+    }
+    func value(_ key: L10nKey, in bundle: Bundle) -> String {
+        bundle.localizedString(forKey: key.rawValue, value: nil, table: nil)
+    }
+
+    func testEveryDeclaredKeyExistsInEveryShippedLocale() throws {
+        // CaseIterable is the whole reason keys are a typed enum: adding a case without
+        // adding the line fails right here — now for each locale, so a translation can't
+        // silently lag behind the English file.
+        for locale in Self.shippedLocales {
+            let bundle = try self.bundle(for: locale)
+            for key in L10nKey.allCases {
+                let value = self.value(key, in: bundle)
+                XCTAssertNotEqual(value, key.rawValue,
+                                  "missing from \(locale).lproj/Localizable.strings: \(key.rawValue)")
+                XCTAssertFalse(value.isEmpty, "empty value for \(key.rawValue) in \(locale)")
+            }
+        }
+    }
+
+    /// A translation that drops or reorders a placeholder is a CRASH — `String(format:)`
+    /// reads an argument that was never passed — and it is a crash only speakers of that
+    /// language would ever hit. Cheap to prevent, so it is prevented mechanically.
+    func testPlaceholdersMatchTheBaseLocaleExactly() throws {
+        let base = try bundle(for: "en")
+        for locale in Self.shippedLocales where locale != "en" {
+            let translated = try bundle(for: locale)
+            for key in L10nKey.allCases {
+                XCTAssertEqual(Self.placeholders(in: value(key, in: translated)),
+                               Self.placeholders(in: value(key, in: base)),
+                               "placeholder mismatch for \(key.rawValue) in \(locale)")
+            }
+        }
+    }
+
+    /// The format specifiers in order, e.g. ["%@", "%@", "%d"]. `%%` is a literal percent
+    /// and is deliberately not counted.
+    static func placeholders(in value: String) -> [String] {
+        var found: [String] = []
+        var rest = Substring(value)
+        while let percent = rest.firstIndex(of: "%") {
+            let after = rest.index(after: percent)
+            guard after < rest.endIndex else { break }
+            let specifier = rest[after]
+            if specifier != "%" { found.append("%\(specifier)") }
+            rest = rest[rest.index(after: after)...]
+        }
+        return found
+    }
+
+    /// Foundation, not us, decides which `.lproj` a German Mac reads — so this pins the two
+    /// things that decision depends on: that the shipped bundle actually ADVERTISES both
+    /// localizations, and that Foundation's own matcher picks German for a German
+    /// preference (region variants included). `preferredLocalizations(from:forPreferences:)`
+    /// is the very rule `localizedString` applies, run here against the real bundle.
+    func testTheBundleAdvertisesEveryShippedLocaleAndFoundationPicksTheRightOne() {
+        let available = uiResourceBundle.localizations
+        for locale in Self.shippedLocales {
+            XCTAssertTrue(available.contains(locale), "\(locale) missing from \(available)")
+        }
+        for preference in [["de-DE", "en-US"], ["de"], ["de-AT", "fr"]] {
+            XCTAssertEqual(Bundle.preferredLocalizations(from: available, forPreferences: preference).first,
+                           "de", "German preference \(preference) did not select de.lproj")
+        }
+        for preference in [["en-GB", "de-DE"], ["fr-FR"], ["en"]] {
+            XCTAssertEqual(Bundle.preferredLocalizations(from: available, forPreferences: preference).first,
+                           "en", "\(preference) should fall to the development language")
+        }
+    }
+
+    /// The welcome window's notify caption is a SINGLE-LINE label in a fixed 353pt slot
+    /// (see WelcomeWindow) — it truncates rather than wraps. German runs longer than
+    /// English almost by default, so this is measured, not eyeballed, for every locale.
+    func testNotifyCaptionFitsItsSingleLineSlotInEveryLocale() throws {
+        let available: CGFloat = 372 - 19   // window content width minus the checkbox indent
+        for locale in Self.shippedLocales {
+            let caption = value(.welcomeNotifyCaption, in: try bundle(for: locale))
+            let width = (caption as NSString)
+                .size(withAttributes: [.font: NSFont.systemFont(ofSize: 10)]).width
+            XCTAssertLessThanOrEqual(width, available,
+                                     "\(locale) notify caption is \(Int(width))pt, truncates at \(Int(available))pt: \(caption)")
         }
     }
 
