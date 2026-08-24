@@ -8,6 +8,14 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Fixed
+- The open dropdown no longer jumps when you hold or release ⌥. AppKit calls
+  `menuNeedsUpdate` on every keydown during menu tracking — modifier presses included —
+  and the app rebuilt every row each time, tearing the item views out from under the
+  cursor. The menu is now built once per open; the ⌥ alternate swaps natively, which is
+  what it was always meant to do. A state refresh that lands while the menu is open now
+  appears on the next open rather than rearranging rows mid-click.
+
 ## [0.5] — 2026-08-24
 
 ### Added

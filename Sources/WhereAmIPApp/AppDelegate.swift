@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var availableUpdate: String?
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
+    // Build-once-per-open guard for the dropdown (see MenuTrackingSession): AppKit calls
+    // menuNeedsUpdate on every keydown during tracking, ⌥ included.
+    let menuSession = MenuTrackingSession()
     var welcomeWindowController: WelcomeWindowController?
     // Separate from the welcome window's controller on purpose — the two windows
     // are independent and may be open at the same time.
@@ -252,9 +255,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // Rebuild the menu fresh on every open (spec §4)
+    // Rebuild the menu fresh on every OPEN (spec §4) — but only once per open.
+    //
+    // menuNeedsUpdate also fires on every keydown while the menu is tracking, ⌥ presses and
+    // releases included, and rebuilding there tore the item views out of the open menu on
+    // each one (visible jump, lost hover highlight — field-reported on v0.5). The alternate
+    // pair never needed it: AppKit swaps those natively. MenuTrackingSession (in the UI
+    // target, where it is unit-tested) holds the once-per-session rule and the reasoning,
+    // including why a mid-open state refresh deliberately does not appear until the next open.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let fresh = MenuBuilder.build(
+        menuSession.updateIfNeeded(menu) { self.buildMenu() }
+    }
+
+    // Ends the tracking session, so the next open builds from fresh state. Also the reason
+    // nothing needs to clear this flag on state changes: the menu is only ever stale while
+    // it is open, and closing it is what makes it current again.
+    func menuDidClose(_ menu: NSMenu) {
+        menuSession.trackingEnded()
+    }
+
+    private func buildMenu() -> NSMenu {
+        MenuBuilder.build(
             state: lastState, style: settings.menuBarStyle,
             notificationsEnabled: settings.notificationsEnabled,
             launchAtLogin: SMAppService.mainApp.status == .enabled,
@@ -380,11 +401,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     guard let self else { return }
                     self.relaunch(from: Bundle.main.bundlePath)
                 }))
-        menu.removeAllItems()
-        fresh.items.forEach { item in
-            fresh.removeItem(item)
-            menu.addItem(item)
-        }
     }
 }
 
