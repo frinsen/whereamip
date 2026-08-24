@@ -37,8 +37,22 @@ public enum SemVer {
 
 /// Passive update check against the latest GitHub release. Never downloads
 /// or applies anything — it only reports a version string for the UI to
-/// display, leaving the actual upgrade to `brew upgrade whereamip`.
+/// display, leaving the actual upgrade to `UpdateChecker.upgradeCommand`.
 public struct UpdateChecker: Sendable {
+    /// The command the dropdown's update row puts on the clipboard.
+    ///
+    /// `brew update &&` is not decoration. WhereAmIP is installed from a third-party TAP,
+    /// which Homebrew keeps as a git clone — and `brew upgrade <formula>` does not reliably
+    /// pull it. Homebrew's API mode refreshes the core/cask JSON, not tap clones, so on a
+    /// stale clone the upgrade cheerfully reports the OLD version as already installed and
+    /// does nothing. Field-reported by a beta tester who saw "0.4.2 already installed" hours
+    /// after 0.5 was on the tap. Only an explicit `brew update` refreshes the clone, so the
+    /// command we hand people has to include it.
+    ///
+    /// Single source of truth: the row's clipboard payload uses this, and it is what the
+    /// tests assert against — the string must never quietly regress to the bare upgrade.
+    public static let upgradeCommand = "brew update && brew upgrade whereamip"
+
     private let session: URLSession
     private let deadline: Double
     static let url = URL(string: "https://api.github.com/repos/frinsen/whereamip/releases/latest")!

@@ -24,7 +24,13 @@
 
 "menu.header" = "WhereAmIP v%@";
 "menu.update.restart" = "↻ Zum Abschließen des Updates neu starten (v%@)";
-"menu.update.available" = "⬆︎ Update v%@ verfügbar (brew upgrade whereamip)";
+/* Die Zeile kopiert den Befehl und nennt ihn bewusst NICHT: er lautet
+   `brew update && brew upgrade whereamip` (das `update` ist nötig — siehe
+   UpdateChecker.upgradeCommand) und machte die Zeile um rund 100 pt zur breitesten im
+   Menü. Gar keinen Befehl zu nennen kann der Zwischenablage nicht widersprechen — genau
+   das tat die alte Beschriftung, die einen unvollständigen nannte. Verb am Ende wie die
+   anderen Aktionszeilen („Diagnose kopieren"). */
+"menu.update.available" = "⬆︎ Update v%@ verfügbar — Update-Befehl kopieren";
 "menu.offline" = "Keine Internetverbindung";
 "menu.offline.hijack" = "⚠️ OpenVPN-Hijack-Routen vorhanden — Tunnel vermutlich tot";
 /* %1 Zeitstempel, %2 Länderflagge (kann leer sein), %3 Betreiber (kann leer sein) */

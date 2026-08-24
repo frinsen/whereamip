@@ -209,6 +209,19 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(first.title.contains("0.3"))
         XCTAssertTrue(first.isEnabled)
     }
+    /// The row must not name a command at all: the previous label named an INCOMPLETE one
+    /// (`brew upgrade whereamip`), which is what sent a beta tester into a stale-tap no-op.
+    /// The clipboard carries the real command; the label just must not contradict it.
+    func testUpdateRowDoesNotSpellOutACommandThatWouldContradictTheClipboard() {
+        for locale in ["en", "de"] {
+            L10n.languageSetting = { locale }
+            let label = L10n.string(.menuUpdateAvailable, "0.5.1")
+            XCTAssertFalse(label.contains("brew"), "\(locale) row names a command: \(label)")
+            XCTAssertTrue(label.contains("0.5.1"), "\(locale) row must still name the version")
+        }
+        L10n.languageSetting = { Settings().language }
+    }
+
     func testNoUpdateRowWhenUnavailable() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())

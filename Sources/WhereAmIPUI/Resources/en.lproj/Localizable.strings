@@ -19,7 +19,12 @@
 
 "menu.header" = "WhereAmIP v%@";
 "menu.update.restart" = "↻ Restart to finish update (v%@)";
-"menu.update.available" = "⬆︎ Update v%@ available (brew upgrade whereamip)";
+/* The row copies the upgrade command; it deliberately does NOT spell it out. The real
+   command is `brew update && brew upgrade whereamip` (the update half matters — see
+   UpdateChecker.upgradeCommand), and printing that in the row made it the widest thing in
+   the dropdown by ~100pt. Naming no command at all cannot contradict the clipboard, which
+   is what the previous label did by naming an incomplete one. */
+"menu.update.available" = "⬆︎ Update v%@ available — copy the update command";
 "menu.offline" = "No internet connection";
 "menu.offline.hijack" = "⚠️ OpenVPN hijack routes present — tunnel likely dead";
 /* %1 timestamp, %2 country flag emoji (may be empty), %3 organisation (may be empty) */

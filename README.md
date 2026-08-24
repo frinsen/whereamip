@@ -25,7 +25,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Three menu bar styles: emoji flag (🇩🇪), ISO country code (`DE`), or crisp flag image — pick per taste in Settings; ISO code is the monochrome, accessibility-friendly option (🇳🇱 vs 🇱🇺 at 16 px is hard, `NL` vs `LU` isn't)
 - Full functionality via CLI (`whereamip status --json`)
 - Notifications (off by default) — alerts on exit, route, or connectivity changes; launch at login
-- Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. Once brew has installed it, the row becomes "↻ Restart to finish update" — one click relaunches into the new version. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
+- Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row copies `brew update && brew upgrade whereamip` for you (the `brew update` half matters — see the FAQ). Once brew has installed it, the row becomes "↻ Restart to finish update" — one click relaunches into the new version. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
 - One-time welcome window on first start (and once after major releases): what the app is, where it lives, and live toggles for Launch at Login, Add to Applications folder, and Show Notifications — no permission prompts unless you flip a toggle. Reopen it anytime via Settings
 - Honest freshness: the dropdown shows both "Since" (when the current state began, to the second) and "Checked" (when it was last verified), and a manual Refresh shows a brief loading cue in the menu bar
 - Speaks German when your Mac does — menu, notifications, welcome and help windows follow the system language, with English everywhere else (`whereamip` output stays English on purpose: it's a parseable interface). **Settings ▸ Language** overrides it in-app (English/Deutsch/system), and the change is live: the next time you open the menu it's in the new language, no restart
@@ -109,6 +109,15 @@ WhereAmIP probes real reachability instead of trusting Wi-Fi status. If the netw
 **Why does Safari show a different location than my other apps?**
 That's iCloud Private Relay: it carries Safari traffic through Apple's relay while other apps take the system route. WhereAmIP detects this split and shows both exits.
 
+**`brew upgrade` says "already installed" / doesn't see the new version?**
+Your tap clone is stale. WhereAmIP is installed from a third-party tap, which Homebrew keeps as a git clone — and `brew upgrade <formula>` does not reliably pull it (API mode refreshes Homebrew's own core/cask data, not tap clones). On a stale clone the upgrade cheerfully reports the version you already have and does nothing. Run `brew update` first:
+
+```bash
+brew update && brew upgrade whereamip
+```
+
+That is exactly what the dropdown's update row now copies for you.
+
 **Does it phone home?**
 No — see Privacy below. No accounts, no API keys, no tracking.
 
@@ -121,7 +130,7 @@ WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothi
 
 The DNS leak check is the one part that sends DNS queries of its own: per full refresh it looks up the TXT record of up to six random names under `test.dnscheck.tools` (each name is used once, so nothing is cached and every lookup reaches that zone's authoritative server, which reports which resolver address asked). That server therefore sees your resolvers' egress addresses — the same thing every website you visit sees — and nothing else about you; the queries carry no identifier beyond the random label. If that service is unreachable, a single TXT lookup of Google's `o-o.myaddr.l.google.com` beacon serves as the fallback. Reading your resolver *configuration* needs no network at all and always works. Turn the check off with `whereamip config set dns false` (or the "Check for DNS Leaks" toggle in Settings) and no such query is ever sent.
 
-WhereAmIP also checks `api.github.com/repos/frinsen/whereamip/releases/latest` once a day (and whenever you hit Refresh) to see if a newer release exists — this is a passive version check only, it never downloads or installs anything, it just shows a dropdown row that copies `brew upgrade whereamip` for you to run yourself. This check is on by default; turn it off with `whereamip config set updates false` (or the "Check for Updates" toggle in Settings) and no such request is ever made.
+WhereAmIP also checks `api.github.com/repos/frinsen/whereamip/releases/latest` once a day (and whenever you hit Refresh) to see if a newer release exists — this is a passive version check only, it never downloads or installs anything, it just shows a dropdown row that copies `brew update && brew upgrade whereamip` for you to run yourself. This check is on by default; turn it off with `whereamip config set updates false` (or the "Check for Updates" toggle in Settings) and no such request is ever made.
 
 WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), but this creates no privacy problem: the app never writes a log file anywhere. Entries are logged at debug level, which macOS does not persist to disk by default — they exist only in the local system's in-memory ring buffer while you're actively streaming them with `whereamip debug` (or Console.app), and expire on their own shortly after. Nothing is collected, stored, or sent off your Mac.
 
@@ -131,7 +140,7 @@ WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), b
 - Faster far-end detection: a VPN server switch inside the same tunnel produces no local route event, so today the geo backstop (5 min) is the only trigger.
 - Optional history: `whereamip watch --json >> file` already works as a manual log; consider last-N transitions in the dropdown.
 - **Multi-language**: *`de` done.* The app follows your Mac's language — every menu row, notification, and both windows are available in German, and further locales are a `<code>.lproj` folder plus a language subfolder for the bundled Markdown (see CONTRIBUTING). CLI output, `whereamip diagnostics` and the log stay English by design — they are a parseable interface, and bug reports land in English-language issues.
-- **Install-aware update hint**: the update row currently always offers `brew upgrade whereamip` — misleading for people who installed from the release zip. Detect the install method from the bundle path (Homebrew Cellar vs. anywhere else) and have the row open the GitHub releases page instead for zip installs. Small and near-term.
+- **Install-aware update hint**: the update row currently always offers the Homebrew upgrade command — misleading for people who installed from the release zip. Detect the install method from the bundle path (Homebrew Cellar vs. anywhere else) and have the row open the GitHub releases page instead for zip installs. Small and near-term.
 - Sparkle self-updates for the zip channel: technically possible without an Apple Developer account (Sparkle's update trust rests on its own EdDSA signing, independent of Apple; the Gatekeeper dance stays a first-install-only affair). Deferred because it adds a third-party framework, an appcast feed, and private-key management, and must stay disabled for Homebrew installs — revisit once the direct-download channel has real users, ideally together with the notarization decision below.
 - Signed & notarized downloads (needs an Apple Developer membership): would turn the unsigned release zip into a double-click install, enable a fast `brew install --cask` path, and drop the Gatekeeper caveats. Deliberately deferred until the project earns it — the build-from-source formula already installs cleanly without Apple's toll.
 - Flag-image style polish: rounded corners + hairline border so the PNG flags hold up on any menu bar background (emoji and ISO styles are unaffected).

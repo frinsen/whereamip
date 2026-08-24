@@ -384,8 +384,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {
+                    // UpdateChecker.upgradeCommand, not a literal: it carries the
+                    // `brew update &&` prefix a stale third-party tap needs, and the reason.
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString("brew upgrade whereamip", forType: .string)
+                    NSPasteboard.general.setString(UpdateChecker.upgradeCommand, forType: .string)
                 },
                 toggleUpdateChecks: { [weak self] in
                     guard let self else { return }

@@ -26,6 +26,13 @@ install-ready notes per version.
   possible, which also lets you select and copy any part of the help text.
 
 ### Fixed
+- The update row now copies `brew update && brew upgrade whereamip`, not the bare
+  upgrade. WhereAmIP installs from a third-party tap, which Homebrew keeps as a git
+  clone that `brew upgrade <formula>` does not reliably pull — so on a stale clone the
+  upgrade reported the version you already had and did nothing. Reported from the field:
+  "0.4.2 already installed", hours after 0.5 was on the tap. The row also stops spelling
+  the command out (it named an incomplete one, which is how the trap was set); it now
+  says it copies the update command, and the clipboard carries the whole thing.
 - The open dropdown no longer jumps when you hold or release ⌥. Two causes, both fixed:
   the app rebuilt every row on each keydown during menu tracking (AppKit calls
   `menuNeedsUpdate` there, modifier presses included), tearing the item views out from

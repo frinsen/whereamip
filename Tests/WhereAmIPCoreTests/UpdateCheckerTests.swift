@@ -25,4 +25,16 @@ final class UpdateCheckerTests: XCTestCase {
         let v = await checker().latestVersion()
         XCTAssertNil(v)
     }
+
+    // MARK: - the command we hand people
+
+    /// Field bug: a tester ran `brew upgrade whereamip` and was told 0.4.2 was already
+    /// installed, hours after 0.5 shipped. WhereAmIP lives in a third-party TAP — a git
+    /// clone that `brew upgrade` does not reliably pull — so without an explicit
+    /// `brew update` first, the upgrade can silently no-op on a stale clone.
+    func testUpgradeCommandRefreshesTheTapFirst() {
+        XCTAssertTrue(UpdateChecker.upgradeCommand.hasPrefix("brew update &&"),
+                      "must not regress to the bare upgrade: \(UpdateChecker.upgradeCommand)")
+        XCTAssertEqual(UpdateChecker.upgradeCommand, "brew update && brew upgrade whereamip")
+    }
 }
