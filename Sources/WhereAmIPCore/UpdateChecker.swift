@@ -35,6 +35,40 @@ public enum SemVer {
     }
 }
 
+/// When an opportunistic update check is allowed to happen.
+///
+/// The daily timer alone means a release published just after it ran stays invisible for up
+/// to 24 hours — a beta tester hit exactly that. A full refresh already happens on launch,
+/// on wake, every 5 minutes and on manual Refresh, so it is a free place to ask "has it been
+/// a while?" without adding a second timer.
+///
+/// Throttles ATTEMPTS, not successes, deliberately: keying off the last SUCCESS would turn a
+/// GitHub outage into a request on every 5-minute refresh — hammering an API that is already
+/// failing, from every installed copy at once. A transient failure therefore delays the next
+/// opportunistic attempt by the full interval, which is acceptable precisely because the
+/// daily timer is still there as the backstop.
+///
+/// Pure and clock-injected because the code that acts on it lives in AppDelegate, which has
+/// no test target — the decision is testable even though its caller is not.
+public enum UpdateCheckSchedule {
+    /// Six hours: roughly 2-3 extra requests a day per install, and it turns a worst case of
+    /// "a day late" into "a few hours late".
+    public static let opportunisticInterval: TimeInterval = 6 * 60 * 60
+
+    public static func shouldAttempt(lastAttempt: Date?, now: Date = Date(), enabled: Bool) -> Bool {
+        // The setting is absolute — README promises no request is EVER made when it is off,
+        // and an opportunistic path is where such a promise erodes by accident.
+        guard enabled else { return false }
+        guard let lastAttempt else { return true }
+        let elapsed = now.timeIntervalSince(lastAttempt)
+        // A negative interval means the stored attempt is in the future: the clock moved
+        // backwards (travel, an NTP correction, a long sleep). Waiting the interval out from
+        // a future instant could suppress checks for far longer than intended, so treat
+        // nonsense as stale — one extra request is the cheaper mistake.
+        return elapsed < 0 || elapsed >= opportunisticInterval
+    }
+}
+
 /// Passive update check against the latest GitHub release. Never downloads
 /// or applies anything — it only reports a version string for the UI to
 /// display, leaving the actual upgrade to `UpdateChecker.upgradeCommand`.

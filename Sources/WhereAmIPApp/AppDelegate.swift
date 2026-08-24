@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var availableUpdate: String?
     var restartUpdate: String?
     private var lastDiskCheckAt: Date?
+    // When a GitHub release check was last ATTEMPTED (not when one last succeeded) — the
+    // throttle for the opportunistic check in runMonitorRefresh(). See UpdateCheckSchedule
+    // for why attempts and not successes.
+    private var lastUpdateCheckAttempt: Date?
     // Build-once-per-open guard for the dropdown (see MenuTrackingSession): AppKit calls
     // menuNeedsUpdate on every keydown during tracking, ⌥ included.
     let menuSession = MenuTrackingSession()
@@ -84,7 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             Task { await self.runMonitorRefresh(full: true) }
         }
-        // Cadence per spec: launch + once per 24h + on manual Refresh.
+        // Cadence: launch + once per 24h + on manual Refresh, plus the opportunistic
+        // six-hourly check that rides along with full refreshes (runMonitorRefresh).
+        // This timer is the backstop that makes throttling ATTEMPTS rather than
+        // successes safe — see UpdateCheckSchedule.
         Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { [weak self] _ in
             self?.checkForUpdates()
         }
@@ -128,6 +135,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await monitor.probeTick()
         }
         lastChecked = Date()
+        // Opportunistic release check, at most every six hours. A full refresh already
+        // happens on launch, on wake, every five minutes and on every manual Refresh, so
+        // this rides along instead of adding a second timer — and it turns "a release can
+        // stay invisible for up to a day" (field-reported) into "a few hours at worst". The
+        // daily timer below stays exactly as it was, as the backstop this leans on.
+        if full, UpdateCheckSchedule.shouldAttempt(lastAttempt: lastUpdateCheckAttempt,
+                                                   enabled: settings.updatesEnabled) {
+            checkForUpdates()
+        }
     }
 
     // Manual-refresh-only loading cue (spec §2 field lesson: "silent vs
@@ -151,6 +167,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func checkForUpdates() {
         checkInstalledVersion()
         guard settings.updatesEnabled else { return }
+        // Stamped here, past the settings guard and before the request: this is the moment
+        // an attempt is actually spent, so it is what the opportunistic throttle measures
+        // from — including for the launch, daily-timer and manual-Refresh callers, which is
+        // what keeps those three from being immediately followed by an opportunistic repeat.
+        lastUpdateCheckAttempt = Date()
         Task {
             let latest = await updateChecker.latestVersion()
             let newer = latest.map { SemVer.isNewer($0, than: whereamipVersion) } ?? false

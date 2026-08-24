@@ -25,6 +25,14 @@ install-ready notes per version.
   opens. The help body moved from a text field to a non-editable text view to make that
   possible, which also lets you select and copy any part of the help text.
 
+### Changed
+- The update check now also rides along with a full refresh, at most once every six
+  hours, instead of relying on the daily timer alone. A release published just after that
+  timer ran could stay invisible for up to a day (which is how a beta tester ended up on
+  an old version); worst case is now a few hours. Costs roughly two or three extra
+  requests a day, and the "Check for Updates" setting still means no request is ever made
+  when it is off.
+
 ### Fixed
 - The update row now copies `brew update && brew upgrade whereamip`, not the bare
   upgrade. WhereAmIP installs from a third-party tap, which Homebrew keeps as a git
