@@ -367,7 +367,34 @@ public enum MenuBuilder {
         let quit = action(L10n.string(.menuQuit), key: "q") { actions.quit() }
         quit.keyEquivalentModifierMask = [.command]
         menu.addItem(quit)
+        reserveAlternateWidth(menu)
         return menu
+    }
+
+    /// Pins the menu's width so that revealing an alternate cannot RESIZE it.
+    ///
+    /// Second half of the ⌥ flicker (the first was rebuilding on every keydown — see
+    /// MenuTrackingSession). The key-equivalent column is shared and sized to its widest
+    /// visible entry: at rest that is ⌘C/⌘D, while ⌥ is held the visible alternate shows
+    /// ⌥⌘C. Measured here, the ⌥ glyph alone adds 14pt to a row's width — and because a
+    /// status-item menu is anchored at its right edge, the whole panel grows leftward. That
+    /// is the jump the maintainer still saw after the rebuild fix.
+    ///
+    /// `NSMenu.size` was measured before relying on it, and it does NOT behave the way the
+    /// obvious approach assumes: it already accounts for alternate items while they are
+    /// hidden (fresh menu, one read: no alternate 118pt, alternate present 378pt whether
+    /// `isAlternate` is true or false). So there is nothing to toggle and re-measure —
+    /// `size.width` is ALREADY the maximum across both modifier states, which is exactly the
+    /// width to reserve. The displayed popup evidently sizes itself from visible items only,
+    /// which is why it changes when the pair swaps and why a floor is needed at all.
+    ///
+    /// Locale- and content-proof by construction: it measures this menu's own strings with
+    /// the real menu font, so no glyph metrics or padding constants are hardcoded, and any
+    /// alternate added later is covered for free. Menus with no alternates are left alone
+    /// (minimumWidth stays 0) — nothing about them can change width mid-open.
+    static func reserveAlternateWidth(_ menu: NSMenu) {
+        guard menu.items.contains(where: \.isAlternate) else { return }
+        menu.minimumWidth = menu.size.width
     }
 
     /// The DNS row's detail submenu: what macOS is configured to ask (local fact, always known)

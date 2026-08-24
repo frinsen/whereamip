@@ -42,6 +42,14 @@ public final class MenuTrackingSession {
             fresh.removeItem(item)
             menu.addItem(item)
         }
+        // The width reservation is a property of the MENU, not of its items, so moving the
+        // items alone would drop it on the floor and the ⌥ width jump would survive the fix
+        // (MenuBuilder.reserveAlternateWidth explains what it reserves and why). Assigned
+        // unconditionally rather than raised to a maximum: this target menu is long-lived —
+        // AppDelegate creates it once at launch and re-populates it on every open — so a
+        // build that needs a narrower reservation, or none at all, must be able to LOWER it
+        // again instead of inheriting the widest menu this session ever showed.
+        menu.minimumWidth = fresh.minimumWidth
     }
 
     /// The tracking session ended (`menuDidClose`) — the next open builds again.

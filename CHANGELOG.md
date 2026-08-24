@@ -9,12 +9,16 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Fixed
-- The open dropdown no longer jumps when you hold or release ⌥. AppKit calls
-  `menuNeedsUpdate` on every keydown during menu tracking — modifier presses included —
-  and the app rebuilt every row each time, tearing the item views out from under the
-  cursor. The menu is now built once per open; the ⌥ alternate swaps natively, which is
-  what it was always meant to do. A state refresh that lands while the menu is open now
-  appears on the next open rather than rearranging rows mid-click.
+- The open dropdown no longer jumps when you hold or release ⌥. Two causes, both fixed:
+  the app rebuilt every row on each keydown during menu tracking (AppKit calls
+  `menuNeedsUpdate` there, modifier presses included), tearing the item views out from
+  under the cursor — the menu is now built once per open, and the ⌥ alternate swaps
+  natively, as it was always meant to. And the menu got ~14pt wider while ⌥ was held,
+  because the shared key-equivalent column has to fit ⌥⌘C instead of ⌘C; since a menu bar
+  menu is anchored at its right edge, that pushed the left edge outward. The build now
+  reserves the wider of the two states up front, so the swap is pixel-stable. A state
+  refresh that lands while the menu is open now appears on the next open rather than
+  rearranging rows mid-click.
 
 ## [0.5] — 2026-08-24
 
