@@ -70,6 +70,17 @@
 "settings.style.emoji" = "Emoji-Flagge";
 "settings.style.code" = "ISO-Ländercode";
 "settings.style.image" = "Flaggenbild";
+/* Die App-Sprache. Steht neben dem Menüleistenstil: beides sind „wie sieht die App für
+   mich aus"-Entscheidungen, und beides sind Auswahllisten mit Häkchen. */
+"settings.language" = "Sprache";
+/* Der Sprache des Systems folgen — die Voreinstellung. Benannt wie macOS es in seiner
+   eigenen Sprachauswahl pro Programm tut, nicht wörtlich als „Systemvorgabe". */
+"settings.language.system" = "Systemsprache";
+/* Jede Sprache benennt SICH SELBST, in jeder Lokalisierung gleich: wer Deutsch sucht,
+   findet „Deutsch" auch dann, wenn die Oberfläche noch englisch ist. Diese beiden Werte
+   sind in en.lproj und de.lproj absichtlich identisch. */
+"settings.language.english" = "English";
+"settings.language.german" = "Deutsch";
 "settings.notifications" = "Mitteilungen anzeigen";
 "settings.launchAtLogin" = "Bei der Anmeldung starten";
 "settings.applicationsLink" = "Zum Ordner „Programme“ hinzufügen";

@@ -4,6 +4,8 @@
   the world sees your traffic coming from. It flips the moment a VPN takes over the
   default route. Settings ▸ Menu Bar Style can show a plain **ISO code** (`DE`) or a
   flag image instead; the ISO code is the readable choice at 16 px.
+- The app follows your Mac's language. Settings ▸ Language switches it by hand —
+  English or Deutsch — and takes effect the next time you open the menu, no restart.
 - A **crossed-out Wi-Fi symbol** means nothing actually loads right now, whatever
   Wi-Fi claims. A **question mark** means the exit could not be placed.
 - A small **⚠️ badge** next to the symbol means a confirmed leak — IPv6 or DNS
@@ -62,7 +64,8 @@ Everything the menu bar does, `whereamip` does too:
 - `whereamip diagnostics` — the same report ⌘D copies.
 - `whereamip debug` — live-streams the diagnostic log while you reproduce a problem.
   Nothing is written to disk, before or after.
-- `whereamip config get` / `set` — the same settings the dropdown shows.
+- `whereamip config get` / `set` — the same settings the dropdown shows, including
+  `config set language de|en|system`.
 
 `whereamip` output stays English on purpose: it is a parseable interface, and bug reports
 land in English-language GitHub issues.

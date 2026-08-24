@@ -9,6 +9,13 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
+- **A language picker in Settings.** The app still follows your Mac by default, but
+  Settings ▸ Language now switches it by hand — System Language, English, or Deutsch —
+  and the change is live: the next time you open the menu it is in the new language, with
+  no restart. `whereamip config set language de|en|system` does the same from the CLI and
+  `config get` reports it. (The CLI's own output stays English either way — it is a
+  parseable interface, not UI.) A welcome or help window that is already open keeps the
+  language it was opened with until you reopen it.
 - **Deutsch.** The app now follows your Mac's language: every dropdown row, notification,
   and both windows (welcome and help) are available in German, including the long-form
   help and what's-new copy. English stays the default everywhere else. `whereamip`

@@ -13,6 +13,7 @@ public struct MenuActions {
     public var copyText: (String) -> Void
     public var refresh: () -> Void
     public var setStyle: (MenuBarStyle) -> Void
+    public var setLanguage: (String) -> Void
     public var toggleNotifications: () -> Void
     public var toggleLaunchAtLogin: () -> Void
     public var toggleApplicationsLink: () -> Void
@@ -28,6 +29,7 @@ public struct MenuActions {
                 copyText: @escaping (String) -> Void = { _ in },
                 refresh: @escaping () -> Void = {},
                 setStyle: @escaping (MenuBarStyle) -> Void = { _ in },
+                setLanguage: @escaping (String) -> Void = { _ in },
                 toggleNotifications: @escaping () -> Void = {},
                 toggleLaunchAtLogin: @escaping () -> Void = {},
                 toggleApplicationsLink: @escaping () -> Void = {},
@@ -40,7 +42,7 @@ public struct MenuActions {
                 restartAction: @escaping () -> Void = {},
                 restartApp: @escaping () -> Void = {}) {
         self.copyIP = copyIP; self.copyText = copyText
-        self.refresh = refresh; self.setStyle = setStyle
+        self.refresh = refresh; self.setStyle = setStyle; self.setLanguage = setLanguage
         self.toggleNotifications = toggleNotifications
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
         self.toggleApplicationsLink = toggleApplicationsLink
@@ -109,6 +111,7 @@ public enum MenuBuilder {
                              notificationsEnabled: Bool, launchAtLogin: Bool,
                              availableUpdate: String? = nil, updatesEnabled: Bool = true,
                              dnsProbeEnabled: Bool = true,
+                             language: String = AppLanguage.system,
                              restartUpdate: String? = nil, applicationsLinked: Bool = false,
                              lastChecked: Date? = nil,
                              actions: MenuActions) -> NSMenu {
@@ -338,6 +341,26 @@ public enum MenuBuilder {
         }
         styleItem.submenu = styleMenu
         settingsMenu.addItem(styleItem)
+
+        // Same shape as the style picker above: a submenu of radio-style checkmarks, one on.
+        // Placed next to it because both answer "how does this app look to me", and because
+        // a language picker buried further down would be found by nobody looking for it.
+        //
+        // Switching takes effect on the next menu open — no relaunch — because every string
+        // on this menu is resolved through L10n at BUILD time and the menu is rebuilt per
+        // open. An already-open welcome or help window keeps the language it was built with
+        // until it is reopened; accepted, since both are read-and-close windows.
+        let languageItem = NSMenuItem(title: L10n.string(.settingsLanguage), action: nil, keyEquivalent: "")
+        let languageMenu = NSMenu()
+        languageMenu.autoenablesItems = false
+        for (key, value) in [(L10nKey.settingsLanguageSystem, AppLanguage.system),
+                             (.settingsLanguageEnglish, "en"), (.settingsLanguageGerman, "de")] {
+            let i = action(L10n.string(key)) { actions.setLanguage(value) }
+            i.state = (language == value) ? .on : .off
+            languageMenu.addItem(i)
+        }
+        languageItem.submenu = languageMenu
+        settingsMenu.addItem(languageItem)
         settingsMenu.addItem(.separator())
         let notify = action(L10n.string(.settingsNotifications)) { actions.toggleNotifications() }
         notify.state = notificationsEnabled ? .on : .off

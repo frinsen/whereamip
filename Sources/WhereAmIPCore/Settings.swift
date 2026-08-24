@@ -34,6 +34,14 @@ public final class Settings: @unchecked Sendable {
         get { d.object(forKey: "dnsProbeEnabled") == nil ? true : d.bool(forKey: "dnsProbeEnabled") }
         set { d.set(newValue, forKey: "dnsProbeEnabled") }
     }
+    /// The app's UI language: `system` (default) or a code from `AppLanguage.supported`.
+    /// The getter normalizes on the way OUT as well as the setter validating on the way in,
+    /// so a value written by another build — or by hand into the plist — reads back as
+    /// `system` instead of leaving the UI stuck on a language this build cannot render.
+    public var language: String {
+        get { AppLanguage.overrideCode(d.string(forKey: "language") ?? "") ?? AppLanguage.system }
+        set { d.set(newValue, forKey: "language") }
+    }
     // Internal, not surfaced in `set(key:value:)`/the config-command switch below:
     // the milestone (see `welcomeMilestone` in Version.swift) last
     // acknowledged via the welcome window's Done button. Empty = never shown
@@ -60,12 +68,19 @@ public final class Settings: @unchecked Sendable {
         case "dns":
             guard value == "true" || value == "false" else { throw SettingsError.invalid("dns must be true|false") }
             dnsProbeEnabled = (value == "true")
+        case "language":
+            guard value == AppLanguage.system || AppLanguage.supported.contains(value) else {
+                throw SettingsError.invalid(
+                    "language must be \(([AppLanguage.system] + AppLanguage.supported).joined(separator: "|"))")
+            }
+            language = value
         // "applications" is deliberately absent here: its truth lives on the
         // filesystem (ApplicationsLink.isLinked), not in UserDefaults, and
         // applying it needs a bundle/executable path this generic setter
         // doesn't have. The CLI's `config set applications` handles it
         // directly via ApplicationsLink instead (see whereamip-cli/Main.swift).
-        default: throw SettingsError.invalid("unknown key '\(key)' (valid: style, notify, updates, dns, applications)")
+        default: throw SettingsError.invalid(
+            "unknown key '\(key)' (valid: style, notify, updates, dns, language, applications)")
         }
     }
     /// `applicationsLinkPath` is injectable for tests; real callers use the
@@ -73,7 +88,7 @@ public final class Settings: @unchecked Sendable {
     /// this one isn't read from `d` — it's live filesystem state.
     public func allValues(applicationsLinkPath: String = "/Applications/WhereAmIP.app") -> [(key: String, value: String)] {
         [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled)),
-         ("dns", String(dnsProbeEnabled)),
+         ("dns", String(dnsProbeEnabled)), ("language", language),
          ("applications", String(ApplicationsLink.isLinked(linkPath: applicationsLinkPath)))]
     }
 }

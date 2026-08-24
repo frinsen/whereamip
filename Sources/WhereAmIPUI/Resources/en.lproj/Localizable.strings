@@ -67,6 +67,17 @@
 "settings.style.emoji" = "Emoji flag";
 "settings.style.code" = "ISO country code";
 "settings.style.image" = "Flag image";
+/* The in-app language override. Sits next to the menu-bar style because both are
+   "how this app looks to me" choices, and both are radio pickers. */
+"settings.language" = "Language";
+/* Follow the Mac's own language setting — the default. Named the way macOS names it in
+   its own per-app language picker rather than a literal "System default". */
+"settings.language.system" = "System Language";
+/* Each language names ITSELF, identically in every locale: a German speaker looking for
+   German finds "Deutsch" even while the UI is still English, which is the whole point of
+   the row. These two values are deliberately the same in en.lproj and de.lproj. */
+"settings.language.english" = "English";
+"settings.language.german" = "Deutsch";
 "settings.notifications" = "Show Notifications";
 "settings.launchAtLogin" = "Launch at Login";
 "settings.applicationsLink" = "Add to Applications folder";

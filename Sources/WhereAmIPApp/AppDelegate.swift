@@ -281,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             launchAtLogin: SMAppService.mainApp.status == .enabled,
             availableUpdate: availableUpdate, updatesEnabled: settings.updatesEnabled,
             dnsProbeEnabled: settings.dnsProbeEnabled,
+            language: settings.language,
             restartUpdate: restartUpdate, applicationsLinked: ApplicationsLink.isLinked(),
             lastChecked: lastChecked,
             actions: MenuActions(
@@ -320,6 +321,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 setStyle: { [weak self] style in
                     self?.settings.menuBarStyle = style
                     if let s = self?.lastState { self?.stateChanged(s) }
+                },
+                setLanguage: { [weak self] language in
+                    // Nothing to invalidate and nothing to relaunch: every string is
+                    // resolved through L10n while the menu is being built, and the menu is
+                    // rebuilt on each open (MenuTrackingSession), so the next open is
+                    // already in the new language. Windows already on screen keep theirs
+                    // until reopened — accepted, see MenuBuilder's picker comment.
+                    self?.settings.language = language
                 },
                 toggleNotifications: { [weak self] in
                     guard let self else { return }

@@ -5,6 +5,9 @@
   Standardroute übernimmt. Unter Einstellungen ▸ Menüleistenstil geht stattdessen auch ein
   schlichter **ISO-Code** (`DE`) oder ein Flaggenbild; bei 16 px ist der ISO-Code am besten
   zu lesen.
+- Die App folgt der Sprache deines Macs. Unter Einstellungen ▸ Sprache lässt sie sich von
+  Hand umstellen — English oder Deutsch — und zwar ab dem nächsten Öffnen des Menüs, ohne
+  Neustart.
 - Ein **durchgestrichenes WLAN-Symbol** heißt, dass gerade nichts wirklich lädt — egal, was
   das WLAN behauptet. Ein **Fragezeichen** heißt, der Austritt ließ sich nicht zuordnen.
 - Ein kleines **⚠️-Zeichen** am Symbol steht für ein bestätigtes Leck: IPv6- oder
@@ -64,7 +67,8 @@ Alles, was die Menüleiste kann, kann `whereamip` auch:
 - `whereamip diagnostics` — derselbe Bericht, den ⌘D kopiert.
 - `whereamip debug` — überträgt das Diagnoseprotokoll live, während du einen Fehler
   nachstellst. Auf die Festplatte wird dabei nichts geschrieben, weder vorher noch danach.
-- `whereamip config get` / `set` — dieselben Einstellungen, die auch im Menü stehen.
+- `whereamip config get` / `set` — dieselben Einstellungen, die auch im Menü stehen,
+  inklusive `config set language de|en|system`.
 
 Die Ausgaben von `whereamip` sind bewusst englisch: sie sind eine auswertbare Schnittstelle,
 und Fehlerberichte landen in englischsprachigen GitHub-Issues.

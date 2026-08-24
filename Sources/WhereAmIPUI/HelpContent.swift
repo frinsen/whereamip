@@ -25,14 +25,14 @@ public enum HelpContent {
 
     /// Bundled help copy in the user's language, or `fallback` when even the English file
     /// is missing or empty.
-    public static func markdown(preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+    public static func markdown(preferredLanguages: [String] = L10n.effectiveLanguages()) -> String {
         markdown(in: uiResourceBundle, preferredLanguages: preferredLanguages)
     }
 
     /// Bundle- and language-injecting variant, so the missing/empty and language-selection
     /// cases are testable against a bundle that genuinely resolves nothing.
     static func markdown(in bundle: Bundle,
-                         preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+                         preferredLanguages: [String] = L10n.effectiveLanguages()) -> String {
         LocalizedMarkdown.load(folder: "help", name: "help", bundle: bundle,
                                preferredLanguages: preferredLanguages) ?? fallback
     }

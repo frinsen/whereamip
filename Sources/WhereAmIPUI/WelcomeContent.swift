@@ -35,7 +35,7 @@ public enum WelcomeContent {
     /// releases past it. A milestone with no bundled highlights falls back to the
     /// intro copy rather than showing an empty window (or, worse, a file path).
     public static func copy(for storedMilestone: String,
-                            preferredLanguages: [String] = Locale.preferredLanguages) -> Copy {
+                            preferredLanguages: [String] = L10n.effectiveLanguages()) -> Copy {
         guard !storedMilestone.isEmpty else {
             return Copy(heading: L10n.string(.welcomeHeadingFirst, whereamipVersion),
                         markdown: markdown(milestone: nil, preferredLanguages: preferredLanguages))
@@ -52,7 +52,7 @@ public enum WelcomeContent {
     /// its English highlights rather than silently dropping to the intro pitch — see
     /// LocalizedMarkdown for why per-file fallback beats per-locale all-or-nothing.
     public static func markdown(milestone: String?,
-                                preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+                                preferredLanguages: [String] = L10n.effectiveLanguages()) -> String {
         if let milestone, isSafeFileStem(milestone),
            let text = load(milestone, preferredLanguages: preferredLanguages) { return text }
         return load("intro", preferredLanguages: preferredLanguages) ?? fallbackPitch

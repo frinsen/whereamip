@@ -24,7 +24,8 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.notificationsEnabled)
         XCTAssertThrowsError(try settings.set(key: "style", value: "banana"))
         XCTAssertThrowsError(try settings.set(key: "nope", value: "x"))
-        XCTAssertEqual(settings.allValues().map(\.key), ["notify", "style", "updates", "dns", "applications"])
+        XCTAssertEqual(settings.allValues().map(\.key),
+                       ["notify", "style", "updates", "dns", "language", "applications"])
     }
     func testUpdatesConfigSurface() throws {
         try settings.set(key: "updates", value: "false")
@@ -77,6 +78,50 @@ final class SettingsTests: XCTestCase {
     }
 
     // MARK: - welcome window milestone gating
+
+    // MARK: - language override
+
+    func testLanguageDefaultsToSystem() {
+        XCTAssertEqual(settings.language, AppLanguage.system)
+    }
+    func testLanguageRoundTrips() throws {
+        try settings.set(key: "language", value: "de")
+        XCTAssertEqual(settings.language, "de")
+        try settings.set(key: "language", value: "en")
+        XCTAssertEqual(settings.language, "en")
+        try settings.set(key: "language", value: "system")
+        XCTAssertEqual(settings.language, AppLanguage.system)
+    }
+    func testLanguageRejectsAnythingItCannotActuallyShow() {
+        // Same shape as the other typed keys: refuse at the boundary rather than storing a
+        // value that would silently behave as "system" forever.
+        for junk in ["fr", "banana", "EN", "de-DE", ""] {
+            XCTAssertThrowsError(try settings.set(key: "language", value: junk), junk)
+        }
+        XCTAssertEqual(settings.language, AppLanguage.system, "a rejected value must not be stored")
+    }
+    func testLanguageAppearsInTheConfigSurface() throws {
+        try settings.set(key: "language", value: "de")
+        XCTAssertTrue(settings.allValues().contains { $0.key == "language" && $0.value == "de" })
+    }
+    /// A value that reached defaults some other way (older build, hand-edited plist) must
+    /// read back as system rather than as itself — the reader is the last line of defence.
+    func testUnsupportedStoredValueReadsBackAsSystem() {
+        let defaults = UserDefaults(suiteName: "test.whereamip")!
+        defaults.set("fr", forKey: "language")
+        XCTAssertEqual(Settings(defaults: defaults).language, AppLanguage.system)
+    }
+    func testUnknownKeyErrorNamesLanguage() {
+        // The error text is the CLI's discoverability surface for `config set`.
+        do {
+            try settings.set(key: "nope", value: "x")
+            XCTFail("expected a throw")
+        } catch let SettingsError.invalid(message) {
+            XCTAssertTrue(message.contains("language"), "got: \(message)")
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+    }
 
     func testWelcomedMilestoneDefaultsEmpty() {
         XCTAssertEqual(settings.welcomedMilestone, "")

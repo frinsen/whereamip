@@ -29,7 +29,7 @@ enum LocalizedMarkdown {
     /// `preferredLanguages` is injected (defaulting to the real user preference) so the
     /// language-selection rules are testable without touching system settings.
     static func load(folder: String, name: String, bundle: Bundle,
-                     preferredLanguages: [String] = Locale.preferredLanguages) -> String? {
+                     preferredLanguages: [String] = L10n.effectiveLanguages()) -> String? {
         for language in preferredLanguages {
             // "de-DE", "de_DE", "de" all mean the same folder here. Region variants are
             // deliberately NOT separate files: a de-AT reader is far better served by German

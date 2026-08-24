@@ -141,6 +141,59 @@ final class MenuBuilderTests: XCTestCase {
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
         XCTAssertTrue(titles(menu).contains(L10n.string(.menuOfflineHijack)))
     }
+    // MARK: - language picker (same shape as the style picker above it)
+
+    func languageSubmenu(_ language: String) -> NSMenu? {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, language: language, actions: MenuActions())
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }?.submenu
+        return settings?.items.first { $0.title == L10n.string(.settingsLanguage) }?.submenu
+    }
+
+    func testLanguageSubmenuOffersSystemAndEachShippedLanguage() throws {
+        let submenu = try XCTUnwrap(languageSubmenu(AppLanguage.system))
+        XCTAssertEqual(submenu.items.map(\.title), [L10n.string(.settingsLanguageSystem),
+                                                    L10n.string(.settingsLanguageEnglish),
+                                                    L10n.string(.settingsLanguageGerman)])
+        // Each language names itself, so the list reads the same whichever language the UI
+        // is currently in — the one place where NOT translating a label is the right call.
+        XCTAssertEqual(L10n.string(.settingsLanguageEnglish), "English")
+        XCTAssertEqual(L10n.string(.settingsLanguageGerman), "Deutsch")
+    }
+
+    func testLanguageRadioReflectsSelection() throws {
+        // Radio-style checkmarks, exactly like the menu-bar-style picker: exactly one on.
+        for (setting, index) in [(AppLanguage.system, 0), ("en", 1), ("de", 2)] {
+            let submenu = try XCTUnwrap(languageSubmenu(setting))
+            let states = submenu.items.map(\.state)
+            XCTAssertEqual(states.filter { $0 == .on }.count, 1, "\(setting)")
+            XCTAssertEqual(states[index], .on, "\(setting) should check row \(index)")
+        }
+    }
+
+    func testLanguageRowsFireWithTheValueTheyName() throws {
+        for (index, expected) in [(0, AppLanguage.system), (1, "en"), (2, "de")] {
+            var chosen: String?
+            let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                         launchAtLogin: false, language: AppLanguage.system,
+                                         actions: MenuActions(setLanguage: { chosen = $0 }))
+            let settings = try XCTUnwrap(menu.items.first { $0.title == L10n.string(.menuSettings) }?.submenu)
+            let submenu = try XCTUnwrap(settings.items.first { $0.title == L10n.string(.settingsLanguage) }?.submenu)
+            (submenu.items[index].representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+            XCTAssertEqual(chosen, expected)
+        }
+    }
+
+    func testLanguagePickerSitsDirectlyBelowTheStylePickerInSettings() throws {
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions())
+        let settings = try XCTUnwrap(menu.items.first { $0.title == L10n.string(.menuSettings) }?.submenu)
+        let titles = settings.items.map(\.title)
+        let styleIndex = try XCTUnwrap(titles.firstIndex(of: L10n.string(.settingsStyle)))
+        XCTAssertEqual(titles.firstIndex(of: L10n.string(.settingsLanguage)), styleIndex + 1,
+                       "the two appearance pickers belong together: \(titles)")
+    }
+
     func testStyleRadioReflectsSelection() {
         let menu = MenuBuilder.build(state: vpnState(), style: .code,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())

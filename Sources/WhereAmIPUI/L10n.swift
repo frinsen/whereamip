@@ -1,4 +1,5 @@
 import Foundation
+import WhereAmIPCore
 
 /// Every user-facing string the app can show, as a stable key.
 ///
@@ -66,6 +67,10 @@ public enum L10nKey: String, CaseIterable {
     case settingsStyleEmoji = "settings.style.emoji"
     case settingsStyleCode = "settings.style.code"
     case settingsStyleImage = "settings.style.image"
+    case settingsLanguage = "settings.language"
+    case settingsLanguageSystem = "settings.language.system"
+    case settingsLanguageEnglish = "settings.language.english"
+    case settingsLanguageGerman = "settings.language.german"
     case settingsNotifications = "settings.notifications"
     case settingsLaunchAtLogin = "settings.launchAtLogin"
     case settingsApplicationsLink = "settings.applicationsLink"
@@ -144,9 +149,57 @@ public enum L10nKey: String, CaseIterable {
 /// last-resort fallback: a visible `menu.refresh` in the UI is an obvious,
 /// self-describing bug report, where a crash or a blank row is neither.
 public enum L10n {
+    /// The stored language setting — `AppLanguage.system` or a supported code. One knob,
+    /// read by both consumers below, so the strings table and the bundled Markdown can never
+    /// disagree about which language the app is currently speaking.
+    ///
+    /// A closure rather than a direct `Settings()` read at each call site so tests can pin a
+    /// language deterministically (the alternative — depending on the HOST Mac's language —
+    /// is exactly the fragility this indirection removes).
+    public static var languageSetting: () -> String = { Settings().language }
+
+    /// The language list the Markdown loader should walk, derived from the same setting.
+    public static func effectiveLanguages() -> [String] {
+        AppLanguage.effectiveLanguages(override: languageSetting())
+    }
+
     /// The literal value for `key`, with no formatting applied.
     public static func string(_ key: L10nKey) -> String {
-        uiResourceBundle.localizedString(forKey: key.rawValue, value: nil, table: nil)
+        stringsBundle().localizedString(forKey: key.rawValue, value: nil, table: nil)
+    }
+
+    /// Which bundle answers a lookup.
+    ///
+    /// With NO override this is the located bundle itself, exactly as before this setting
+    /// existed — Foundation matches the user's language list against the available `.lproj`s
+    /// far better than a hand-rolled walk would, and the system path must not regress.
+    ///
+    /// With an override it is that language's `.lproj` as its own bundle. Of the two
+    /// mechanisms available for a NESTED SwiftPM resource bundle, this is the one that
+    /// works end to end: `url(forResource:withExtension:subdirectory:localization:)` does
+    /// resolve the right file, but hands back a URL that would have to be parsed by hand,
+    /// while `Bundle(path: …/de.lproj)` keeps the whole `localizedString` contract —
+    /// including "return the key when the value is missing", which is the visible-bug
+    /// fallback the rest of this file relies on. (SwiftPM leaves the .strings files as
+    /// plain text in the bundle, which is what makes the sub-bundle load work.)
+    static func stringsBundle() -> Bundle {
+        guard let code = AppLanguage.overrideCode(languageSetting()) else { return uiResourceBundle }
+        return lproj(code) ?? uiResourceBundle
+    }
+
+    /// Resolved `.lproj` sub-bundles, cached: a single menu build performs dozens of
+    /// lookups, and `Bundle(path:)` touches the filesystem. The lock costs nothing at this
+    /// call rate and keeps the cache honest if a lookup ever happens off the main thread.
+    private static let cacheLock = NSLock()
+    private static var lprojCache: [String: Bundle] = [:]
+    private static func lproj(_ code: String) -> Bundle? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached = lprojCache[code] { return cached }
+        guard let path = uiResourceBundle.path(forResource: code, ofType: "lproj"),
+              let bundle = Bundle(path: path) else { return nil }
+        lprojCache[code] = bundle
+        return bundle
     }
 
     /// The value for `key` with its `%@`/`%d` placeholders filled, in order.

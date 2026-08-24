@@ -28,7 +28,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Quiet update hint — checks the latest GitHub release daily and whenever you hit Refresh; when one's out, a single dropdown row lets you copy `brew upgrade whereamip`. Once brew has installed it, the row becomes "↻ Restart to finish update" — one click relaunches into the new version. No popups, no badges, respects your Settings, and the app itself never downloads or self-updates — brew does
 - One-time welcome window on first start (and once after major releases): what the app is, where it lives, and live toggles for Launch at Login, Add to Applications folder, and Show Notifications — no permission prompts unless you flip a toggle. Reopen it anytime via Settings
 - Honest freshness: the dropdown shows both "Since" (when the current state began, to the second) and "Checked" (when it was last verified), and a manual Refresh shows a brief loading cue in the menu bar
-- Speaks German when your Mac does — menu, notifications, welcome and help windows follow the system language, with English everywhere else (`whereamip` output stays English on purpose: it's a parseable interface)
+- Speaks German when your Mac does — menu, notifications, welcome and help windows follow the system language, with English everywhere else (`whereamip` output stays English on purpose: it's a parseable interface). **Settings ▸ Language** overrides it in-app (English/Deutsch/system), and the change is live: the next time you open the menu it's in the new language, no restart
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
 
 ## Install
@@ -84,11 +84,12 @@ DNS     127.0.2.2, 127.0.2.3 (utun17)
         192.168.178.1 (en0)
 Egress  162.158.245.7 · Cloudflare, Inc. (Berlin, DE) · UDP
 
-$ whereamip config get       # notify=false / style=emoji / updates=true / dns=true
+$ whereamip config get       # notify=false / style=emoji / updates=true / dns=true / language=system
 $ whereamip config set style code
 $ whereamip config set notify true
 $ whereamip config set updates false
 $ whereamip config set dns false
+$ whereamip config set language de     # de | en | system — the APP's language; CLI output stays English
 ```
 
 ## FAQ
