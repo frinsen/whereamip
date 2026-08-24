@@ -49,8 +49,9 @@ install-ready notes per version.
   same text; `status`, `watch`, `config`, and the JSON are unchanged.
 - **⌥⌘C copies both exit addresses.** Hold ⌥ with the dropdown open and the
   exit-IP row turns into "Copy both exit addresses" — IPv4 and IPv6, one per
-  line, addresses only. It appears only when an IPv6 exit was actually
-  measured. Plain ⌘C on the IP row is unchanged.
+  line, addresses only. When there is no IPv6 exit to copy, holding ⌥ says
+  exactly that instead of leaving you wondering where the copy went. Plain ⌘C
+  on the IP row is unchanged.
 - **Bulk copy in the DNS submenu**: "Copy configured resolvers" and "Copy
   answering resolvers" at its foot, each copying bare addresses one per line —
   no interface suffixes, operator names, locations, or transports. The
@@ -127,12 +128,6 @@ install-ready notes per version.
 - A full refresh that coalesces onto a probe tick which then escalates is satisfied by
   that escalation instead of running a second, fully redundant refresh — it was
   repeating every geo, DNS and relay call the escalation had just made.
-- Holding ⌥ over the dropdown now always answers. With no IPv6 exit the "Copy both
-  exit addresses" alternate was absent entirely, so ⌥⌘C matched nothing, copied
-  nothing, and left the previous clipboard contents in place — pasting them looked
-  exactly as though ⌥⌘C had copied something else. The ⌥ state now shows a disabled
-  "No IPv6 exit to copy" row instead. Nothing is copied (there is nothing to copy),
-  but the silence is explained.
 - Reopening the Welcome or Help window while it is already open now brings that window
   forward instead of building a second one behind it. The old window stayed on screen
   but its controller was released, leaving its buttons inert — a visibly dead Done
