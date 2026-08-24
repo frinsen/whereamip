@@ -123,3 +123,15 @@ final class HelpWindowController: NSWindowController, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 }
+
+/// The presentation contract `AppDelegate.present(_:make:)` needs from both auxiliary
+/// windows: something that can report whether it is still on screen, and can bring itself
+/// to the front. `window` comes free from NSWindowController; `show()` each controller
+/// already implements (activate + makeKeyAndOrderFront, which accessory apps need).
+protocol AuxiliaryWindowController: AnyObject {
+    var window: NSWindow? { get }
+    func show()
+}
+
+extension WelcomeWindowController: AuxiliaryWindowController {}
+extension HelpWindowController: AuxiliaryWindowController {}

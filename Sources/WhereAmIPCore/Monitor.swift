@@ -73,6 +73,22 @@ public actor Monitor {
     /// caller has already claimed it (e.g. `fullRefresh` starting its own run right after
     /// awaiting an in-flight tick), and clearing would erase someone else's live task.
     private var inFlightGeneration = 0
+    /// What the most recently FINISHED tracked task turned out to be, and which generation it
+    /// was. A coalescer cannot answer "was the work I awaited a full refresh?" from
+    /// `inFlightKind`: read before the await it misses an escalation that happens while the
+    /// coalescer is parked, and read after it may find the slot already cleared by its owner
+    /// (nil, which is not `.full`, so the coalescer would start a redundant run — the same
+    /// duplicate-work bug from the other side). Recorded by the task itself, at the moment it
+    /// completes, so it is accurate no matter who clears the slot or when.
+    private var completedGeneration = 0
+    private var completedKind: RefreshKind?
+
+    /// Called by a tracked task as the last thing it does, while `inFlightKind` still reflects
+    /// any escalation that happened during the run.
+    private func markCompleted(generation: Int) {
+        completedGeneration = generation
+        completedKind = inFlightKind
+    }
 
     public init(geo: any GeoFetching, probe: any ProbeRunning, route: any RouteSnapshotting,
                 httpIP: any HTTPIPFetching, stackIP: any StackIPFetching = StackPinnedIP(),
@@ -115,10 +131,15 @@ public actor Monitor {
         // unconditional re-observation of the same finished task (which was the round-2 bug).
         while let task = inFlight {
             Log.monitor.debug("fullRefresh() coalescing onto in-flight \(self.inFlightKind == .full ? "full" : "tick", privacy: .public) work")
-            let wasFull = (inFlightKind == .full)
             let gen = inFlightGeneration
             await task.value
-            if wasFull { return }
+            // Ask what the awaited task ACTUALLY ended as, not what it looked like before we
+            // parked: a tick can ESCALATE while we wait (offline→online, a route change, a
+            // resolver change — each reclassifies this very slot to .full), and a pre-await
+            // snapshot would still say "only a tick". Acting on that stale reading runs a
+            // second, fully redundant full refresh — every geo, DNS and relay call the
+            // escalation just made, made again, against this codebase's own quota discipline.
+            if completedGeneration == gen, completedKind == .full { return }
             if inFlightGeneration == gen, inFlight != nil {
                 inFlight = nil
                 inFlightKind = nil
@@ -129,6 +150,7 @@ public actor Monitor {
         let task = Task { [weak self] in
             guard let self else { return }
             await self.runFullRefresh()
+            await self.markCompleted(generation: myGeneration)
         }
         inFlight = task
         inFlightKind = .full
@@ -325,6 +347,9 @@ public actor Monitor {
         let task = Task { [weak self] in
             guard let self else { return }
             await self.runProbeTick()
+            // Records `.full` when runProbeTick escalated — that is exactly what a coalescing
+            // fullRefresh needs to know to skip its own redundant run.
+            await self.markCompleted(generation: myGeneration)
         }
         inFlight = task
         inFlightKind = .tick
@@ -354,7 +379,16 @@ public actor Monitor {
             await runFullRefresh()
             return
         }
-        if new.route.defaultInterface != state.route.defaultInterface || new.route.isVPN != state.route.isVPN {
+        // Both stacks' route identity, not just v4's: `runProbeTick` overwrites the WHOLE
+        // route including the v6 fields, so a v6-only flip (a VPN tunnels v4 while the native
+        // v6 default route comes up mid-session — delayed RA, re-attached cable, a v4-only
+        // tunnel profile) would otherwise land a fresh v6 route in state next to an `exit6`
+        // and `ipv6Leak` measured before it existed. Same staleness the v4 condition exists to
+        // prevent, same fix: escalate.
+        if new.route.defaultInterface != state.route.defaultInterface
+            || new.route.isVPN != state.route.isVPN
+            || new.route.v6DefaultInterface != state.route.v6DefaultInterface
+            || new.route.v6IsVPN != state.route.v6IsVPN {
             // The default route just changed (e.g. a VPN took over). Applying this partial
             // tick would pair the new route with `exit`, which is still whatever the last
             // full refresh fetched over the OLD route — the Reducer's leakSuspected rule

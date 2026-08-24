@@ -89,6 +89,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func didWake() { Task { await self.runMonitorRefresh(full: true) } }
 
+    /// One presentation rule for both auxiliary windows: if the one we already hold is still
+    /// on screen, focus THAT rather than building a second one.
+    ///
+    /// Replacing the controller unconditionally looked harmless because the old window stays
+    /// visible (`isReleasedWhenClosed = false`) — but only the window survives. Its controller
+    /// is released the moment this property is overwritten, and AppKit holds `target` weakly,
+    /// so every control on the orphan goes inert: the welcome window's Done button stops
+    /// storing the milestone and stops closing, and the help window stops re-wrapping its text
+    /// on resize. A dead-but-visible window is a worse outcome than either a fresh one or none.
+    ///
+    /// Returns the controller to store, so the caller's assignment stays a single expression.
+    func present<C: AuxiliaryWindowController>(_ existing: C?, make: () -> C) -> C {
+        if let existing, existing.window?.isVisible == true {
+            existing.show()   // re-focus: activate + makeKeyAndOrderFront
+            return existing
+        }
+        let fresh = make()
+        fresh.show()
+        return fresh
+    }
+
     // Every direct fullRefresh/probeTick call site is routed through this one
     // helper so lastChecked (the dropdown's "Checked:" row) can never miss a
     // trigger — see the pathMonitor callback above for the one exception and
@@ -318,18 +339,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     // Done afterwards just re-stores the same milestone
                     // value, which is harmless.
                     guard let self else { return }
-                    self.welcomeWindowController = WelcomeWindowController(settings: self.settings)
-                    self.welcomeWindowController?.show()
+                    self.welcomeWindowController = self.present(self.welcomeWindowController) {
+                        WelcomeWindowController(settings: self.settings)
+                    }
                 },
                 showHelpWindow: { [weak self] in
                     // Held in its own property, independent of the welcome
                     // window's: the two coexist, and opening one must never
-                    // close, move, or reset the other. Re-created per open (like
-                    // the welcome window's manual re-show) so a closed window
-                    // reopens reliably rather than depending on a stale one.
+                    // close, move, or reset the other.
                     guard let self else { return }
-                    self.helpWindowController = HelpWindowController()
-                    self.helpWindowController?.show()
+                    self.helpWindowController = self.present(self.helpWindowController) {
+                        HelpWindowController()
+                    }
                 },
                 quit: { NSApp.terminate(nil) },
                 copyUpdateCommand: {

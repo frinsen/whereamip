@@ -378,6 +378,133 @@ final class MonitorTests: XCTestCase {
         XCTAssertEqual(events, [.countryChanged(from: "DE", to: "FR", vpnName: nil)],
                        "exactly one forward countryChanged; no flip-flop from orphaned duplicate runs")
     }
+    /// Same escalation contract as the v4 test below, for a change only the IPv6 half of the
+    /// route can express: a VPN tunnels v4 while the native v6 default route comes up
+    /// mid-session (delayed RA, a re-attached cable, a profile that only ever tunnels v4).
+    /// `runProbeTick` overwrites the whole `route` — v6 fields included — so without
+    /// escalation the new v6 route lands in state next to an `exit6`/`ipv6Leak` measured
+    /// before it existed, and the leak stays invisible until the next scheduled full refresh.
+    func testProbeTickEscalatesOnIPv6OnlyRouteChange() async {
+        let c = Counter()
+        let box = EventBox()
+        // v4 side is a VPN and stays byte-identical across the flip — only the v6 fields move,
+        // which is exactly what the old condition could not see.
+        let v4Unchanged = RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN")
+        let route = MutableMockRoute(v4Unchanged)
+        let preInfo = ExitInfo(ip: "1.2.3.4", countryCode: "RO", city: "Bucharest", org: "PureVPN",
+                               provider: "mock", fetchedAt: Date())
+        let postInfo = ExitInfo(ip: "1.2.3.4", countryCode: "RO", city: "Bucharest", org: "PureVPN",
+                                provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: SequencedGeo(counter: c, index: CallIndex(), responses: [preInfo, postInfo]),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: route,
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
+                        dnsProbeEnabled: { false },
+                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        await m.fullRefresh()
+        let baseline = await m.currentState()
+        XCTAssertNil(baseline.route.v6DefaultInterface)
+
+        // Native IPv6 default route appears on en0 — v4 fields untouched.
+        route.set(RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN",
+                            v6DefaultInterface: "en0", v6IsVPN: false))
+        await m.probeTick()
+
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 2, "a v6-only route change must escalate the tick into a full refresh")
+        let s = await m.currentState()
+        XCTAssertEqual(s.route.v6DefaultInterface, "en0")
+    }
+
+    /// The v6 half of the escalation condition must not fire on ITSELF being unchanged: a
+    /// plain tick with a byte-identical route still applies without escalating (otherwise
+    /// every 30s tick would become a full refresh).
+    func testProbeTickWithUnchangedIPv6RouteDoesNotEscalate() async {
+        let c = Counter()
+        let route = MutableMockRoute(RouteInfo(defaultInterface: "utun4", isVPN: true,
+                                               v6DefaultInterface: "en0", v6IsVPN: false))
+        let info = ExitInfo(ip: "1.2.3.4", countryCode: "RO", provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: MockGeo(counter: c, info: info),
+                        probe: MockProbe(counter: c, results: { true }),
+                        route: route,
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
+                        dnsProbeEnabled: { false },
+                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { _ in })
+        await m.fullRefresh()
+        await m.probeTick()
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 1, "an unchanged route must not escalate a tick")
+    }
+
+    /// A `fullRefresh` that coalesces onto an in-flight TICK which then ESCALATES must be
+    /// satisfied by that escalation, not run a second full refresh of its own. The escalation
+    /// reclassifies the slot to `.full` while the coalescer is parked in `await task.value`,
+    /// so a `wasFull` snapshot taken before the await is stale by the time it is read —
+    /// and acting on it duplicates every geo/DNS/relay call the tick just made, against this
+    /// codebase's own quota discipline.
+    func testFullRefreshCoalescingOntoAnEscalatingTickDoesNotRunTwice() async {
+        let c = Counter()
+        let started = Gate()
+        let release = Gate()
+        let box = EventBox()
+        let route = MutableMockRoute(RouteInfo(defaultInterface: "en0", isVPN: false))
+        let preInfo = ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Frankfurt", org: "Vodafone",
+                               provider: "mock", fetchedAt: Date())
+        let postInfo = ExitInfo(ip: "5.6.7.8", countryCode: "RO", city: "Bucharest", org: "PureVPN",
+                                provider: "mock", fetchedAt: Date())
+        let thirdInfo = ExitInfo(ip: "9.9.9.9", countryCode: "FR", city: "Paris", org: "Orange",
+                                 provider: "mock", fetchedAt: Date())
+        let m = Monitor(geo: SequencedGeo(counter: c, index: CallIndex(),
+                                          responses: [preInfo, postInfo, thirdInfo]),
+                        probe: SlowSecondProbe(counter: c, started: started, release: release),
+                        route: route,
+                        httpIP: MockHTTPIP(counter: c, ip: nil),
+                        stackIP: MockStackIP(counter: c, ip4: nil, ip6: nil),
+                        dnsConfig: MockDNSConfig(resolvers: []),
+                        dnsProbe: MockDNSProbe(result: nil),
+                        dnsEnumerator: MockDNSEnumerator(result: []),
+                        dnsProbeEnabled: { false },
+                        relayRanges: RelayRanges(csv: "172.224.224.0/27,DE,,,"),
+                        debounceSeconds: 0.05,
+                        onChange: { _ in }, onEvents: { box.append($0) })
+
+        // Baseline (probe call #1, geo response #0).
+        await m.fullRefresh()
+
+        // Tick in flight, parked inside probe.check() (call #2).
+        async let tickResult: Void = m.probeTick()
+        await started.wait()
+
+        // The route flips while the tick is parked, so the tick WILL escalate on resume.
+        route.set(RouteInfo(defaultInterface: "utun4", isVPN: true, vpnName: "PureVPN"))
+
+        // A full refresh arrives and coalesces onto that tick.
+        async let refresh: Void = m.fullRefresh()
+        for _ in 0..<50 { await Task.yield() }
+
+        await release.open()
+        _ = await tickResult
+        _ = await refresh
+
+        let geo = await c.geoCalls
+        XCTAssertEqual(geo, 2,
+                       "baseline (1) + the tick's own escalation (1); the coalescer must be "
+                       + "satisfied by that escalation rather than repeating it")
+    }
+
     func testProbeTickEscalatesOnRouteChangeSoNoStaleLeakEvent() async {
         let c = Counter()
         let box = EventBox()

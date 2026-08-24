@@ -8,6 +8,32 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Fixed
+- IPv6-only route changes now escalate a probe tick into a full refresh. A VPN that
+  tunnels only IPv4 while the native IPv6 default route appears mid-session (delayed
+  router advertisement, a re-attached cable) applied the new route next to an IPv6
+  exit measured before it existed — so an IPv6 leak stayed invisible until the next
+  scheduled full refresh, up to five minutes later.
+- Malformed IPv4 strings are rejected instead of being silently repaired. The parser
+  dropped unparseable components, so "999.1.2.3.4" became 1.2.3.4 — and since that
+  parser is what decides "is this an address at all" for DNS egress answers arriving
+  off the network, a malformed or spoofed answer could be judged a real egress and
+  produce a false DNS-leak warning out of garbage.
+- A confirmed DNS-leak alarm is now lowered when Tailscale's MagicDNS resolver later
+  appears in the configured set (switching on "Override local DNS" after a
+  confirmation). The documented policy for that case is "never confirms, never
+  notifies"; previously an already-lit ⚠️ stayed lit forever.
+- A full refresh that coalesces onto a probe tick which then escalates is satisfied by
+  that escalation instead of running a second, fully redundant refresh — it was
+  repeating every geo, DNS and relay call the escalation had just made.
+- Reopening the Welcome or Help window while it is already open now brings that window
+  forward instead of building a second one behind it. The old window stayed on screen
+  but its controller was released, leaving its buttons inert — a visibly dead Done
+  button.
+- The release workflow is idempotent: a rerun skips creating a release that already
+  exists and re-uploads assets with `--clobber`, so a half-finished release (as
+  happened when GitHub 503'd during v0.4.2) can be completed by rerunning it.
+
 ### Changed
 - **Truthful VPN naming.** A tunnel WhereAmIP can't identify now reads "VPN (utun4)"
   instead of "VPN: unknown (utun4)" — it is a real tunnel owning a real route, and
