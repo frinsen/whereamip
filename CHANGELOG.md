@@ -8,62 +8,32 @@ install-ready notes per version.
 
 ## [Unreleased]
 
-### Fixed
-- Holding ⌥ over the dropdown now always answers. With no IPv6 exit the "Copy both
-  exit addresses" alternate was absent entirely, so ⌥⌘C matched nothing, copied
-  nothing, and left the previous clipboard contents in place — pasting them looked
-  exactly as though ⌥⌘C had copied something else. The ⌥ state now shows a disabled
-  "No IPv6 exit to copy" row instead. Nothing is copied (there is nothing to copy),
-  but the silence is explained.
-- IPv6-only route changes now escalate a probe tick into a full refresh. A VPN that
-  tunnels only IPv4 while the native IPv6 default route appears mid-session (delayed
-  router advertisement, a re-attached cable) applied the new route next to an IPv6
-  exit measured before it existed — so an IPv6 leak stayed invisible until the next
-  scheduled full refresh, up to five minutes later.
-- Malformed IPv4 strings are rejected instead of being silently repaired. The parser
-  dropped unparseable components, so "999.1.2.3.4" became 1.2.3.4 — and since that
-  parser is what decides "is this an address at all" for DNS egress answers arriving
-  off the network, a malformed or spoofed answer could be judged a real egress and
-  produce a false DNS-leak warning out of garbage.
-- A confirmed DNS-leak alarm is now lowered when Tailscale's MagicDNS resolver later
-  appears in the configured set (switching on "Override local DNS" after a
-  confirmation). The documented policy for that case is "never confirms, never
-  notifies"; previously an already-lit ⚠️ stayed lit forever.
-- A full refresh that coalesces onto a probe tick which then escalates is satisfied by
-  that escalation instead of running a second, fully redundant refresh — it was
-  repeating every geo, DNS and relay call the escalation had just made.
-- Reopening the Welcome or Help window while it is already open now brings that window
-  forward instead of building a second one behind it. The old window stayed on screen
-  but its controller was released, leaving its buttons inert — a visibly dead Done
-  button.
-- The release workflow is idempotent: a rerun skips creating a release that already
-  exists and re-uploads assets with `--clobber`, so a half-finished release (as
-  happened when GitHub 503'd during v0.4.2) can be completed by rerunning it.
-
-### Changed
-- **Truthful VPN naming.** A tunnel WhereAmIP can't identify now reads "VPN (utun4)"
-  instead of "VPN: unknown (utun4)" — it is a real tunnel owning a real route, and
-  only the brand is missing, so the row says that rather than reading like a
-  malfunction. Naming from the macOS network service a client registers is unchanged
-  and remains the vendor-neutral path that works for clients this app has never heard
-  of.
-- The Tailscale fingerprint now needs corroboration. A 100.64/10 source address alone
-  no longer means Tailscale: that is RFC 6598 carrier-grade NAT — public space any
-  mesh VPN (Headscale, NetBird, Nebula) or a CGNAT'd uplink may use — so it names
-  Tailscale only alongside Tailscale's own bundle id or a visible Tailscale process.
-  Uncorroborated, it falls through to the rest of the ladder instead of guessing.
-  Cloudflare WARP's 172.16.0.2 keeps needing no corroboration: that constant is
-  assigned by WARP's own client, so it identifies the vendor by construction.
-- OpenVPN Connect tunnels are named again. The old check looked for the `ovpnagent`
-  daemon, which runs as root and is therefore invisible to an unprivileged process
-  scan — dead code that could never fire, leaving the tunnel unnamed. It now also
-  matches the user-owned "OpenVPN Connect" processes that the scanner really sees.
-
 ### Added
-- An unnamed tunnel explains itself in the diagnostics report: a line under Route
-  stating that no service name was found, that no address or process tell matched,
-  and which known VPN apps were running (the input to the ambiguity guard). If your
-  VPN shows as "VPN (utunN)", that line is what an issue needs in order to add it.
+- **DNS egress enumeration**: the leak check now discovers *all* of your
+  egress resolvers instead of one. Public resolvers are load-balanced across
+  a pool, so a single lookup only ever reveals whichever member answered it;
+  a full refresh now fires a round of six TXT lookups of random, single-use
+  names under `test.dnscheck.tools` (an authoritative server that reports who
+  asked — the dnsleaktest.com mechanism), which typically surfaces both an
+  IPv4 and an IPv6 egress of the same operator. Each discovered resolver
+  carries its operator, location, and transport (UDP/TCP/TLS). The Google
+  `o-o.myaddr.l.google.com` beacon remains as the fallback when that service
+  is unreachable, and `config set dns false` still disables every query.
+- The dropdown's DNS row is now a submenu: "Configured resolvers" (each
+  unique address once, with the interfaces it was scoped to) above "Queries
+  answered by" (every discovered egress resolver). `whereamip status` shows
+  the same egress resolvers on an indented line, and `--json` gains a
+  `dns.egressResolvers` array — additive, absent from older output.
+- When every configured resolver is router-local but the queries surface at a
+  known public provider, the submenu names it: "Router forwards to Quad9 —
+  encryption of that hop is set on the router". An attribution hint only —
+  the client cannot observe whether that hop is encrypted, and forwarding is
+  normal configuration, so this never warns. "Router-local" means a private
+  range, an address inside one of this host's directly connected prefixes
+  (which is how a router advertising itself with a *global* address out of
+  the ISP's delegated prefix is recognized — no vendor or ISP knowledge
+  involved), or the same box in a prefix the ISP has since rotated away
+  (identical IPv6 interface identifier as an already-anchored resolver).
 - **Copy Diagnostics** (⌘D, first row above Refresh): puts the whole dropdown
   on the clipboard as plain text — version, exit, IPv6 exit, route, Since,
   configured resolvers, answering resolvers — with every warning the dropdown is
@@ -91,32 +61,6 @@ install-ready notes per version.
   keyboard shortcuts, and the CLI. The app is a menu bar accessory with no menu
   bar of its own, so this row stands in for the Help menu. The welcome window is
   unaffected and the two can be open at the same time.
-- **DNS egress enumeration**: the leak check now discovers *all* of your
-  egress resolvers instead of one. Public resolvers are load-balanced across
-  a pool, so a single lookup only ever reveals whichever member answered it;
-  a full refresh now fires a round of six TXT lookups of random, single-use
-  names under `test.dnscheck.tools` (an authoritative server that reports who
-  asked — the dnsleaktest.com mechanism), which typically surfaces both an
-  IPv4 and an IPv6 egress of the same operator. Each discovered resolver
-  carries its operator, location, and transport (UDP/TCP/TLS). The Google
-  `o-o.myaddr.l.google.com` beacon remains as the fallback when that service
-  is unreachable, and `config set dns false` still disables every query.
-- The dropdown's DNS row is now a submenu: "Configured resolvers" (each
-  unique address once, with the interfaces it was scoped to) above "Queries
-  answered by" (every discovered egress resolver). `whereamip status` shows
-  the same egress resolvers on an indented line, and `--json` gains a
-  `dns.egressResolvers` array — additive, absent from older output.
-- When every configured resolver is router-local but the queries surface at a
-  known public provider, the submenu names it: "Router forwards to Quad9 —
-  encryption of that hop is set on the router". An attribution hint only —
-  the client cannot observe whether that hop is encrypted, and forwarding is
-  normal configuration, so this never warns. "Router-local" means a private
-  range, an address inside one of this host's directly connected prefixes
-  (which is how a router advertising itself with a *global* address out of
-  the ISP's delegated prefix is recognized — no vendor or ISP knowledge
-  involved), or the same box in a prefix the ISP has since rotated away
-  (identical IPv6 interface identifier as an already-anchored resolver).
-
 - **User-facing texts are out of the code.** Every string the menu bar app shows
   — dropdown rows, warning lines, the DNS submenu, Settings items, notification
   titles/bodies, the welcome window — now comes from
@@ -135,6 +79,10 @@ install-ready notes per version.
   back to the intro copy. Rendering covers paragraphs, bullets and inline
   emphasis, with no new dependency; the window sizes to its content once at open
   and never resizes live.
+- An unnamed tunnel explains itself in the diagnostics report: a line under Route
+  stating that no service name was found, that no address or process tell matched,
+  and which known VPN apps were running (the input to the ambiguity guard). If your
+  VPN shows as "VPN (utunN)", that line is what an issue needs in order to add it.
 
 ### Changed
 - The DNS leak verdict is now measured from the enumeration's primary
@@ -143,6 +91,55 @@ install-ready notes per version.
   and the org/ASN rescue, is unchanged. A confirmed leak row can now name
   the egress operator from the enumeration data when the geo attribution
   lookup fails — no additional lookup was added.
+- **Truthful VPN naming.** A tunnel WhereAmIP can't identify now reads "VPN (utun4)"
+  instead of "VPN: unknown (utun4)" — it is a real tunnel owning a real route, and
+  only the brand is missing, so the row says that rather than reading like a
+  malfunction. Naming from the macOS network service a client registers is unchanged
+  and remains the vendor-neutral path that works for clients this app has never heard
+  of.
+- The Tailscale fingerprint now needs corroboration. A 100.64/10 source address alone
+  no longer means Tailscale: that is RFC 6598 carrier-grade NAT — public space any
+  mesh VPN (Headscale, NetBird, Nebula) or a CGNAT'd uplink may use — so it names
+  Tailscale only alongside Tailscale's own bundle id or a visible Tailscale process.
+  Uncorroborated, it falls through to the rest of the ladder instead of guessing.
+  Cloudflare WARP's 172.16.0.2 keeps needing no corroboration: that constant is
+  assigned by WARP's own client, so it identifies the vendor by construction.
+- OpenVPN Connect tunnels are named again. The old check looked for the `ovpnagent`
+  daemon, which runs as root and is therefore invisible to an unprivileged process
+  scan — dead code that could never fire, leaving the tunnel unnamed. It now also
+  matches the user-owned "OpenVPN Connect" processes that the scanner really sees.
+
+### Fixed
+- IPv6-only route changes now escalate a probe tick into a full refresh. A VPN that
+  tunnels only IPv4 while the native IPv6 default route appears mid-session (delayed
+  router advertisement, a re-attached cable) applied the new route next to an IPv6
+  exit measured before it existed — so an IPv6 leak stayed invisible until the next
+  scheduled full refresh, up to five minutes later.
+- Malformed IPv4 strings are rejected instead of being silently repaired. The parser
+  dropped unparseable components, so "999.1.2.3.4" became 1.2.3.4 — and since that
+  parser is what decides "is this an address at all" for DNS egress answers arriving
+  off the network, a malformed or spoofed answer could be judged a real egress and
+  produce a false DNS-leak warning out of garbage.
+- A confirmed DNS-leak alarm is now lowered when Tailscale's MagicDNS resolver later
+  appears in the configured set (switching on "Override local DNS" after a
+  confirmation). The documented policy for that case is "never confirms, never
+  notifies"; previously an already-lit ⚠️ stayed lit forever.
+- A full refresh that coalesces onto a probe tick which then escalates is satisfied by
+  that escalation instead of running a second, fully redundant refresh — it was
+  repeating every geo, DNS and relay call the escalation had just made.
+- Holding ⌥ over the dropdown now always answers. With no IPv6 exit the "Copy both
+  exit addresses" alternate was absent entirely, so ⌥⌘C matched nothing, copied
+  nothing, and left the previous clipboard contents in place — pasting them looked
+  exactly as though ⌥⌘C had copied something else. The ⌥ state now shows a disabled
+  "No IPv6 exit to copy" row instead. Nothing is copied (there is nothing to copy),
+  but the silence is explained.
+- Reopening the Welcome or Help window while it is already open now brings that window
+  forward instead of building a second one behind it. The old window stayed on screen
+  but its controller was released, leaving its buttons inert — a visibly dead Done
+  button.
+- The release workflow is idempotent: a rerun skips creating a release that already
+  exists and re-uploads assets with `--clobber`, so a half-finished release (as
+  happened when GitHub 503'd during v0.4.2) can be completed by rerunning it.
 
 ## [0.4.2] — 2026-08-17
 
