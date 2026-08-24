@@ -8,6 +8,8 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-08-24
+
 ### Added
 - **A language picker in Settings.** The app still follows your Mac by default, but
   Settings ▸ Language now switches it by hand — System Language, English, or Deutsch —
