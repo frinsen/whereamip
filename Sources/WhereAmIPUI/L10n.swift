@@ -46,6 +46,7 @@ public enum L10nKey: String, CaseIterable {
     case menuPrivateRelayVia = "menu.privateRelay.via"
     case menuOrgUnknown = "menu.org.unknown"
     case menuCopyExitBoth = "menu.copyExitBoth"
+    case menuCopyExitBothUnavailable = "menu.copyExitBoth.unavailable"
     case menuCopyDiagnostics = "menu.copyDiagnostics"
     case menuRefresh = "menu.refresh"
     case menuHelp = "menu.help"

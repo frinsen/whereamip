@@ -9,6 +9,12 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Fixed
+- Holding ⌥ over the dropdown now always answers. With no IPv6 exit the "Copy both
+  exit addresses" alternate was absent entirely, so ⌥⌘C matched nothing, copied
+  nothing, and left the previous clipboard contents in place — pasting them looked
+  exactly as though ⌥⌘C had copied something else. The ⌥ state now shows a disabled
+  "No IPv6 exit to copy" row instead. Nothing is copied (there is nothing to copy),
+  but the silence is explained.
 - IPv6-only route changes now escalate a probe tick into a full refresh. A VPN that
   tunnels only IPv4 while the native IPv6 default route appears mid-session (delayed
   router advertisement, a re-attached cable) applied the new route next to an IPv6

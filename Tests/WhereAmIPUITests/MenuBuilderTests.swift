@@ -650,12 +650,80 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(payload, "185.107.56.123\n2a09:bac5:27cd:2a0::43:80")
     }
 
-    func testNoAlternateExitRowWithoutAnIPv6Exit() {
-        // An alternate promising two addresses while copying one is the bug this avoids.
+
+    // MARK: - the ⌥ state always answers, even with no IPv6 exit
+
+    /// Field report: ⌥⌘C pressed on a machine whose IPv6 exit had dropped between
+    /// refreshes. The alternate was absent entirely, so the keystroke matched nothing,
+    /// nothing was copied, and the user pasted a STALE clipboard (their earlier ⌘D
+    /// report) — which read exactly as if ⌥⌘C copies diagnostics. Spec-correct, and a
+    /// genuinely confusing silence. Holding ⌥ must always change something on screen:
+    /// either the wider copy, or the reason it isn't available.
+    func testAlternateRowIsPresentButDisabledWhenThereIsNoIPv6Exit() throws {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
                                      launchAtLogin: false, actions: MenuActions())
-        XCTAssertFalse(titles(menu).contains(L10n.string(.menuCopyExitBoth)))
-        XCTAssertFalse(menu.items.contains { $0.isAlternate })
+        let all = titles(menu)
+        // XCTUnwrap, not `!`: if this row ever disappears again the suite must SAY so, not
+        // crash the whole test bundle on a nil force-unwrap and take every other result with it.
+        let ipIndex = try XCTUnwrap(all.firstIndex(of: "185.107.56.123"))
+        let rowIndex = try XCTUnwrap(all.firstIndex(of: L10n.string(.menuCopyExitBothUnavailable)),
+                                     "the ⌥ slot must never be empty: \(all)")
+        // Adjacency is what makes it an alternate at all — same rule as the enabled case.
+        XCTAssertEqual(rowIndex, ipIndex + 1)
+        let row = menu.items[rowIndex]
+        XCTAssertTrue(row.isAlternate)
+        XCTAssertFalse(row.isEnabled, "it explains an absence; it must not look actionable")
+        XCTAssertNil(row.action, "nothing to fire")
+        XCTAssertEqual(row.keyEquivalent, "c")
+        XCTAssertEqual(row.keyEquivalentModifierMask, [.command, .option])
+        // The promise-two-copy-one row must not exist in this state.
+        XCTAssertFalse(all.contains(L10n.string(.menuCopyExitBoth)))
+    }
+
+    func testEnabledAlternateIsUnchangedWhenAnIPv6ExitExists() {
+        var payload: String?
+        let menu = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                     launchAtLogin: false, actions: MenuActions(copyText: { payload = $0 }))
+        let all = titles(menu)
+        XCTAssertFalse(all.contains(L10n.string(.menuCopyExitBothUnavailable)),
+                       "the explanation row belongs only to the no-IPv6 state")
+        let row = menu.items[all.firstIndex(of: L10n.string(.menuCopyExitBoth))!]
+        XCTAssertTrue(row.isEnabled)
+        (row.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        XCTAssertEqual(payload, "185.107.56.123\n2a09:bac5:27cd:2a0::43:80")
+    }
+
+    /// Verifies the assumption the fix rests on rather than trusting it: that a DISABLED
+    /// item's key equivalent fires nothing, so ⌥⌘C in the no-IPv6 state still copies
+    /// nothing (correct — there is nothing to copy) instead of doing something surprising.
+    /// Driven through AppKit's real key-equivalent dispatch, not by inspecting properties.
+    func testOptionCommandCFiresTheCopyOnlyWhenTheAlternateIsEnabled() throws {
+        let event = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command, .option],
+            timestamp: 0, windowNumber: 0, context: nil,
+            characters: "c", charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8))
+
+        var enabledPayload: String?
+        let enabled = MenuBuilder.build(state: dualStackState(), style: .emoji, notificationsEnabled: false,
+                                        launchAtLogin: false,
+                                        actions: MenuActions(copyText: { enabledPayload = $0 }))
+        XCTAssertTrue(enabled.performKeyEquivalent(with: event), "⌥⌘C must reach the enabled alternate")
+        XCTAssertEqual(enabledPayload, "185.107.56.123\n2a09:bac5:27cd:2a0::43:80")
+
+        // The disabled alternate: measured, not assumed. AppKit DOES report the event as
+        // handled — the disabled item matches the key equivalent and consumes it — but it
+        // invokes nothing. So the guarantee that matters is about EFFECTS, not about the
+        // return value: with no IPv6 exit, ⌥⌘C copies nothing and, in particular, does not
+        // fall through to the plain ⌘C row and quietly copy the IPv4 instead.
+        var disabledPayload: String?
+        var copyIPFired = false
+        let disabled = MenuBuilder.build(state: vpnState(), style: .emoji, notificationsEnabled: false,
+                                         launchAtLogin: false,
+                                         actions: MenuActions(copyIP: { copyIPFired = true },
+                                                              copyText: { disabledPayload = $0 }))
+        _ = disabled.performKeyEquivalent(with: event)
+        XCTAssertNil(disabledPayload, "nothing to copy, so nothing may be copied")
+        XCTAssertFalse(copyIPFired, "must not silently fall through to the plain ⌘C copy")
     }
 
     // MARK: - copy diagnostics

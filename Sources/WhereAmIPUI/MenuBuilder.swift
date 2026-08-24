@@ -190,8 +190,15 @@ public enum MenuBuilder {
                 // treats an item as an alternate of the one it DIRECTLY follows,
                 // and only when both share a key equivalent — hence the exact
                 // placement here rather than anywhere else in the info block.
-                // Absent entirely without an IPv6 exit: a row promising two
-                // addresses that copies one would be a lie, not a shortcut.
+                //
+                // The ⌥ state is ALWAYS occupied, either by the copy or by the
+                // reason there isn't one. Field report: with no IPv6 exit the slot
+                // used to be empty, so ⌥⌘C matched nothing, copied nothing, and
+                // left whatever was already on the clipboard — the user pasted an
+                // earlier ⌘D report and reasonably concluded ⌥⌘C copies
+                // diagnostics. Nothing on screen had changed to say otherwise.
+                // Same precedent as the DNS submenu's disabled "DNS check
+                // disabled" row: state the absence rather than hiding the slot.
                 if let exit6 = state.exit6 {
                     let bothItem = action(L10n.string(.menuCopyExitBoth), key: "c") {
                         // Addresses only, one per line. The rows above carry the
@@ -202,6 +209,16 @@ public enum MenuBuilder {
                     bothItem.keyEquivalentModifierMask = [.command, .option]
                     bothItem.isAlternate = true
                     menu.addItem(bothItem)
+                } else {
+                    // Disabled (`info`) so it can't be clicked and doesn't read as an
+                    // action — and because a disabled item's key equivalent fires
+                    // nothing, ⌥⌘C here still copies nothing, which is correct: there
+                    // is nothing to copy. What changes is that the user is told so.
+                    let unavailable = info(L10n.string(.menuCopyExitBothUnavailable))
+                    unavailable.keyEquivalent = "c"
+                    unavailable.keyEquivalentModifierMask = [.command, .option]
+                    unavailable.isAlternate = true
+                    menu.addItem(unavailable)
                 }
                 let place = [exit.city, countryName(exit.countryCode)].compactMap { $0 }.joined(separator: ", ")
                 if !place.isEmpty { menu.addItem(info(place)) }

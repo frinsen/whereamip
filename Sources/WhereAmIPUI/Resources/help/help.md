@@ -45,8 +45,8 @@ cannot be observed from here.
 
 - **⌘C** — copy the exit IPv4 address.
 - **⌥⌘C** — copy both exit addresses, IPv4 and IPv6. Hold **⌥** with the dropdown
-  open and the IP row turns into this wider copy; it only appears when an IPv6 exit
-  was measured.
+  open and the IP row turns into this wider copy; when no IPv6 exit was measured the
+  row says so instead, and nothing is copied.
 - **⌘D** — Copy Diagnostics: the whole dropdown as text, with the same warnings it
   is showing you and no others, ready to paste into a bug report. It goes to your
   clipboard and nowhere else.

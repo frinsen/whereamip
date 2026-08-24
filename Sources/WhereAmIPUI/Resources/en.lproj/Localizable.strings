@@ -47,6 +47,11 @@
 /* ⌥⌘C alternate of the exit-IP row: copies BOTH exit addresses, so the label must
    promise exactly two — the row is hidden entirely when there is no IPv6 exit */
 "menu.copyExitBoth" = "Copy both exit addresses";
+/* Takes the same ⌥-hold slot when there is no IPv6 exit, as a DISABLED row: holding ⌥
+   must always answer, either with the wider copy or with the reason it is unavailable.
+   "No X" mirrors the menu's own "No internet connection"; the trailing "to copy" keeps
+   it tied to the action whose place it is taking, which a bare network fact would not. */
+"menu.copyExitBoth.unavailable" = "No IPv6 exit to copy";
 "menu.copyDiagnostics" = "Copy Diagnostics";
 "menu.refresh" = "Refresh";
 /* Apple's HIG naming pattern for a Help item, "<YourAppName> Help" — this app is
