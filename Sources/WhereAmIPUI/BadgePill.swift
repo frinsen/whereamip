@@ -28,7 +28,10 @@ public final class BadgePill: NSView {
     public static let font = NSFont.systemFont(ofSize: 11, weight: .bold)
     /// Letter spacing as a fraction of the point size (~0.08em) — uppercase text set
     /// solid is noticeably harder to read, and tracking is the standard remedy.
-    private static let kernRatio: CGFloat = 0.08
+    /// Public because the welcome window sets its section headers uppercase too and
+    /// has to track them the same way (see WelcomeLayout.sectionHeader): one number,
+    /// not two free to drift apart in the same window.
+    public static let kernRatio: CGFloat = 0.08
     private static let horizontalPadding: CGFloat = 10
     private static let verticalPadding: CGFloat = 4
     /// Background opacity for the tint. Low enough that the pill stays a background

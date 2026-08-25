@@ -148,8 +148,13 @@ public enum L10nKey: String, CaseIterable {
     // uppercasing stays locale-aware.
     case welcomeBadgeIntro = "welcome.badge.intro"
     case welcomeBadgeWhatsNew = "welcome.badge.whatsNew"
+    /// First-run pitch only — see `WelcomeContent.showsNotchHint(variant:)`.
     case welcomeHint = "welcome.hint"
+    /// Section header for the toggles. Stored title case, uppercased by the view
+    /// (WelcomeLayout.sectionHeader), the same split the badges make.
     case welcomeSetupHeader = "welcome.setup.header"
+    /// Its caption. Used to be a parenthetical stuck onto the header itself; it is
+    /// now a caption line under it, so the header can be a header.
     case welcomeSetupCaption = "welcome.setup.caption"
     case welcomeNotifyCaption = "welcome.notify.caption"
     case welcomeNotifyHint = "welcome.notify.hint"

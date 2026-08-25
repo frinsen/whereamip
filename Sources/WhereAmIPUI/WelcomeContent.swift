@@ -72,6 +72,21 @@ public enum WelcomeContent {
         storedMilestone.isEmpty ? .intro : .whatsNew
     }
 
+    /// Whether the window shows the "can't see the flag? it may be behind the notch"
+    /// aside under its body copy.
+    ///
+    /// Only the first-run pitch does. The aside is orientation — where to look for the
+    /// thing you just installed — and it is written for someone who has never seen the
+    /// flag. A reader who opened What's New has been running the app since at least the
+    /// previous release and either found the flag long ago or fixed the menu bar; there
+    /// the same sentence is just a paragraph of first-run copy wedged between a change
+    /// log and a settings group, which is exactly how it read (a sixth bullet that had
+    /// lost its dot). Content structure rather than layout, so it is decided here where
+    /// it can be tested, not in the window.
+    public static func showsNotchHint(variant: Variant) -> Bool {
+        variant == .intro
+    }
+
     /// What clicking Done stores as seen. Deliberately variant-blind: acknowledging is
     /// about the release, not about which of its two windows happened to be on screen,
     /// so reading What's New marks the milestone seen exactly as the auto-shown window

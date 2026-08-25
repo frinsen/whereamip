@@ -37,6 +37,10 @@ install-ready notes per version.
   bundle's own path is what stays stable across `port upgrade` and is what gets compared.
 
 ### Changed
+- The welcome window's lower half now reads as three separated bands — release copy,
+  **Your setup**, and the footer — on one spacing scale, and the window is sized from its
+  own content at open, so a long release note can never lose its last line off the bottom
+  edge. The notch tip is now a footnote in the first-run pitch only.
 - The welcome window now says which of its two things it is with a small tinted badge
   above the title — **Getting Started** in blue, **What's New** in amber — instead of
   spelling it out in the title itself. Both titles are now just the name and the version,

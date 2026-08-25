@@ -162,9 +162,14 @@
    — der Menüeintrag (settings.whatsNew) trägt zusätzlich das Verb seiner Geschwister */
 "welcome.badge.intro" = "Erste Schritte";
 "welcome.badge.whatsNew" = "Neue Funktionen";
+/* Nur in der Vorstellung — der Satz sagt neuen Leuten, wo die Flagge steckt; wer
+   „Neue Funktionen" öffnet, weiß das längst */
 "welcome.hint" = "Flagge nicht zu sehen? In einer vollen Menüleiste verschwindet sie leicht hinter der Notch.";
+/* Abschnittsüberschrift. Hier normal geschrieben, die Großschreibung macht die View */
 "welcome.setup.header" = "Deine Einrichtung";
-"welcome.setup.caption" = "(zeigt die aktuellen Einstellungen)";
+/* Die zugehörige Bildunterschrift: die Überschrift benennt, die Unterschrift erklärt.
+   Verb zuerst, ohne Subjekt — wie welcome.notify.caption, die andere im Fenster */
+"welcome.setup.caption" = "Zeigt deine aktuellen Einstellungen.";
 /* Einzeilig: muss bei 10 pt in 353 pt passen, sonst wird abgeschnitten. Deutsche Sätze
    sind länger als englische, deshalb hier bewusst knapp — gemessen von
    L10nTests.testNotifyCaptionFitsItsSingleLineSlotInEveryLocale, nicht geschätzt. */

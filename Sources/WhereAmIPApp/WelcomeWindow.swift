@@ -43,50 +43,11 @@ final class WelcomeWindowController: NSWindowController {
     private var applicationsErrorText: String? { didSet { renderMergedStatus() } }
     private var notifyHintActive = false { didSet { renderMergedStatus() } }
 
-    // Fixed height for the shared conditionally-populated status slot
-    // (mergedStatusView) — EXACTLY two lines at its 10pt font
-    // (NSLayoutManager.defaultLineHeight(for: .systemFont(ofSize: 10))
-    // measures 12pt/line, so 2 lines = 24pt; not a rounder but looser guess —
-    // a looser reservation is exactly what read as a "hole" in the second
-    // design review). The view stays permanently in the stack at this
-    // height; only its text/tint/enabled state changes (never `.isHidden`,
-    // never inserted/removed), so the window's size never jumps depending on
-    // whether an error or a permission hint happens to be showing right now
-    // (field-reported bug — see toggleApplications()/toggleNotify()).
-    //
-    // Height alone isn't enough, though: a *width* that varies with content
-    // is just as capable of moving things around. NSStackView sizes a
-    // leading-aligned container (setupSection/checkboxStack) to its widest
-    // row; a capped-not-fixed width let a conditionally-populated view shrink
-    // to near-zero while empty and grow wide once populated, which changed
-    // checkboxStack's own intrinsic width and shifted its centered parent
-    // (setupSection) sideways, dragging every checkbox's *left* edge with it
-    // (a horizontal jump, reported after an earlier vertical-only fix). So
-    // this view gets BOTH dimensions pinned to a constant — never just
-    // capped — and setupSection ALSO gets an explicit fixed width (see
-    // buildContent) so its own leading edge no longer depends on which of
-    // its children happens to be widest.
-    private static let reservedStatusLineHeight: CGFloat = 24
-    // The one standard gap after a reserved status slot — replaces what was
-    // an oversized, inconsistent custom-spacing value that (on top of the
-    // reservation itself) made the setup→commit transition read as an empty
-    // hole rather than a deliberate section break.
-    private static let sectionGap: CGFloat = 20
-    // Footer gaps (privacy→Done, Done→window-bottom-edge) are equalized to
-    // this value rather than sectionGap: the side margins are 24pt, and the
-    // bottom margin must never be smaller than the side margins, so the
-    // footer's "standard" gap is pinned to match the sides exactly instead
-    // of the plain ~20pt used elsewhere.
-    private static let footerGap: CGFloat = 24
-    // Badge → heading. The badge names the category the heading no longer spells
-    // out, so the two belong together: tighter than the stack's default 12pt, but
-    // still more than the 4pt that binds the heading to the body beneath it.
-    private static let badgeGap: CGFloat = 6
-    // Approximates the leading edge of a standard AppKit checkbox's title
-    // text (checkbox glyph + its gap before the label) — not pixel-exact
-    // across every rendering, but close enough to visually align a caption
-    // under the checkbox's *label*, not its square.
-    private static let checkboxTextIndent: CGFloat = 19
+    // Arrangement, spacing and size all live in WhereAmIPUI/WelcomeLayout —
+    // including the shared status slot's pinned dimensions, which are what stop
+    // the window jumping around when an error or a permission hint appears. This
+    // controller keeps the window, the three live toggles and their actions;
+    // it holds no geometry of its own.
 
     init(settings: Settings, variant: WelcomeContent.Variant) {
         self.settings = settings
@@ -103,11 +64,10 @@ final class WelcomeWindowController: NSWindowController {
         // "WhereAmIP" (see buildContent) so the version isn't shown twice.
         let copy = WelcomeContent.copy(variant: variant)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: WelcomeLayout.windowWidth, height: 360),
             // No .resizable — this is a small fixed-size informational window.
-            // The actual height is whatever the content's Auto Layout fitting
-            // size resolves to (see stack's `<=` bottom constraint below);
-            // this is just the initial frame before that first layout pass.
+            // The height here is a placeholder: buildContent() replaces it with
+            // the content's own resolved height before the window is shown.
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false)
         // Plain, not the versioned heading text: avoids showing "WhereAmIP vX"
@@ -159,55 +119,7 @@ final class WelcomeWindowController: NSWindowController {
             iconView = label
         }
 
-        // Category pill — "GETTING STARTED" or "WHAT'S NEW" — between the icon and
-        // the heading. ONE new fixed-height row (BadgePill.height, a constant that
-        // does not follow its text or its locale), so the window's single sizing pass
-        // at open still resolves to a settled height and nothing below it moves
-        // relative to anything else. Words, tint and shape all live in
-        // WhereAmIPUI/BadgePill, which is where they can be tested; this file only
-        // places the row.
-        let badge = BadgePill.forVariant(variant)
-
-        let heading = NSTextField(labelWithString: copy.heading)
-        heading.font = .boldSystemFont(ofSize: 15)
-        heading.alignment = .center
-
-        // Bundled Markdown, rendered once here, before the window is ever shown —
-        // so a longer "what's new" body resolves into a taller window at open
-        // (the stack's fitting size, see the bottom constraint below) and never
-        // resizes afterwards. Nothing re-renders this label at runtime.
-        // ReadingLabel, not the raw wrapping-label factory: that factory is SELECTABLE, and
-        // a click on selectable attributed text hands it to the window's field editor, which
-        // rebuilds it from the plain string and writes the flattened result back — bold gone,
-        // bullet indents collapsed, permanently (field-reported on 0.5.5, reproduced in
-        // ReadingLabelTests). Interactivity only; the font, alignment and width below are
-        // unchanged, so this moves nothing in the tuned layout.
-        let bodyFont = NSFont.systemFont(ofSize: 12)
-        let body = ReadingLabel.wrapping(font: bodyFont)
-        body.attributedStringValue = WelcomeContent.rendered(copy.markdown, font: bodyFont,
-                                                             alignment: .center)
-
-        // Plain strings, so they had nothing to lose to the field editor — but they are the
-        // same kind of thing (copy you read), and a caret blinking in the middle of a
-        // sentence is an affordance for an interaction that does nothing.
-        let hint = ReadingLabel.wrapping(font: .systemFont(ofSize: 11))
-        hint.stringValue = L10n.string(.welcomeHint)
-        hint.alignment = .center
-        hint.textColor = .secondaryLabelColor
-
-        // MARK: setup band — header + the three live-state toggles
-
-        let setupHeader = NSTextField(labelWithString: L10n.string(.welcomeSetupHeader))
-        setupHeader.font = .systemFont(ofSize: 11, weight: .semibold)
-        let setupHeaderCaption = NSTextField(labelWithString: L10n.string(.welcomeSetupCaption))
-        setupHeaderCaption.font = .systemFont(ofSize: 10)
-        setupHeaderCaption.textColor = .secondaryLabelColor
-        // So pre-checked boxes below (e.g. Launch at Login already on) read
-        // as reported status, not as something this window just did.
-        let setupHeaderRow = NSStackView(views: [setupHeader, setupHeaderCaption])
-        setupHeaderRow.orientation = .horizontal
-        setupHeaderRow.alignment = .firstBaseline
-        setupHeaderRow.spacing = 4
+        // MARK: the three live toggles — the only interactive content here
 
         launchAtLoginCheckbox = NSButton(checkboxWithTitle: L10n.string(.settingsLaunchAtLogin),
                                           target: self, action: #selector(toggleLaunchAtLogin))
@@ -231,87 +143,19 @@ final class WelcomeWindowController: NSWindowController {
         // disagreed with reality the moment this window could be reopened
         // later (Settings ▸ Show Welcome Window) with the setting already
         // on — screenshot showed Settings ✓ checked, welcome window
-        // unchecked, right under a header literally claiming "reflects
-        // current settings". Refined further once the real system
+        // unchecked, right under a header whose caption claims it reflects
+        // current settings. Refined further once the real system
         // authorization is known — see refreshNotifyCheckboxFromTruth(),
         // called from init() after buildContent() returns.
         notifyCheckbox.state = settings.notificationsEnabled ? .on : .off
-
-        // Single-line (not wrapping) label, so it must fit the caption's
-        // available width (372 - checkboxTextIndent = 353pt) at this 10pt
-        // font without truncating — measured directly via
-        // NSString.size(withAttributes:) rather than eyeballed; the design
-        // review's own suggested one-liner ("Alerts when your exit, route,
-        // or connectivity changes. Asks for macOS permission when enabled.",
-        // 465pt) and its proposed fallback (410pt) both overflowed, so this
-        // is trimmed further (341pt) to actually fit.
-        let notifyCaption = NSTextField(labelWithString: L10n.string(.welcomeNotifyCaption))
-        notifyCaption.font = .systemFont(ofSize: 10)
-        notifyCaption.textColor = .secondaryLabelColor
-        notifyCaption.preferredMaxLayoutWidth = 372 - Self.checkboxTextIndent
-
-        // Caption indented to align under the checkbox's *label* text, not
-        // its square. The shared status slot (mergedStatusView, built below
-        // as a sibling of setupSection) reuses this same checkboxTextIndent
-        // so both lines share one left edge, even though the slot itself no
-        // longer lives inside this row — see buildContent's assembly.
-        let notifyIndentSpacer = NSView()
-        notifyIndentSpacer.widthAnchor.constraint(equalToConstant: Self.checkboxTextIndent).isActive = true
-        let notifyCaptionRow = NSStackView(views: [notifyIndentSpacer, notifyCaption])
-        notifyCaptionRow.orientation = .horizontal
-        notifyCaptionRow.alignment = .top
-        notifyCaptionRow.spacing = 0
-
-        let checkboxStack = NSStackView(views: [launchAtLoginCheckbox, applicationsCheckbox,
-                                                 notifyCheckbox, notifyCaptionRow])
-        checkboxStack.orientation = .vertical
-        checkboxStack.alignment = .leading
-        checkboxStack.spacing = 6
-        checkboxStack.setCustomSpacing(2, after: notifyCheckbox)
-
-        let setupSection = NSStackView(views: [setupHeaderRow, checkboxStack])
-        setupSection.orientation = .vertical
-        setupSection.alignment = .leading
-        setupSection.spacing = 8
-        // Explicit fixed width (== the stack's full usable content width, see
-        // below) rather than relying on some child happening to be that
-        // wide: setupSection's leading edge must stay put regardless of
-        // what's inside it, and an internal child's width is not a
-        // dependable way to guarantee that (see reservedStatusLineHeight doc).
-        setupSection.widthAnchor.constraint(equalToConstant: 372).isActive = true
 
         // Shared conditional-status slot (applications-link error OR the
         // notifications-denied hint — see the class-level doc above for the
         // precedence rule). A plain NSButton so the notify-hint case can be
         // clickable (opens System Settings); the error case just never fires
-        // its action (see openNotificationSettings()). Positioned as a
-        // sibling right after setupSection, indented to the same left edge
-        // as notifyCaption via its own spacer+fixed-width pairing below —
-        // the "directly under the setup section" placement from the design
-        // review, not nested inside checkboxStack.
+        // its action (see openNotificationSettings()). Its appearance and its
+        // pinned size are WelcomeLayout's; only the target/action is ours.
         mergedStatusView = NSButton(title: "", target: self, action: #selector(openNotificationSettings))
-        mergedStatusView.bezelStyle = .inline
-        mergedStatusView.isBordered = false
-        mergedStatusView.font = .systemFont(ofSize: 10)
-        (mergedStatusView.cell as? NSButtonCell)?.wraps = true
-        (mergedStatusView.cell as? NSButtonCell)?.lineBreakMode = .byWordWrapping
-        // NSButton centers its title by default regardless of the button's
-        // own frame alignment; left-align the text itself so it lines up
-        // with notifyCaption above it instead of floating on the window's axis.
-        (mergedStatusView.cell as? NSButtonCell)?.alignment = .left
-        let statusIndentSpacer = NSView()
-        statusIndentSpacer.widthAnchor.constraint(equalToConstant: Self.checkboxTextIndent).isActive = true
-        let statusRow = NSStackView(views: [statusIndentSpacer, mergedStatusView])
-        statusRow.orientation = .horizontal
-        statusRow.alignment = .top
-        statusRow.spacing = 0
-
-        // MARK: commit band — privacy note + Done
-
-        let privacy = ReadingLabel.wrapping(font: .systemFont(ofSize: 10))
-        privacy.stringValue = L10n.string(.welcomePrivacy)
-        privacy.textColor = .secondaryLabelColor
-        privacy.alignment = .center
 
         let doneButton = NSButton(title: L10n.string(.welcomeDone), target: self, action: #selector(done))
         doneButton.bezelStyle = .rounded
@@ -321,43 +165,19 @@ final class WelcomeWindowController: NSWindowController {
         // dialog must get right is answering "what do I do now".
         window.defaultButtonCell = doneButton.cell as? NSButtonCell
 
-        // MARK: assembly — three bands: pitch / setup / commit
+        // MARK: everything else — arrangement, spacing and size live in WelcomeLayout
 
-        let stack = NSStackView(views: [iconView, badge, heading, body, hint,
-                                         setupSection, statusRow,
-                                         privacy, doneButton])
-        stack.orientation = .vertical
-        stack.alignment = .centerX
-        stack.spacing = 12
-        // Bottom inset equals the side insets (24) — never smaller, per the
-        // footer fix: Done→window-bottom-edge is a real margin, not a
-        // between-elements gap, so it follows footerGap, not sectionGap.
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 24, bottom: Self.footerGap, right: 24)
-        stack.setCustomSpacing(8, after: iconView)     // reclaim space the icon doesn't need
-        // The ONLY new gap. Everything else in this stack keeps the spacing it was
-        // tuned with, so the whole window grows by exactly BadgePill.height + this
-        // value and no slot moves relative to any other. Tighter than the default 12
-        // so the badge reads as a label ON the heading rather than a third element.
-        stack.setCustomSpacing(Self.badgeGap, after: badge)
-        stack.setCustomSpacing(4, after: heading)
-        stack.setCustomSpacing(6, after: body)          // tighten hint-to-body: one thought
-        stack.setCustomSpacing(24, after: hint)         // air above the checkbox group: pitch → setup
-        stack.setCustomSpacing(4, after: setupSection)  // status slot stays visually part of setup
-        stack.setCustomSpacing(Self.sectionGap, after: statusRow) // setup → commit
-        stack.setCustomSpacing(Self.footerGap, after: privacy) // privacy → Done, equal to Done → bottom edge
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        [heading, body, hint, privacy].forEach {
-            $0.preferredMaxLayoutWidth = 372   // 420 window width - 24*2 edge insets
-        }
-        // Both axes pinned to a CONSTANT (not a ceiling) — see the
-        // reservedStatusLineHeight doc above for why a `<=` width still let
-        // the checkbox group jump.
-        mergedStatusView.heightAnchor.constraint(equalToConstant: Self.reservedStatusLineHeight).isActive = true
-        mergedStatusView.widthAnchor.constraint(equalToConstant: 372 - Self.checkboxTextIndent).isActive = true
+        let layout = WelcomeLayout.build(
+            variant: variant, copy: copy, icon: iconView,
+            controls: WelcomeLayout.Controls(launchAtLogin: launchAtLoginCheckbox,
+                                             applications: applicationsCheckbox,
+                                             notify: notifyCheckbox,
+                                             status: mergedStatusView,
+                                             done: doneButton))
         // Starts empty/cleared — see renderMergedStatus(), driven by the two
         // didSet-observed flags above, both false/nil at construction time.
 
+        let stack = layout.stack
         let contentView = NSView()
         contentView.addSubview(stack)
         window.contentView = contentView
@@ -367,6 +187,14 @@ final class WelcomeWindowController: NSWindowController {
             stack.topAnchor.constraint(equalTo: contentView.topAnchor),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor),
         ])
+        // Sized ONCE, here, from the content's own resolved height — not left to
+        // AppKit's window-size negotiation, where the window's current size holds
+        // at priority 500 and anything above it merely *tends* to win. That
+        // negotiation is what makes a too-long body silently lose its last line
+        // instead of opening a taller window, and a clipped last line is a bug
+        // nobody sees until a release note grows. The window never resizes again:
+        // the copy is rendered before this call and nothing re-renders it.
+        window.setContentSize(layout.contentSize)
     }
 
     @objc private func toggleLaunchAtLogin() {

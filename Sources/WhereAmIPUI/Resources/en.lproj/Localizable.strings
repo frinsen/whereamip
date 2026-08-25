@@ -158,9 +158,14 @@
 /* Category pills above the heading. Title case here, uppercased by the view */
 "welcome.badge.intro" = "Getting Started";
 "welcome.badge.whatsNew" = "What's New";
+/* Shown in the first-run pitch only — it tells a new reader where to look for the
+   flag, which is not what someone opening What's New came for */
 "welcome.hint" = "Can't see the flag? A crowded menu bar may hide it behind the notch.";
+/* Section header. Title case here, uppercased by the view, exactly like the badges */
 "welcome.setup.header" = "Your setup";
-"welcome.setup.caption" = "(reflects current settings)";
+/* Its caption: the header carries the pattern, this carries the explanation. Verb
+   first and no subject, like welcome.notify.caption — the window's other caption */
+"welcome.setup.caption" = "Reflects your current settings.";
 /* Single line, must fit 353pt at 10pt system font without truncating — measure
    before lengthening (see WelcomeWindow.swift) */
 "welcome.notify.caption" = "Alerts on exit, route, or connectivity changes. Asks macOS permission.";
