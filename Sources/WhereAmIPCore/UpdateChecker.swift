@@ -73,7 +73,8 @@ public enum UpdateCheckSchedule {
 /// or applies anything — it only reports a version string for the UI to
 /// display, leaving the actual upgrade to `UpdateChecker.upgradeCommand`.
 public struct UpdateChecker: Sendable {
-    /// The command the dropdown's update row puts on the clipboard.
+    /// The command the dropdown's update row puts on the clipboard, for the channel this
+    /// copy was installed from — or nil when there is no package manager to drive.
     ///
     /// `brew update &&` is not decoration. WhereAmIP is installed from a third-party TAP,
     /// which Homebrew keeps as a git clone — and `brew upgrade <formula>` does not reliably
@@ -81,11 +82,30 @@ public struct UpdateChecker: Sendable {
     /// stale clone the upgrade cheerfully reports the OLD version as already installed and
     /// does nothing. Field-reported by a beta tester who saw "0.4.2 already installed" hours
     /// after 0.5 was on the tap. Only an explicit `brew update` refreshes the clone, so the
-    /// command we hand people has to include it.
+    /// command we hand people has to include it. `sudo port selfupdate &&` is the same
+    /// point in MacPorts terms — `port upgrade` against a ports tree that was never synced
+    /// sees no new version — and is verbatim the command the port submission documents.
+    ///
+    /// `.direct` gets nil rather than a best guess: a release-zip install has nothing to
+    /// upgrade with, and handing it a `brew` line would at best fail and at worst install
+    /// a SECOND copy through a package manager the user never chose. The row opens the
+    /// releases page in that case (see `releasesURL` and MenuBuilder).
     ///
     /// Single source of truth: the row's clipboard payload uses this, and it is what the
-    /// tests assert against — the string must never quietly regress to the bare upgrade.
-    public static let upgradeCommand = "brew update && brew upgrade whereamip"
+    /// tests assert against — no string here may quietly regress to a bare upgrade. It is
+    /// also what let the MacPorts Portfile drop its `post-patch` block, which used to
+    /// rewrite the Homebrew string (and the test guarding it) at build time.
+    public static func upgradeCommand(for channel: InstallChannel) -> String? {
+        switch channel {
+        case .homebrew: return "brew update && brew upgrade whereamip"
+        case .macports: return "sudo port selfupdate && sudo port upgrade whereamip"
+        case .direct: return nil
+        }
+    }
+
+    /// Where a `.direct` install is sent instead of being handed a command: GitHub's
+    /// "latest release" redirect, so the link never has to name a version.
+    public static let releasesURL = "https://github.com/frinsen/whereamip/releases/latest"
 
     private let session: URLSession
     private let deadline: Double
