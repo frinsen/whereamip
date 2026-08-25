@@ -78,6 +78,10 @@ final class WelcomeWindowController: NSWindowController {
     // footer's "standard" gap is pinned to match the sides exactly instead
     // of the plain ~20pt used elsewhere.
     private static let footerGap: CGFloat = 24
+    // Badge → heading. The badge names the category the heading no longer spells
+    // out, so the two belong together: tighter than the stack's default 12pt, but
+    // still more than the 4pt that binds the heading to the body beneath it.
+    private static let badgeGap: CGFloat = 6
     // Approximates the leading edge of a standard AppKit checkbox's title
     // text (checkbox glyph + its gap before the label) — not pixel-exact
     // across every rendering, but close enough to visually align a caption
@@ -87,8 +91,10 @@ final class WelcomeWindowController: NSWindowController {
     init(settings: Settings, variant: WelcomeContent.Variant) {
         self.settings = settings
         self.variant = variant
-        // `.intro` is the plain welcome heading and the first-run pitch; `.whatsNew`
-        // is "what's new" framing and the milestone's bundled highlights. WHICH one
+        // `.intro` is the "Getting Started" badge and the first-run pitch; `.whatsNew`
+        // is the "What's New" badge and the milestone's bundled highlights (the
+        // heading itself is now the same "WhereAmIP v%@" for both — only the version
+        // filling it differs). WHICH one
         // is the caller's decision — the launch-time auto-show derives it from
         // history (WelcomeContent.variant(for:)), the two Settings entries name it
         // outright. Both the copy and that mapping live in WhereAmIPUI's
@@ -104,8 +110,8 @@ final class WelcomeWindowController: NSWindowController {
             // this is just the initial frame before that first layout pass.
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false)
-        // Plain, not the versioned heading text: avoids showing "Welcome to
-        // WhereAmIP vX" twice (titlebar + in-content heading, ~240px apart).
+        // Plain, not the versioned heading text: avoids showing "WhereAmIP vX"
+        // twice (titlebar + in-content heading, ~240px apart).
         window.title = L10n.string(.welcomeWindowTitle)
         // Close-only dialog: no miniaturize (nothing to restore to), no zoom
         // (layout is fixed-size, stretching it would just break it). The
@@ -152,6 +158,15 @@ final class WelcomeWindowController: NSWindowController {
             label.font = .systemFont(ofSize: 40)
             iconView = label
         }
+
+        // Category pill — "GETTING STARTED" or "WHAT'S NEW" — between the icon and
+        // the heading. ONE new fixed-height row (BadgePill.height, a constant that
+        // does not follow its text or its locale), so the window's single sizing pass
+        // at open still resolves to a settled height and nothing below it moves
+        // relative to anything else. Words, tint and shape all live in
+        // WhereAmIPUI/BadgePill, which is where they can be tested; this file only
+        // places the row.
+        let badge = BadgePill.forVariant(variant)
 
         let heading = NSTextField(labelWithString: copy.heading)
         heading.font = .boldSystemFont(ofSize: 15)
@@ -308,7 +323,7 @@ final class WelcomeWindowController: NSWindowController {
 
         // MARK: assembly — three bands: pitch / setup / commit
 
-        let stack = NSStackView(views: [iconView, heading, body, hint,
+        let stack = NSStackView(views: [iconView, badge, heading, body, hint,
                                          setupSection, statusRow,
                                          privacy, doneButton])
         stack.orientation = .vertical
@@ -319,6 +334,11 @@ final class WelcomeWindowController: NSWindowController {
         // between-elements gap, so it follows footerGap, not sectionGap.
         stack.edgeInsets = NSEdgeInsets(top: 20, left: 24, bottom: Self.footerGap, right: 24)
         stack.setCustomSpacing(8, after: iconView)     // reclaim space the icon doesn't need
+        // The ONLY new gap. Everything else in this stack keeps the spacing it was
+        // tuned with, so the whole window grows by exactly BadgePill.height + this
+        // value and no slot moves relative to any other. Tighter than the default 12
+        // so the badge reads as a label ON the heading rather than a third element.
+        stack.setCustomSpacing(Self.badgeGap, after: badge)
         stack.setCustomSpacing(4, after: heading)
         stack.setCustomSpacing(6, after: body)          // tighten hint-to-body: one thought
         stack.setCustomSpacing(24, after: hint)         // air above the checkbox group: pitch → setup

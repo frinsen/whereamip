@@ -37,6 +37,11 @@ install-ready notes per version.
   bundle's own path is what stays stable across `port upgrade` and is what gets compared.
 
 ### Changed
+- The welcome window now says which of its two things it is with a small tinted badge
+  above the title — **Getting Started** in blue, **What's New** in amber — instead of
+  spelling it out in the title itself. Both titles are now just the name and the version,
+  and the German one no longer says "Neuerungen" where the menu entry that opens it says
+  "Neue Funktionen".
 - The MacPorts port no longer has to patch the update command (and the test guarding it)
   into the app at build time — the app derives it. That `post-patch` block goes away with
   the next release.

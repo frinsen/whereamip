@@ -69,11 +69,20 @@ final class LanguageOverrideTests: XCTestCase {
         XCTAssertTrue(HelpContent.markdown().contains("Keyboard shortcuts"))
     }
 
-    func testWelcomeCopyHeadingAndBodySpeakTheSameLanguage() {
+    /// The heading itself is now language-NEUTRAL — "WhereAmIP v%@" in every locale,
+    /// because the category it used to spell out moved into the badge. So the thing that
+    /// has to follow the override alongside the body is the badge, and that is what this
+    /// checks: one German window, not a German body under an English label.
+    func testWelcomeBadgeAndBodySpeakTheSameLanguage() {
         L10n.languageSetting = { "de" }
         let copy = WelcomeContent.copy(for: "")
-        XCTAssertTrue(copy.heading.hasPrefix("Willkommen bei"), "got: \(copy.heading)")
+        XCTAssertEqual(copy.heading, "WhereAmIP v\(whereamipVersion)", "got: \(copy.heading)")
+        XCTAssertEqual(BadgePill.forVariant(.intro).text, "ERSTE SCHRITTE")
         XCTAssertTrue(copy.markdown.contains("Menüleiste"))
+
+        L10n.languageSetting = { "en" }
+        XCTAssertEqual(BadgePill.forVariant(.intro).text, "GETTING STARTED")
+        XCTAssertEqual(BadgePill.forVariant(.whatsNew).text, "WHAT'S NEW")
     }
 
     /// The milestone decision is a version comparison, not a text one — it must not shift

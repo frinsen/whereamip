@@ -16,7 +16,7 @@ final class WelcomeContentTests: XCTestCase {
         // history has no vote, so this must hold for a first-timer and for someone
         // who acknowledged the current milestone yesterday alike.
         let copy = WelcomeContent.copy(variant: .intro)
-        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeadingFirst, whereamipVersion))
+        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeading, whereamipVersion))
         XCTAssertEqual(copy.markdown, WelcomeContent.markdown(milestone: nil))
         XCTAssertEqual(copy, WelcomeContent.copy(for: ""))
         XCTAssertEqual(copy, WelcomeContent.copy(variant: .intro))
@@ -26,7 +26,7 @@ final class WelcomeContentTests: XCTestCase {
         // Settings ▸ What's New is the mirror image: the milestone's highlights, titled
         // with the MILESTONE version, even for someone who has never seen the intro.
         let copy = WelcomeContent.copy(variant: .whatsNew)
-        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeadingMilestone, welcomeMilestone))
+        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeading, welcomeMilestone))
         XCTAssertTrue(copy.heading.contains(welcomeMilestone))
         XCTAssertEqual(copy.markdown, WelcomeContent.markdown(milestone: welcomeMilestone))
         XCTAssertNotEqual(copy.markdown, WelcomeContent.markdown(milestone: nil),
@@ -58,15 +58,26 @@ final class WelcomeContentTests: XCTestCase {
 
     func testFirstEverStartShowsTheWelcomeHeadingAndTheIntroPitch() {
         let copy = WelcomeContent.copy(for: "")
-        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeadingFirst, whereamipVersion))
+        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeading, whereamipVersion))
         XCTAssertEqual(copy.markdown, WelcomeContent.markdown(milestone: nil))
+    }
+
+    /// The two variants now share one heading FORMAT — the category moved into the
+    /// badge — so the only thing left distinguishing the two headings is the version
+    /// filling it. That is a decision `copy(variant:)` makes, not the strings file, and
+    /// merging the keys must not have quietly merged it too.
+    func testTheSharedHeadingStillNamesADIFFERENTVersionPerVariant() {
+        XCTAssertEqual(WelcomeContent.copy(variant: .intro).heading,
+                       L10n.string(.welcomeHeading, whereamipVersion))
+        XCTAssertEqual(WelcomeContent.copy(variant: .whatsNew).heading,
+                       L10n.string(.welcomeHeading, welcomeMilestone))
     }
 
     func testMilestoneRetriggerIsTitledWithTheMilestoneNotTheRunningVersion() {
         // The whole point: this window re-opened because `welcomeMilestone`
         // advanced, and the running build may already be patch releases past it.
         let copy = WelcomeContent.copy(for: "0.1")
-        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeadingMilestone, welcomeMilestone))
+        XCTAssertEqual(copy.heading, L10n.string(.welcomeHeading, welcomeMilestone))
         XCTAssertTrue(copy.heading.contains(welcomeMilestone))
     }
 

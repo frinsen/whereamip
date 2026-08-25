@@ -133,8 +133,21 @@ public enum L10nKey: String, CaseIterable {
     // prose, not a label.
 
     case welcomeWindowTitle = "welcome.window.title"
-    case welcomeHeadingFirst = "welcome.heading.first"
-    case welcomeHeadingMilestone = "welcome.heading.milestone"
+    // ONE heading for both variants. There used to be two — a "Welcome to
+    // WhereAmIP v%@" and a "WhereAmIP v%@ — what's new" — because the heading
+    // was also carrying the category. The category now has its own badge (the
+    // two keys below), so both variants say the same thing and a second key
+    // would only be two strings free to drift apart. Which VERSION fills the
+    // %@ still differs and is the caller's decision, not the string's: the
+    // pitch is titled with the running version, the highlights with the
+    // milestone that earned the re-show (see WelcomeContent.copy(variant:)).
+    case welcomeHeading = "welcome.heading"
+    // The category pill above the heading. Stored in title case and uppercased
+    // by the view (BadgePill), the same split SwiftUI's `.textCase(.uppercase)`
+    // makes: the strings file stays readable and translatable, and the
+    // uppercasing stays locale-aware.
+    case welcomeBadgeIntro = "welcome.badge.intro"
+    case welcomeBadgeWhatsNew = "welcome.badge.whatsNew"
     case welcomeHint = "welcome.hint"
     case welcomeSetupHeader = "welcome.setup.header"
     case welcomeSetupCaption = "welcome.setup.caption"

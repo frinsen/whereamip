@@ -150,10 +150,14 @@
 /* MARK: - welcome window (body copy lives in Resources/welcome/*.md) */
 
 "welcome.window.title" = "WhereAmIP";
-"welcome.heading.first" = "Welcome to WhereAmIP v%@";
-/* %1 is the WELCOME MILESTONE, not the running version — this window re-opens for
-   the release that earned it, so it names that release */
-"welcome.heading.milestone" = "WhereAmIP v%@ — what's new";
+/* One heading for both variants — the category is carried by the badge above it.
+   %1 is the RUNNING version for the first-run pitch and the WELCOME MILESTONE for
+   the what's-new window (the release that earned the re-show, which the running
+   build may already be patch releases past) — see WelcomeContent.copy(variant:) */
+"welcome.heading" = "WhereAmIP v%@";
+/* Category pills above the heading. Title case here, uppercased by the view */
+"welcome.badge.intro" = "Getting Started";
+"welcome.badge.whatsNew" = "What's New";
 "welcome.hint" = "Can't see the flag? A crowded menu bar may hide it behind the notch.";
 "welcome.setup.header" = "Your setup";
 "welcome.setup.caption" = "(reflects current settings)";

@@ -42,19 +42,23 @@ public enum WelcomeContent {
     /// consulted: a reader who asks for the pitch gets the pitch, and one who asks
     /// what's new gets the highlights, however many times either has been seen.
     ///
-    /// The what's-new heading is titled with the MILESTONE version, not the running
-    /// one: these are the highlights of the release that earned a re-show, and the
-    /// running build may already be several patch releases past it. A milestone with
-    /// no bundled highlights falls back to the intro copy rather than showing an
-    /// empty window (or, worse, a file path).
+    /// Both variants share ONE heading format (`welcome.heading`, "WhereAmIP v%@") —
+    /// the category that used to be spelled out in it now lives in the badge above it
+    /// (see BadgePill). What still differs, and is decided HERE rather than by the
+    /// string, is which version fills the placeholder: the what's-new heading is
+    /// titled with the MILESTONE version, not the running one, because these are the
+    /// highlights of the release that earned a re-show and the running build may
+    /// already be several patch releases past it. A milestone with no bundled
+    /// highlights falls back to the intro copy rather than showing an empty window
+    /// (or, worse, a file path).
     public static func copy(variant: Variant,
                             preferredLanguages: [String] = L10n.effectiveLanguages()) -> Copy {
         switch variant {
         case .intro:
-            return Copy(heading: L10n.string(.welcomeHeadingFirst, whereamipVersion),
+            return Copy(heading: L10n.string(.welcomeHeading, whereamipVersion),
                         markdown: markdown(milestone: nil, preferredLanguages: preferredLanguages))
         case .whatsNew:
-            return Copy(heading: L10n.string(.welcomeHeadingMilestone, welcomeMilestone),
+            return Copy(heading: L10n.string(.welcomeHeading, welcomeMilestone),
                         markdown: markdown(milestone: welcomeMilestone,
                                            preferredLanguages: preferredLanguages))
         }

@@ -126,6 +126,23 @@ final class L10nTests: XCTestCase {
         }
     }
 
+    /// One heading, both variants, every locale: the category the heading used to spell
+    /// out ("Welcome to …", "— what's new", "— Neuerungen") now lives in the badge above
+    /// it, and having it in BOTH places is exactly the duplication this change removed.
+    /// The German heading is the pointed case — its old "— Neuerungen" was the wording
+    /// inconsistency that got flagged, since the menu entry opening that window says
+    /// "Neue Funktionen".
+    func testTheHeadingIsJustTheVersionedNameInEveryLocale() throws {
+        for locale in Self.shippedLocales {
+            let heading = value(.welcomeHeading, in: try bundle(for: locale))
+            XCTAssertEqual(heading, "WhereAmIP v%@", "\(locale) heading carries more than the name")
+            for category in ["Welcome", "Willkommen", "what's new", "Neuerungen", "Neue Funktionen"] {
+                XCTAssertFalse(heading.localizedCaseInsensitiveContains(category),
+                               "\(locale) heading still spells out the category, which the badge now carries: \(heading)")
+            }
+        }
+    }
+
     /// The welcome window's notify caption is a SINGLE-LINE label in a fixed 353pt slot
     /// (see WelcomeWindow) — it truncates rather than wraps. German runs longer than
     /// English almost by default, so this is measured, not eyeballed, for every locale.

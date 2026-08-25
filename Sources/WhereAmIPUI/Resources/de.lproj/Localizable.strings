@@ -152,10 +152,16 @@
 /* MARK: - Willkommensfenster (Fließtext liegt in Resources/welcome/de/*.md) */
 
 "welcome.window.title" = "WhereAmIP";
-"welcome.heading.first" = "Willkommen bei WhereAmIP v%@";
-/* %1 ist der WILLKOMMENS-MEILENSTEIN, nicht die laufende Version — das Fenster ist
-   für diese Version wieder aufgegangen, also nennt es sie */
-"welcome.heading.milestone" = "WhereAmIP v%@ — Neuerungen";
+/* Eine Überschrift für beide Varianten — die Kategorie steht im Badge darüber.
+   %1 ist die LAUFENDE Version bei der Vorstellung und der WILLKOMMENS-MEILENSTEIN
+   beim Neue-Funktionen-Fenster (die Version, für die das Fenster wieder aufgegangen
+   ist; die laufende kann schon einige Patch-Releases weiter sein) */
+"welcome.heading" = "WhereAmIP v%@";
+/* Kategorie-Badges über der Überschrift. Hier in normaler Schreibweise, die
+   Großschreibung macht die View. "Neue Funktionen" ist Apples eigene Wortwahl
+   und steht wortgleich im Menü (settings.whatsNew) */
+"welcome.badge.intro" = "Erste Schritte";
+"welcome.badge.whatsNew" = "Neue Funktionen";
 "welcome.hint" = "Flagge nicht zu sehen? In einer vollen Menüleiste verschwindet sie leicht hinter der Notch.";
 "welcome.setup.header" = "Deine Einrichtung";
 "welcome.setup.caption" = "(zeigt die aktuellen Einstellungen)";
