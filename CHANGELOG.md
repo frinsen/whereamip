@@ -8,6 +8,25 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Added
+- The update row now knows how WhereAmIP was installed, and offers what actually works
+  there. A Homebrew install still copies `brew update && brew upgrade whereamip`; a
+  MacPorts install copies `sudo port selfupdate && sudo port upgrade whereamip`; a copy
+  installed from the release zip (or built from source) has no package manager to drive,
+  so its row opens the releases page in the browser instead of putting a command on the
+  clipboard that would do nothing — or install a second copy through a package manager
+  you never chose. The channel is derived from the running bundle's path alone (Homebrew's
+  `Cellar`/`opt` prefixes, the port's `${applications_dir}` and `${prefix}/libexec`
+  layouts), so nothing new is stored, read, or asked.
+- "↻ Restart to finish update" now appears for MacPorts installs too. It used to
+  understand only Homebrew's versioned keg layout; MacPorts activates in place, so the
+  bundle's own path is what stays stable across `port upgrade` and is what gets compared.
+
+### Changed
+- The MacPorts port no longer has to patch the update command (and the test guarding it)
+  into the app at build time — the app derives it. That `post-patch` block goes away with
+  the next release.
+
 ### Fixed
 - Clicking in the welcome window no longer strips its formatting. The body text was a
   selectable label, so a click handed it to the window's field editor, which rebuilt the
