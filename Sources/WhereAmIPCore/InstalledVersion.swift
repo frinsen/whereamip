@@ -1,7 +1,7 @@
 import Foundation
 
-/// Detects when the copy of WhereAmIP installed on disk (via Homebrew) is
-/// newer than the running process — the "brew upgrade replaced the files but
+/// Detects when the copy of WhereAmIP installed on disk (by Homebrew or MacPorts) is
+/// newer than the running process — the "the upgrade replaced the files but
 /// didn't restart me" case. Pure path derivation plus a single plist read;
 /// no network, no process launching (that lives in AppDelegate).
 public enum InstalledVersion {
@@ -30,17 +30,39 @@ public enum InstalledVersion {
         return "\(prefixPath)/opt/whereamip/\(restPath)"
     }
 
-    /// Reads the version + app path of the copy currently installed on disk,
-    /// via the stable opt symlink derived from the running bundle's Cellar path.
+    /// The path that keeps pointing at the CURRENTLY INSTALLED app across an upgrade,
+    /// for the channel `bundlePath` belongs to. The one place that knows this differs
+    /// per package manager.
     ///
-    /// Deliberately reads through `opt/whereamip` rather than the running
-    /// process's own Cellar directory: after `brew upgrade`, Homebrew may have
-    /// already deleted the *old* Cellar keg (the one this process is still
-    /// executing from) while installing the new one and repointing `opt` at
-    /// it. `opt` always points at whatever is currently installed, so it's the
-    /// only path guaranteed to still exist and be current.
+    /// - Homebrew: the version-stable `opt` path (`optAppPath` above). Never the running
+    ///   process's own Cellar keg — `brew upgrade` may already have deleted it.
+    /// - MacPorts: `bundlePath` itself. There is no versioned keg to indirect through:
+    ///   the port destroots the bundle into `${applications_dir}` and activation
+    ///   hardlinks it into place, so `/Applications/MacPorts/WhereAmIP.app` is the same
+    ///   path before and after `port upgrade`. Deactivating the old version unlinks
+    ///   those files and activating the new one links new ones at the same paths, so
+    ///   re-reading `Contents/Info.plist` there sees the NEW version while this process
+    ///   keeps running from the old inode it already has open — exactly the signal the
+    ///   restart row needs. (Reasoned from MacPorts' activation model and stated in the
+    ///   port submission notes; not yet confirmed against a live `port upgrade`, which
+    ///   is why it is one function with its own tests rather than an assumption spread
+    ///   across callers.)
+    /// - Direct installs: nil. A zip in /Applications is not managed by anything, so
+    ///   nothing can replace it underneath us and there is nothing to compare against.
+    public static func installedAppPath(fromBundlePath bundlePath: String) -> String? {
+        guard !bundlePath.isEmpty else { return nil }
+        switch InstallChannel.detect(path: bundlePath) {
+        case .homebrew: return optAppPath(fromBundlePath: bundlePath)
+        case .macports: return bundlePath
+        case .direct: return nil
+        }
+    }
+
+    /// Reads the version + app path of the copy currently installed on disk, through
+    /// whichever path stays stable across an upgrade for this install channel
+    /// (see `installedAppPath`).
     public static func onDisk(bundlePath: String) -> (version: String, appPath: String)? {
-        guard let appPath = optAppPath(fromBundlePath: bundlePath) else { return nil }
+        guard let appPath = installedAppPath(fromBundlePath: bundlePath) else { return nil }
         let plistPath = "\(appPath)/Contents/Info.plist"
         guard let data = FileManager.default.contents(atPath: plistPath) else { return nil }
         guard let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)
