@@ -8,12 +8,7 @@ install-ready notes per version.
 
 ## [Unreleased]
 
-### Fixed
-- Builds no longer break on Xcode 16.2. The CLI's argument-parsing dependency is
-  capped below its 1.8 series, which declares Swift tools 6.0 and fails to compile
-  under Xcode 16.2's Swift 6.0.3 — every from-source install (Homebrew, MacPorts)
-  on that toolchain hit the error. Found by the MacPorts three-OS CI before any
-  user reported it.
+## [0.6] — 2026-08-25
 
 ### Added
 - **Settings ▸ What's New** — the release highlights are now reachable by name, any time.
@@ -37,20 +32,25 @@ install-ready notes per version.
   bundle's own path is what stays stable across `port upgrade` and is what gets compared.
 
 ### Changed
-- The welcome window's lower half now reads as three separated bands — release copy,
-  **Your setup**, and the footer — on one spacing scale, and the window is sized from its
-  own content at open, so a long release note can never lose its last line off the bottom
-  edge. The notch tip is now a footnote in the first-run pitch only.
 - The welcome window now says which of its two things it is with a small tinted badge
   above the title — **Getting Started** in blue, **What's New** in amber — instead of
   spelling it out in the title itself. Both titles are now just the name and the version,
   and the German one no longer says "Neuerungen" where the menu entry that opens it says
   "Neue Funktionen".
+- The welcome window's lower half now reads as three separated bands — release copy,
+  **Your setup**, and the footer — on one spacing scale, and the window is sized from its
+  own content at open, so a long release note can never lose its last line off the bottom
+  edge. The notch tip is now a footnote in the first-run pitch only.
 - The MacPorts port no longer has to patch the update command (and the test guarding it)
   into the app at build time — the app derives it. That `post-patch` block goes away with
   the next release.
 
 ### Fixed
+- Builds no longer break on Xcode 16.2. The CLI's argument-parsing dependency is
+  capped below its 1.8 series, which declares Swift tools 6.0 and fails to compile
+  under Xcode 16.2's Swift 6.0.3 — every from-source install (Homebrew, MacPorts)
+  on that toolchain hit the error. Found by the MacPorts three-OS CI before any
+  user reported it.
 - Clicking in the welcome window no longer strips its formatting. The body text was a
   selectable label, so a click handed it to the window's field editor, which rebuilt the
   text from its plain contents and wrote the flattened version back — bold lead-ins turned
