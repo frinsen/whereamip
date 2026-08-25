@@ -12,7 +12,13 @@ let package = Package(
         .executable(name: "WhereAmIPApp", targets: ["WhereAmIPApp"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        // Capped below 1.8: the 1.8.x series declares swift-tools 6.0 and fails to
+        // COMPILE under Xcode 16.2's Swift 6.0.3 ("reference to static property
+        // 'arguments' is not concurrency-safe", Platform.swift:16) — found by the
+        // MacPorts three-OS CI on macOS 14, and it equally breaks every Homebrew
+        // from-source build on that toolchain. Raise the cap only alongside a
+        // toolchain-floor decision, and prove it on an Xcode 16.2 builder first.
+        .package(url: "https://github.com/apple/swift-argument-parser", "1.3.0"..<"1.8.0"),
     ],
     targets: [
         .target(name: "WhereAmIPCore", resources: [.copy("Resources")]),

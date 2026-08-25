@@ -8,6 +8,13 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Fixed
+- Builds no longer break on Xcode 16.2. The CLI's argument-parsing dependency is
+  capped below its 1.8 series, which declares Swift tools 6.0 and fails to compile
+  under Xcode 16.2's Swift 6.0.3 — every from-source install (Homebrew, MacPorts)
+  on that toolchain hit the error. Found by the MacPorts three-OS CI before any
+  user reported it.
+
 ### Added
 - **Settings ▸ What's New** — the release highlights are now reachable by name, any time.
   They used to appear only if you happened to upgrade across a milestone and had not yet
