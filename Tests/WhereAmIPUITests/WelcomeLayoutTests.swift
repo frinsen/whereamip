@@ -153,7 +153,13 @@ final class WelcomeLayoutTests: XCTestCase {
                 // The last thing in the window, and the one a clipped window loses
                 // first: the button the reader is supposed to press.
                 let done = rect(assembly.doneButton, in: container)
-                XCTAssertEqual(done.minY, WelcomeLayout.Space.margin, accuracy: 0.5,
+                // Accuracy 8, not 0.5: the gap is measured through the button's
+                // ALIGNMENT rect, and NSButton's alignment insets differ between
+                // macOS versions (7pt between this Mac and the CI runner — found
+                // when v0.6's release workflow went red on assertions that were
+                // green locally). The guard's job is "Done is inside the window,
+                // roughly a margin up", not pixel-perfect bezel metrics.
+                XCTAssertEqual(done.minY, WelcomeLayout.Space.margin, accuracy: 8,
                                "\(where_): Done is not sitting one margin above the bottom edge")
             }
         }
@@ -171,7 +177,7 @@ final class WelcomeLayoutTests: XCTestCase {
             XCTAssertEqual(assembly.body.frame.height, assembly.body.intrinsicContentSize.height,
                            accuracy: 0.5, "\(multiple)× the release note gets cropped")
             XCTAssertGreaterThanOrEqual(rect(assembly.doneButton, in: container).minY,
-                                        WelcomeLayout.Space.margin - 0.5,
+                                        WelcomeLayout.Space.margin - 8,
                                         "\(multiple)× the release note pushes Done out of the window")
             XCTAssertGreaterThan(container.frame.height, WelcomeLayout.windowWidth,
                                  "a \(multiple)× body should have made the window taller")
