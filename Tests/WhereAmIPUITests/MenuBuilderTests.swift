@@ -387,6 +387,43 @@ final class MenuBuilderTests: XCTestCase {
         _ = item.target?.perform(item.action, with: item)
         XCTAssertTrue(fired)
     }
+    func testWhatsNewRowExistsAndFires() {
+        var fired = false
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     actions: MenuActions(showWhatsNew: { fired = true }))
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsWhatsNew) }!
+        XCTAssertEqual(item.state, .off)   // plain action, never a checkmark
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertTrue(fired)
+    }
+    func testWhatsNewSitsDirectlyBelowTheWelcomeRow() {
+        // Two explicit entries for the two variants of one window: they only read as a
+        // pair — "the pitch" and "the highlights" — while they are adjacent, in that order.
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     actions: MenuActions())
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let welcome = settings.items.firstIndex { $0.title == L10n.string(.settingsWelcome) }!
+        let whatsNew = settings.items.firstIndex { $0.title == L10n.string(.settingsWhatsNew) }!
+        XCTAssertEqual(whatsNew, welcome + 1)
+    }
+    func testTheTwoWelcomeRowsAreIndependentActions() {
+        // One window, two entries — but the wiring must not be shared: clicking one
+        // may never fire the other's closure.
+        var welcomeFired = false
+        var whatsNewFired = false
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     actions: MenuActions(showWelcomeWindow: { welcomeFired = true },
+                                                          showWhatsNew: { whatsNewFired = true }))
+        let settings = menu.items.first { $0.title == L10n.string(.menuSettings) }!.submenu!
+        let item = settings.items.first { $0.title == L10n.string(.settingsWhatsNew) }!
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertTrue(whatsNewFired)
+        XCTAssertFalse(welcomeFired)
+    }
     func testNotificationsRowTitleAndStateReflectSetting() {
         // Harmonized on "Show Notifications" — a verb phrase like its
         // siblings (Launch at Login, Add to Applications folder, Check for

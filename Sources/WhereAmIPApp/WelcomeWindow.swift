@@ -7,10 +7,15 @@ import WhereAmIPUI
 /// Welcome window: shown once on first launch, and again on a
 /// maintainer-bumped `welcomeMilestone` (see `shouldShowWelcome(stored:)` in
 /// WhereAmIPCore, gated by `Settings.welcomedMilestone`), or any time from
-/// Settings ▸ Show Welcome Window. Explains what the app does, where to find
-/// it, and offers the three most useful first-run toggles. Plain AppKit —
-/// NSWindow + programmatic NSStackView layout, no xibs/SwiftUI — consistent
-/// with the rest of the UI layer (MenuBuilder etc).
+/// Settings ▸ Show Welcome Window / What's New. Explains what the app does,
+/// where to find it, and offers the three most useful first-run toggles.
+/// Plain AppKit — NSWindow + programmatic NSStackView layout, no xibs/SwiftUI
+/// — consistent with the rest of the UI layer (MenuBuilder etc).
+///
+/// One window, two variants (see `WelcomeContent.Variant`). The variant is fixed
+/// at construction: the copy is rendered ONCE in `buildContent` so the window's
+/// height settles before it is ever shown, so switching variants means a new
+/// window, not a re-render — see AppDelegate's `showWelcome(variant:)`.
 ///
 /// The only system prompt this window can ever trigger is the notification
 /// permission dialog, and only as a direct result of the user checking that
@@ -18,6 +23,9 @@ import WhereAmIPUI
 /// request happens here.
 final class WelcomeWindowController: NSWindowController {
     private let settings: Settings
+    /// Which copy this window was built with. Read by AppDelegate to decide whether an
+    /// already-open window can be re-focused or has to be replaced.
+    let variant: WelcomeContent.Variant
     private var launchAtLoginCheckbox: NSButton!
     private var applicationsCheckbox: NSButton!
     private var notifyCheckbox: NSButton!
@@ -76,17 +84,18 @@ final class WelcomeWindowController: NSWindowController {
     // under the checkbox's *label*, not its square.
     private static let checkboxTextIndent: CGFloat = 19
 
-    init(settings: Settings) {
+    init(settings: Settings, variant: WelcomeContent.Variant) {
         self.settings = settings
-        // First run (never acknowledged anything yet) gets the plain welcome
-        // heading and the intro pitch; a milestone re-trigger (welcomedMilestone
-        // non-empty, but older than the current welcomeMilestone) gets "what's
-        // new" framing and that milestone's bundled highlights instead. Both
-        // the decision and the copy live in WhereAmIPUI's WelcomeContent (pure,
-        // unit-tested there) — this window only lays out whatever it hands
-        // back. The window's own titlebar title stays a plain "WhereAmIP" (see
-        // buildContent) so the version isn't shown twice.
-        let copy = WelcomeContent.copy(for: settings.welcomedMilestone)
+        self.variant = variant
+        // `.intro` is the plain welcome heading and the first-run pitch; `.whatsNew`
+        // is "what's new" framing and the milestone's bundled highlights. WHICH one
+        // is the caller's decision — the launch-time auto-show derives it from
+        // history (WelcomeContent.variant(for:)), the two Settings entries name it
+        // outright. Both the copy and that mapping live in WhereAmIPUI's
+        // WelcomeContent (pure, unit-tested there); this window only lays out
+        // whatever it hands back. The window's own titlebar title stays a plain
+        // "WhereAmIP" (see buildContent) so the version isn't shown twice.
+        let copy = WelcomeContent.copy(variant: variant)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             // No .resizable — this is a small fixed-size informational window.
@@ -455,9 +464,11 @@ final class WelcomeWindowController: NSWindowController {
     @objc private func done() {
         // Only Done acknowledges the current milestone — see the comment at
         // the call site in AppDelegate for why closing any other way must
-        // not. On a manually-reopened window (Settings ▸ Show Welcome
-        // Window) this just re-stores the same value; harmless.
-        settings.welcomedMilestone = welcomeMilestone
+        // not. Variant-blind by design (WelcomeContent.acknowledgedMilestone,
+        // pinned by a test there): What's New marks the release seen exactly
+        // as the auto-shown window does, and re-reading the pitch from
+        // Settings ▸ Show Welcome Window just re-stores the same value.
+        settings.welcomedMilestone = WelcomeContent.acknowledgedMilestone(for: variant)
         close()
     }
 

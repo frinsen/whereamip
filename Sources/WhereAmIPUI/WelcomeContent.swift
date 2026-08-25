@@ -28,21 +28,61 @@ public enum WelcomeContent {
     static let fallbackPitch =
         "WhereAmIP shows the country flag of your real internet exit in the menu bar."
 
-    /// First run (nothing acknowledged yet) gets the plain welcome heading and the
-    /// intro pitch. A milestone re-trigger gets "what's new" — titled with the
-    /// MILESTONE version, not the running one: the window re-opened because that
-    /// release earned it, and the running build may already be several patch
-    /// releases past it. A milestone with no bundled highlights falls back to the
-    /// intro copy rather than showing an empty window (or, worse, a file path).
-    public static func copy(for storedMilestone: String,
+    /// Which of the two things this window can be. Both are reachable by name from
+    /// Settings (Show Welcome Window / What's New); the launch-time auto-show still
+    /// derives one from history, via `variant(for:)`.
+    public enum Variant: Equatable, CaseIterable {
+        /// The first-run pitch — what the app is — headed with the RUNNING version.
+        case intro
+        /// The current milestone's highlights, headed with the MILESTONE version.
+        case whatsNew
+    }
+
+    /// Heading + body markdown for an explicitly chosen variant. No history is
+    /// consulted: a reader who asks for the pitch gets the pitch, and one who asks
+    /// what's new gets the highlights, however many times either has been seen.
+    ///
+    /// The what's-new heading is titled with the MILESTONE version, not the running
+    /// one: these are the highlights of the release that earned a re-show, and the
+    /// running build may already be several patch releases past it. A milestone with
+    /// no bundled highlights falls back to the intro copy rather than showing an
+    /// empty window (or, worse, a file path).
+    public static func copy(variant: Variant,
                             preferredLanguages: [String] = L10n.effectiveLanguages()) -> Copy {
-        guard !storedMilestone.isEmpty else {
+        switch variant {
+        case .intro:
             return Copy(heading: L10n.string(.welcomeHeadingFirst, whereamipVersion),
                         markdown: markdown(milestone: nil, preferredLanguages: preferredLanguages))
+        case .whatsNew:
+            return Copy(heading: L10n.string(.welcomeHeadingMilestone, welcomeMilestone),
+                        markdown: markdown(milestone: welcomeMilestone,
+                                           preferredLanguages: preferredLanguages))
         }
-        return Copy(heading: L10n.string(.welcomeHeadingMilestone, welcomeMilestone),
-                    markdown: markdown(milestone: welcomeMilestone,
-                                       preferredLanguages: preferredLanguages))
+    }
+
+    /// What the LAUNCH-TIME auto-show opens, given what has been acknowledged: a first
+    /// run (nothing acknowledged yet) gets the pitch, a milestone re-trigger gets the
+    /// highlights. The only history-driven choice left — the two Settings entries name
+    /// their variant outright.
+    public static func variant(for storedMilestone: String) -> Variant {
+        storedMilestone.isEmpty ? .intro : .whatsNew
+    }
+
+    /// What clicking Done stores as seen. Deliberately variant-blind: acknowledging is
+    /// about the release, not about which of its two windows happened to be on screen,
+    /// so reading What's New marks the milestone seen exactly as the auto-shown window
+    /// does — and re-reading the pitch from Settings never un-sees it. Lives here rather
+    /// than inline in the window because the App target has no test target, and this is
+    /// the rule that decides whether an upgrade nags twice.
+    public static func acknowledgedMilestone(for variant: Variant) -> String {
+        welcomeMilestone
+    }
+
+    /// The auto-show path's copy in one step. Thin wrapper: `variant(for:)` decides,
+    /// `copy(variant:)` renders.
+    public static func copy(for storedMilestone: String,
+                            preferredLanguages: [String] = L10n.effectiveLanguages()) -> Copy {
+        copy(variant: variant(for: storedMilestone), preferredLanguages: preferredLanguages)
     }
 
     /// Bundled Markdown for `milestone`, or the intro pitch (nil milestone, missing

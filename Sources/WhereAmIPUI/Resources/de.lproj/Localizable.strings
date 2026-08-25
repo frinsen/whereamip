@@ -99,6 +99,10 @@
 "settings.updates" = "Nach Updates suchen";
 "settings.dnsProbe" = "Auf DNS-Lecks prüfen";
 "settings.welcome" = "Willkommensfenster anzeigen";
+/* Apple's own German for "What's New": the macOS App Store labels an app's
+   what's-new section "Neue Funktionen" (AppStoreKit,
+   PRODUCT_SECTION_MOST_RECENT_VERSION). Noun phrase, like the English. */
+"settings.whatsNew" = "Neue Funktionen";
 
 /* MARK: - dns */
 

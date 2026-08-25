@@ -51,7 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // below runs regardless of this window; the app's core behavior
         // never waits on it.
         if shouldShowWelcome(stored: settings.welcomedMilestone) {
-            welcomeWindowController = WelcomeWindowController(settings: settings)
+            // The one place that still asks history WHICH variant to open: a first
+            // run gets the pitch, a milestone bump gets the highlights. The two
+            // Settings entries name their variant outright instead.
+            welcomeWindowController = WelcomeWindowController(
+                settings: settings,
+                variant: WelcomeContent.variant(for: settings.welcomedMilestone))
             welcomeWindowController?.show()
         }
 
@@ -123,6 +128,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let fresh = make()
         fresh.show()
         return fresh
+    }
+
+    /// Opens the welcome window on a named variant — the shared path for both Settings
+    /// entries, holding the same single controller property the launch-time auto-show uses.
+    ///
+    /// Open-while-open: asking for the variant that is already on screen re-focuses it
+    /// (present's rule, unchanged). Asking for the OTHER one closes that window and opens
+    /// the requested variant in its place. Replacing the copy inside the live window would
+    /// be the smoother move, but the window renders its Markdown exactly once, before it is
+    /// ever shown, so its height settles at open and never moves afterwards (see
+    /// WelcomeWindow.buildContent) — swapping in a longer or shorter body would resize a
+    /// window under the reader's cursor, which is the jumping class of bug this layout was
+    /// tuned to eliminate. So: one welcome window at a time, always showing what was asked
+    /// for. Never two, and never the wrong one wearing the right name.
+    func showWelcome(variant: WelcomeContent.Variant) {
+        if let existing = welcomeWindowController, existing.variant != variant {
+            existing.close()
+            welcomeWindowController = nil
+        }
+        welcomeWindowController = present(welcomeWindowController) {
+            WelcomeWindowController(settings: settings, variant: variant)
+        }
     }
 
     // Every direct fullRefresh/probeTick call site is routed through this one
@@ -393,14 +420,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try? ApplicationsLink.setLinked(!ApplicationsLink.isLinked(), bundlePath: Bundle.main.bundlePath)
                 },
                 showWelcomeWindow: { [weak self] in
-                    // Manual re-show, bypasses shouldShowWelcome entirely —
-                    // always shows regardless of welcomedMilestone. Clicking
-                    // Done afterwards just re-stores the same milestone
+                    // Manual, and explicit: ALWAYS the intro pitch, whatever
+                    // welcomedMilestone says. Bypasses shouldShowWelcome entirely;
+                    // clicking Done afterwards just re-stores the same milestone
                     // value, which is harmless.
-                    guard let self else { return }
-                    self.welcomeWindowController = self.present(self.welcomeWindowController) {
-                        WelcomeWindowController(settings: self.settings)
-                    }
+                    self?.showWelcome(variant: .intro)
+                },
+                showWhatsNew: { [weak self] in
+                    // The mirror image: ALWAYS the milestone highlights, including
+                    // for someone who has never been shown them (or has already
+                    // dismissed them). Same window, same Done semantics.
+                    self?.showWelcome(variant: .whatsNew)
                 },
                 showHelpWindow: { [weak self] in
                     // Held in its own property, independent of the welcome

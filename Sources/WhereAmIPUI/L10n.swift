@@ -78,6 +78,7 @@ public enum L10nKey: String, CaseIterable {
     case settingsUpdates = "settings.updates"
     case settingsDNSProbe = "settings.dnsProbe"
     case settingsWelcome = "settings.welcome"
+    case settingsWhatsNew = "settings.whatsNew"
 
     // MARK: - dns: the DNS summary row and its detail submenu
 

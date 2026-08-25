@@ -18,6 +18,11 @@ public struct MenuActions {
     public var toggleLaunchAtLogin: () -> Void
     public var toggleApplicationsLink: () -> Void
     public var showWelcomeWindow: () -> Void
+    /// The same window's other half: the current milestone's highlights. Its own
+    /// closure rather than a parameter on `showWelcomeWindow`, so the menu row stays a
+    /// plain "do this" with no argument to get wrong — and so the two entries can never
+    /// accidentally share one action.
+    public var showWhatsNew: () -> Void
     public var showHelpWindow: () -> Void
     public var quit: () -> Void
     /// Takes the finished payload for the same reason `copyText` does: WHICH command an
@@ -40,6 +45,7 @@ public struct MenuActions {
                 toggleLaunchAtLogin: @escaping () -> Void = {},
                 toggleApplicationsLink: @escaping () -> Void = {},
                 showWelcomeWindow: @escaping () -> Void = {},
+                showWhatsNew: @escaping () -> Void = {},
                 showHelpWindow: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
                 copyUpdateCommand: @escaping (String) -> Void = { _ in },
@@ -54,6 +60,7 @@ public struct MenuActions {
         self.toggleLaunchAtLogin = toggleLaunchAtLogin; self.quit = quit
         self.toggleApplicationsLink = toggleApplicationsLink
         self.showWelcomeWindow = showWelcomeWindow
+        self.showWhatsNew = showWhatsNew
         self.showHelpWindow = showHelpWindow
         self.copyUpdateCommand = copyUpdateCommand
         self.openURL = openURL
@@ -403,10 +410,15 @@ public enum MenuBuilder {
         dnsProbe.state = dnsProbeEnabled ? .on : .off
         settingsMenu.addItem(dnsProbe)
         settingsMenu.addItem(.separator())
-        // Plain action (no checkmark, unlike the toggles above) — re-opens
-        // the first-run window on demand, independent of whether it's
-        // already been acknowledged.
+        // Two plain actions (no checkmarks, unlike the toggles above) for the two
+        // things the welcome window can be. Both are explicit: this one ALWAYS shows
+        // the first-run pitch, its neighbour ALWAYS shows the milestone highlights —
+        // neither asks what has already been acknowledged. Only the launch-time
+        // auto-show still derives that from history (see WelcomeContent.variant(for:)).
+        // Adjacent and in this order on purpose: the pitch is what the app IS, the
+        // highlights are what CHANGED, and they read as a pair or not at all.
         settingsMenu.addItem(action(L10n.string(.settingsWelcome)) { actions.showWelcomeWindow() })
+        settingsMenu.addItem(action(L10n.string(.settingsWhatsNew)) { actions.showWhatsNew() })
         settings.submenu = settingsMenu
         menu.addItem(settings)
 
