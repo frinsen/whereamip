@@ -9,6 +9,13 @@ install-ready notes per version.
 ## [Unreleased]
 
 ### Added
+- **Settings ▸ What's New** — the release highlights are now reachable by name, any time.
+  They used to appear only if you happened to upgrade across a milestone and had not yet
+  dismissed the window. The neighbouring **Show Welcome Window** entry now always shows the
+  first-run pitch, so each entry means exactly one thing instead of both meaning "whichever
+  you have not seen". German: "Neue Funktionen", Apple's own wording for that section.
+  Clicking Done in either window marks the release seen, exactly as before; what the app
+  shows by itself on first start and after a milestone bump is unchanged.
 - The update row now knows how WhereAmIP was installed, and offers what actually works
   there. A Homebrew install still copies `brew update && brew upgrade whereamip`; a
   MacPorts install copies `sudo port selfupdate && sudo port upgrade whereamip`; a copy

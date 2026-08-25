@@ -57,6 +57,14 @@ wird am Router eingestellt und lässt sich von hier aus nicht beobachten.
   geht in die Zwischenablage und sonst nirgendwohin.
 - **⌘R** — Aktualisieren. **⌘?** — dieses Fenster. **⌘Q** — Beenden.
 
+**Das Willkommensfenster**
+
+Das Fenster vom ersten Start ist weiterhin da, und es hat zwei Hälften. Einstellungen ▸
+Willkommensfenster anzeigen öffnet wieder die Vorstellung — was die App ist, wo sie sitzt,
+und dieselben drei Schalter mit deinen aktuellen Einstellungen. Einstellungen ▸ Neue
+Funktionen zeigt die Neuerungen der Version, die zuletzt ein erneutes Einblenden verdient
+hat. Beides auf Zuruf, ganz gleich, was du schon gesehen hast.
+
 **Die Kommandozeile**
 
 Alles, was die Menüleiste kann, kann `whereamip` auch:

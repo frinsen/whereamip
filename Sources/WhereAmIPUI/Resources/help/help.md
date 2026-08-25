@@ -54,6 +54,13 @@ cannot be observed from here.
   clipboard and nowhere else.
 - **⌘R** — Refresh. **⌘?** — this window. **⌘Q** — quit.
 
+**The welcome window**
+
+The window from your first start is still there, and it has two halves. Settings ▸ Show
+Welcome Window reopens the pitch — what the app is, where it lives, and the same three
+toggles, showing your current settings. Settings ▸ What's New shows the highlights of the
+release that last earned a re-show. Either opens on demand, whatever you have seen before.
+
 **The command line**
 
 Everything the menu bar does, `whereamip` does too:
