@@ -98,7 +98,7 @@
 /* The milestone highlights, on demand. A noun phrase among verb phrases on purpose:
    it names a thing everyone already knows by that name (Apple's own App Store section
    header), and "Show What's New" would be a mouthful for the same click. */
-"settings.whatsNew" = "What's New";
+"settings.whatsNew" = "Show What's New";
 
 /* MARK: - dns */
 

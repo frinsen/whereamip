@@ -102,7 +102,7 @@
 /* Apple's own German for "What's New": the macOS App Store labels an app's
    what's-new section "Neue Funktionen" (AppStoreKit,
    PRODUCT_SECTION_MOST_RECENT_VERSION). Noun phrase, like the English. */
-"settings.whatsNew" = "Neue Funktionen";
+"settings.whatsNew" = "Neue Funktionen anzeigen";
 
 /* MARK: - dns */
 
@@ -159,7 +159,7 @@
 "welcome.heading" = "WhereAmIP v%@";
 /* Kategorie-Badges über der Überschrift. Hier in normaler Schreibweise, die
    Großschreibung macht die View. "Neue Funktionen" ist Apples eigene Wortwahl
-   und steht wortgleich im Menü (settings.whatsNew) */
+   — der Menüeintrag (settings.whatsNew) trägt zusätzlich das Verb seiner Geschwister */
 "welcome.badge.intro" = "Erste Schritte";
 "welcome.badge.whatsNew" = "Neue Funktionen";
 "welcome.hint" = "Flagge nicht zu sehen? In einer vollen Menüleiste verschwindet sie leicht hinter der Notch.";

@@ -46,7 +46,10 @@ final class BadgePillTests: XCTestCase {
         XCTAssertEqual(value(.welcomeBadgeIntro, in: de), "Erste Schritte")
         // The same words Settings ▸ What's New uses — Apple's own wording for the
         // section — so the entry and the window it opens name the same thing.
-        XCTAssertEqual(value(.welcomeBadgeWhatsNew, in: de), value(.settingsWhatsNew, in: de))
+        // The badge is a LABEL (noun, like its sibling "Erste Schritte"); the menu
+        // entry is an ACTION and carries its siblings' verb ("… anzeigen") — Martin's
+        // sibling-grammar rule, applied per group. The shared noun keeps them linked.
+        XCTAssertTrue(value(.settingsWhatsNew, in: de).contains(value(.welcomeBadgeWhatsNew, in: de)))
         XCTAssertEqual(value(.welcomeBadgeWhatsNew, in: de), "Neue Funktionen")
     }
 
