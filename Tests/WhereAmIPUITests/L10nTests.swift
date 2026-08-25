@@ -140,6 +140,29 @@ final class L10nTests: XCTestCase {
         }
     }
 
+    /// The update row is the FIRST row of the dropdown and the widest thing in it — wide
+    /// enough that spelling the command out in it was rejected for costing ~100pt (see the
+    /// comment above `menu.update.available`). The direct-install variant is a second
+    /// wording for the same row, so the accepted one is its budget: measured per locale in
+    /// the menu font, not eyeballed. At the time of writing, en 322pt vs 334pt and
+    /// de 319pt vs 324pt.
+    func testDownloadPageRowIsNoWiderThanTheCopyCommandRowInEveryLocale() throws {
+        let font = NSFont.menuFont(ofSize: 0)
+        func width(_ key: L10nKey, _ bundle: Bundle) -> CGFloat {
+            let label = String(format: value(key, in: bundle), "0.5.1")
+            return (label as NSString).size(withAttributes: [.font: font]).width
+        }
+        for locale in Self.shippedLocales {
+            let bundle = try self.bundle(for: locale)
+            let budget = width(.menuUpdateAvailable, bundle)
+            let download = width(.menuUpdateAvailableDownload, bundle)
+            XCTAssertLessThanOrEqual(download, budget,
+                                     "\(locale) download-page row is \(Int(download))pt, "
+                                     + "wider than the \(Int(budget))pt row it replaces: "
+                                     + value(.menuUpdateAvailableDownload, in: bundle))
+        }
+    }
+
     func testKeysAreLowercaseDotSeparatedAndUnderAKnownPrefix() {
         let prefixes = ["menu.", "settings.", "dns.", "notification.", "welcome.", "help."]
         for key in L10nKey.allCases {

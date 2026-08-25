@@ -37,6 +37,7 @@ public enum L10nKey: String, CaseIterable {
     case menuHeader = "menu.header"
     case menuUpdateRestart = "menu.update.restart"
     case menuUpdateAvailable = "menu.update.available"
+    case menuUpdateAvailableDownload = "menu.update.available.download"
     case menuOffline = "menu.offline"
     case menuOfflineHijack = "menu.offline.hijack"
     case menuOfflineLastSeen = "menu.offline.lastSeen"

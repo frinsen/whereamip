@@ -20,11 +20,17 @@
 "menu.header" = "WhereAmIP v%@";
 "menu.update.restart" = "↻ Restart to finish update (v%@)";
 /* The row copies the upgrade command; it deliberately does NOT spell it out. The real
-   command is `brew update && brew upgrade whereamip` (the update half matters — see
-   UpdateChecker.upgradeCommand), and printing that in the row made it the widest thing in
-   the dropdown by ~100pt. Naming no command at all cannot contradict the clipboard, which
-   is what the previous label did by naming an incomplete one. */
+   command depends on how this copy was installed (UpdateChecker.upgradeCommand(for:)), and
+   printing it in the row made it the widest thing in the dropdown by ~100pt. Naming no
+   command at all cannot contradict the clipboard, which is what the previous label did by
+   naming an incomplete one — and cannot go stale when a fourth channel appears. */
 "menu.update.available" = "⬆︎ Update v%@ available — copy the update command";
+/* Same row, for a copy no package manager installed (the release zip, a dist/ build):
+   there is no command to copy, so the click opens the releases page instead and the label
+   has to say so — a row that promises a command the clipboard does not carry is the same
+   mistake as naming an incomplete one. Kept no wider than the row above (measured in
+   L10nTests): this is the dropdown's first and widest row. */
+"menu.update.available.download" = "⬆︎ Update v%@ available — open the download page";
 "menu.offline" = "No internet connection";
 "menu.offline.hijack" = "⚠️ OpenVPN hijack routes present — tunnel likely dead";
 /* %1 timestamp, %2 country flag emoji (may be empty), %3 organisation (may be empty) */

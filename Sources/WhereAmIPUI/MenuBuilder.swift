@@ -20,7 +20,13 @@ public struct MenuActions {
     public var showWelcomeWindow: () -> Void
     public var showHelpWindow: () -> Void
     public var quit: () -> Void
-    public var copyUpdateCommand: () -> Void
+    /// Takes the finished payload for the same reason `copyText` does: WHICH command an
+    /// update row offers depends on the install channel, and deriving it in the builder
+    /// keeps that decision unit-testable while the app end stays one pasteboard write.
+    public var copyUpdateCommand: (String) -> Void
+    /// Opens a URL in the user's browser. Only the update row uses it today — a direct
+    /// (zip) install has no upgrade command to copy, so its row opens the releases page.
+    public var openURL: (String) -> Void
     public var toggleUpdateChecks: () -> Void
     public var toggleDNSProbe: () -> Void
     public var restartAction: () -> Void
@@ -36,7 +42,8 @@ public struct MenuActions {
                 showWelcomeWindow: @escaping () -> Void = {},
                 showHelpWindow: @escaping () -> Void = {},
                 quit: @escaping () -> Void = {},
-                copyUpdateCommand: @escaping () -> Void = {},
+                copyUpdateCommand: @escaping (String) -> Void = { _ in },
+                openURL: @escaping (String) -> Void = { _ in },
                 toggleUpdateChecks: @escaping () -> Void = {},
                 toggleDNSProbe: @escaping () -> Void = {},
                 restartAction: @escaping () -> Void = {},
@@ -49,6 +56,7 @@ public struct MenuActions {
         self.showWelcomeWindow = showWelcomeWindow
         self.showHelpWindow = showHelpWindow
         self.copyUpdateCommand = copyUpdateCommand
+        self.openURL = openURL
         self.toggleUpdateChecks = toggleUpdateChecks
         self.toggleDNSProbe = toggleDNSProbe
         self.restartAction = restartAction
@@ -114,6 +122,12 @@ public enum MenuBuilder {
                              language: String = AppLanguage.system,
                              restartUpdate: String? = nil, applicationsLinked: Bool = false,
                              lastChecked: Date? = nil,
+                             // Defaults to the channel that cannot be wrong: a caller that
+                             // does not know how this copy was installed gets a row that
+                             // opens the download page, never one that hands out a
+                             // package-manager command for a package manager the user may
+                             // not have. The app passes the detected channel.
+                             installChannel: InstallChannel = .direct,
                              actions: MenuActions) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -130,11 +144,22 @@ public enum MenuBuilder {
             menu.addItem(.separator())
         } else if let availableUpdate {
             // Quiet update hint — never a popup or badge, just the first row when
-            // a newer release exists. Clicking copies the brew command; the app
-            // itself never downloads or modifies anything.
-            menu.addItem(action(L10n.string(.menuUpdateAvailable, availableUpdate)) {
-                actions.copyUpdateCommand()
-            })
+            // a newer release exists. The app itself never downloads or modifies
+            // anything; what the click does depends on how this copy was installed:
+            //   - a package manager installed it → copy ITS upgrade command
+            //   - a zip did → open the releases page, since there is no command that
+            //     would work (and a brew line would install a second copy)
+            // One row, two wordings: a label that promised a command the clipboard
+            // does not carry is the same mistake as naming an incomplete one.
+            if let command = UpdateChecker.upgradeCommand(for: installChannel) {
+                menu.addItem(action(L10n.string(.menuUpdateAvailable, availableUpdate)) {
+                    actions.copyUpdateCommand(command)
+                })
+            } else {
+                menu.addItem(action(L10n.string(.menuUpdateAvailableDownload, availableUpdate)) {
+                    actions.openURL(UpdateChecker.releasesURL)
+                })
+            }
             menu.addItem(.separator())
         }
 

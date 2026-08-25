@@ -14,6 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var lastState = ExitState()
     var availableUpdate: String?
     var restartUpdate: String?
+    // How this copy was installed, so the update row can offer the right thing (a brew
+    // command, a port command, or the download page). Derived once from the bundle path,
+    // which cannot change while the process runs — and pure string work either way, which
+    // matters because menu building must stay I/O-free.
+    let installChannel = InstallChannel.detect(path: Bundle.main.bundlePath)
     private var lastDiskCheckAt: Date?
     // When a GitHub release check was last ATTEMPTED (not when one last succeeded) — the
     // throttle for the opportunistic check in runMonitorRefresh(). See UpdateCheckSchedule
@@ -179,14 +184,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // Detects "brew upgrade already replaced the files on disk, but this
+    // Detects "the upgrade already replaced the files on disk, but this
     // process is still the old binary" by comparing the version installed at
-    // the stable brew opt path against our own. Cheap (one plist read), but
+    // whichever path stays stable across an upgrade for this install channel
+    // (brew's opt path; the bundle path itself under MacPorts, which activates
+    // in place; nothing for a zip install) against our own. Cheap (one plist read), but
     // still I/O — never call this from menuNeedsUpdate (menu-build must stay
     // I/O-free). Evaluated at the same cadence as the GitHub check (launch,
     // daily timer, manual Refresh) plus a throttled pass from stateChanged
     // below, since that's the only place likely to observe the change soon
-    // after a background `brew upgrade` completes.
+    // after a background `brew upgrade` / `port upgrade` completes.
     func checkInstalledVersion() {
         guard let onDisk = InstalledVersion.onDisk(bundlePath: Bundle.main.bundlePath) else {
             restartUpdate = nil
@@ -203,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = image
 
         // Throttled disk-version check (at most once/60s) — stateChanged fires
-        // often (probe ticks, route changes), so this catches a `brew upgrade`
+        // often (probe ticks, route changes), so this catches an upgrade
         // that finished in the background well before the next daily/manual
         // update check without adding I/O on every single state change.
         let now = Date()
@@ -305,6 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             language: settings.language,
             restartUpdate: restartUpdate, applicationsLinked: ApplicationsLink.isLinked(),
             lastChecked: lastChecked,
+            installChannel: installChannel,
             actions: MenuActions(
                 copyIP: { [weak self] in
                     guard let ip = self?.lastState.exit?.ip else { return }
@@ -404,11 +412,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     }
                 },
                 quit: { NSApp.terminate(nil) },
-                copyUpdateCommand: {
-                    // UpdateChecker.upgradeCommand, not a literal: it carries the
-                    // `brew update &&` prefix a stale third-party tap needs, and the reason.
+                copyUpdateCommand: { command in
+                    // The payload comes from the builder, which derived it from the install
+                    // channel via UpdateChecker.upgradeCommand(for:) — this end is one
+                    // pasteboard write, like every other copy row.
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(UpdateChecker.upgradeCommand, forType: .string)
+                    NSPasteboard.general.setString(command, forType: .string)
+                },
+                openURL: { urlString in
+                    // Only the direct-install update row reaches this today: no package
+                    // manager to drive, so the click opens the releases page. Still the
+                    // app's only outbound navigation — it opens a page, it never fetches
+                    // or installs anything itself.
+                    guard let url = URL(string: urlString) else { return }
+                    NSWorkspace.shared.open(url)
                 },
                 toggleUpdateChecks: { [weak self] in
                     guard let self else { return }

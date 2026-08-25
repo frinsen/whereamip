@@ -24,13 +24,19 @@
 
 "menu.header" = "WhereAmIP v%@";
 "menu.update.restart" = "↻ Zum Abschließen des Updates neu starten (v%@)";
-/* Die Zeile kopiert den Befehl und nennt ihn bewusst NICHT: er lautet
-   `brew update && brew upgrade whereamip` (das `update` ist nötig — siehe
-   UpdateChecker.upgradeCommand) und machte die Zeile um rund 100 pt zur breitesten im
-   Menü. Gar keinen Befehl zu nennen kann der Zwischenablage nicht widersprechen — genau
-   das tat die alte Beschriftung, die einen unvollständigen nannte. Verb am Ende wie die
-   anderen Aktionszeilen („Diagnose kopieren"). */
+/* Die Zeile kopiert den Befehl und nennt ihn bewusst NICHT: welcher es ist, hängt von der
+   Installationsart ab (UpdateChecker.upgradeCommand(for:)), und ihn zu nennen machte die
+   Zeile um rund 100 pt zur breitesten im Menü. Gar keinen Befehl zu nennen kann der
+   Zwischenablage nicht widersprechen — genau das tat die alte Beschriftung, die einen
+   unvollständigen nannte. Verb am Ende wie die anderen Aktionszeilen
+   („Diagnose kopieren"). */
 "menu.update.available" = "⬆︎ Update v%@ verfügbar — Update-Befehl kopieren";
+/* Dieselbe Zeile für eine Kopie, die kein Paketmanager installiert hat (Release-ZIP,
+   dist/-Build): es gibt keinen Befehl zu kopieren, der Klick öffnet die Releases-Seite —
+   und die Beschriftung muss das sagen. Verb am Ende wie die Geschwisterzeilen
+   („Update-Befehl kopieren", „Einstellungen öffnen"), und nicht breiter als die Zeile
+   darüber (in L10nTests gemessen). */
+"menu.update.available.download" = "⬆︎ Update v%@ verfügbar — Download-Seite öffnen";
 "menu.offline" = "Keine Internetverbindung";
 "menu.offline.hijack" = "⚠️ OpenVPN-Hijack-Routen vorhanden — Tunnel vermutlich tot";
 /* %1 Zeitstempel, %2 Länderflagge (kann leer sein), %3 Betreiber (kann leer sein) */

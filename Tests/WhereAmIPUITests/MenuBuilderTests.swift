@@ -222,6 +222,69 @@ final class MenuBuilderTests: XCTestCase {
         L10n.languageSetting = { Settings().language }
     }
 
+    // MARK: - the update row adapts to how this copy was installed
+
+    /// Builds the update row for `channel` and clicks it, reporting what the click
+    /// reached: the clipboard (with its payload) or the browser (with its URL).
+    func fireUpdateRow(channel: InstallChannel) -> (title: String, copied: String?, opened: String?) {
+        var copied: String?
+        var opened: String?
+        let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
+                                     notificationsEnabled: false, launchAtLogin: false,
+                                     availableUpdate: "0.5.1", installChannel: channel,
+                                     actions: MenuActions(copyUpdateCommand: { copied = $0 },
+                                                          openURL: { opened = $0 }))
+        let row = menu.items.first!
+        (row.representedObject as? NSObject)?.perform(#selector(ActionTarget.fire))
+        return (row.title, copied, opened)
+    }
+
+    func testHomebrewInstallCopiesTheBrewCommand() {
+        let fired = fireUpdateRow(channel: .homebrew)
+        XCTAssertEqual(fired.copied, UpdateChecker.upgradeCommand(for: .homebrew))
+        XCTAssertEqual(fired.copied, "brew update && brew upgrade whereamip")
+        XCTAssertNil(fired.opened, "a Homebrew install must not be sent to the download page")
+        XCTAssertEqual(fired.title, L10n.string(.menuUpdateAvailable, "0.5.1"))
+    }
+
+    func testMacPortsInstallCopiesThePortCommand() {
+        let fired = fireUpdateRow(channel: .macports)
+        XCTAssertEqual(fired.copied, UpdateChecker.upgradeCommand(for: .macports))
+        XCTAssertEqual(fired.copied, "sudo port selfupdate && sudo port upgrade whereamip")
+        XCTAssertNil(fired.opened)
+        // The copy-command wording is shared with Homebrew — the row never names the
+        // command, so one label serves both package managers.
+        XCTAssertEqual(fired.title, L10n.string(.menuUpdateAvailable, "0.5.1"))
+    }
+
+    /// The point of the whole feature: a zip install has no package manager, so the row
+    /// must not put a `brew` command on the clipboard that would do nothing (or install a
+    /// SECOND copy). It opens the releases page instead.
+    func testDirectInstallOpensTheReleasesPageInsteadOfCopying() {
+        let fired = fireUpdateRow(channel: .direct)
+        XCTAssertNil(fired.copied, "a zip install must not be handed a package-manager command")
+        XCTAssertEqual(fired.opened, UpdateChecker.releasesURL)
+        XCTAssertEqual(fired.title, L10n.string(.menuUpdateAvailableDownload, "0.5.1"))
+    }
+
+    /// Both wordings have to survive retuning without turning into the other's row, and
+    /// neither may name a command (see the label comment in Localizable.strings).
+    func testNeitherUpdateRowWordingNamesACommandInEitherLocale() {
+        for locale in ["en", "de"] {
+            L10n.languageSetting = { locale }
+            for key in [L10nKey.menuUpdateAvailable, .menuUpdateAvailableDownload] {
+                let label = L10n.string(key, "0.5.1")
+                XCTAssertFalse(label.contains("brew"), "\(locale) \(key.rawValue) names a command: \(label)")
+                XCTAssertFalse(label.contains("port "), "\(locale) \(key.rawValue) names a command: \(label)")
+                XCTAssertTrue(label.contains("0.5.1"), "\(locale) \(key.rawValue) must name the version")
+            }
+            XCTAssertNotEqual(L10n.string(.menuUpdateAvailable, "0.5.1"),
+                              L10n.string(.menuUpdateAvailableDownload, "0.5.1"),
+                              "\(locale): the two channels' rows must read differently")
+        }
+        L10n.languageSetting = { Settings().language }
+    }
+
     func testNoUpdateRowWhenUnavailable() {
         let menu = MenuBuilder.build(state: vpnState(), style: .emoji,
                                      notificationsEnabled: false, launchAtLogin: false, actions: MenuActions())
