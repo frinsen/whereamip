@@ -62,13 +62,28 @@ public enum InstalledVersion {
     /// whichever path stays stable across an upgrade for this install channel
     /// (see `installedAppPath`).
     public static func onDisk(bundlePath: String) -> (version: String, appPath: String)? {
-        guard let appPath = installedAppPath(fromBundlePath: bundlePath) else { return nil }
+        guard let appPath = installedAppPath(fromBundlePath: bundlePath),
+              let version = shortVersion(ofBundleAtPath: appPath)
+        else { return nil }
+        return (version: version, appPath: appPath)
+    }
+
+    /// `CFBundleShortVersionString` of the app bundle at `appPath`, or nil if there is no
+    /// bundle there, no readable `Info.plist`, or no version key in it.
+    ///
+    /// Deliberately channel-agnostic, unlike everything above it: the single-instance
+    /// guard has to read the version of a bundle it did not choose — an ancient dev build
+    /// in someone's `dist/` folder, a copy in `/Applications`, a different Cellar keg —
+    /// none of which `installedAppPath` would hand back. One plist read, no network, no
+    /// launching; nil for anything it cannot make sense of, never a throw.
+    public static func shortVersion(ofBundleAtPath appPath: String) -> String? {
+        guard !appPath.isEmpty else { return nil }
         let plistPath = "\(appPath)/Contents/Info.plist"
-        guard let data = FileManager.default.contents(atPath: plistPath) else { return nil }
-        guard let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+        guard let data = FileManager.default.contents(atPath: plistPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)
                 as? [String: Any],
               let version = plist["CFBundleShortVersionString"] as? String
         else { return nil }
-        return (version: version, appPath: appPath)
+        return version
     }
 }

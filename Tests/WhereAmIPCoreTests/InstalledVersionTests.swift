@@ -114,4 +114,55 @@ final class InstalledVersionTests: XCTestCase {
     func testOnDiskNonCellarBundlePathReturnsNil() {
         XCTAssertNil(InstalledVersion.onDisk(bundlePath: "/Applications/WhereAmIP.app"))
     }
+
+    // MARK: - shortVersion: read any bundle's version, not just the installed one
+
+    /// Builds a minimal `.app` with the given Info.plist contents and returns its path.
+    /// The caller owns the returned temp tree.
+    private func makeBundle(plist: [String: Any]?, in tmp: URL) throws -> String {
+        let appDir = tmp.appendingPathComponent("WhereAmIP.app")
+        let contentsDir = appDir.appendingPathComponent("Contents")
+        try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
+        if let plist {
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: contentsDir.appendingPathComponent("Info.plist"))
+        }
+        return appDir.path
+    }
+
+    private func withTempDir(_ body: (URL) throws -> Void) rethrows {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InstalledVersionTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try body(tmp)
+    }
+
+    func testShortVersionReadsAnyBundleRegardlessOfInstallChannel() throws {
+        try withTempDir { tmp in
+            // Deliberately a dist/ dev-build layout — the very shape the single-instance
+            // guard has to read a version out of, and one `installedAppPath` refuses.
+            let path = try makeBundle(plist: ["CFBundleShortVersionString": "0.5.5"],
+                                      in: tmp.appendingPathComponent("dist"))
+            XCTAssertEqual(InstalledVersion.shortVersion(ofBundleAtPath: path), "0.5.5")
+        }
+    }
+
+    func testShortVersionMissingPlistReturnsNil() throws {
+        try withTempDir { tmp in
+            let path = try makeBundle(plist: nil, in: tmp)
+            XCTAssertNil(InstalledVersion.shortVersion(ofBundleAtPath: path))
+        }
+    }
+
+    func testShortVersionPlistWithoutTheKeyReturnsNil() throws {
+        try withTempDir { tmp in
+            let path = try makeBundle(plist: ["CFBundleIdentifier": "io.github.frinsen.whereamip"], in: tmp)
+            XCTAssertNil(InstalledVersion.shortVersion(ofBundleAtPath: path))
+        }
+    }
+
+    func testShortVersionOfNothingAtAllReturnsNil() {
+        XCTAssertNil(InstalledVersion.shortVersion(ofBundleAtPath: ""))
+        XCTAssertNil(InstalledVersion.shortVersion(ofBundleAtPath: "/nope/WhereAmIP.app"))
+    }
 }

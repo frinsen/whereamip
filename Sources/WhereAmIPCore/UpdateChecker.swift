@@ -12,6 +12,15 @@ public enum SemVer {
         return compare(c, b) > 0
     }
 
+    /// Whether `raw` has a comparable dotted numeric core at all.
+    ///
+    /// `isNewer` answers false in both directions for two EQUAL versions and for one it
+    /// cannot parse — indistinguishable, and harmless for the update check, where neither
+    /// case is an update. The single-instance guard needs them apart: "the other copy is
+    /// our version" and "we cannot read the other copy's version" lead to opposite
+    /// verdicts (see InstanceArbiter). Same parser, so the two answers can never drift.
+    public static func parses(_ raw: String) -> Bool { coreComponents(raw) != nil }
+
     private static func coreComponents(_ raw: String) -> [Int]? {
         var s = Substring(raw)
         if s.first == "v" || s.first == "V" { s.removeFirst() }

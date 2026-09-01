@@ -38,6 +38,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var lastChecked: Date?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // FIRST, before a status item, a window or a monitor exists: if another copy of
+        // WhereAmIP is already running and has the better claim, this one leaves without
+        // ever having been visible. See InstanceArbiter for the field bug (two login-item
+        // registrations, two icons after a restart) and the rules.
+        if resolveDuplicateInstances() == .yield {
+            NSApp.terminate(nil)
+            return
+        }
+
+        // Considered and deliberately NOT done here: re-asserting
+        // `SMAppService.mainApp.register()` on every launch when the setting is on, so the
+        // current path would always own a live registration.
+        //
+        // It would make things worse. SMAppService's registration is keyed by path/identity,
+        // not by bundle id alone: from a new location (every `brew upgrade` is one, since
+        // Cellar paths carry the version) `status` reads `.notFound` and `register()` writes
+        // an ADDITIONAL Background Task Management record rather than moving the old one —
+        // developers who register on each launch have reported accumulating dozens of
+        // identical login items, and there is no API to enumerate or delete a single stale
+        // record (only `sudo sfltool resetbtm`, which wipes every third-party login item on
+        // the machine). Registering unconditionally would therefore manufacture exactly the
+        // duplicate-launch condition the guard above cleans up after. On top of that,
+        // `register()` throws `kSMErrorAlreadyRegistered` when the record does match, each
+        // new path re-triggers the system's "Login Item Added" notification, and — per an
+        // Apple DTS reply on the forums — an unconditional register silently overrides a
+        // user who turned the item off in System Settings ▸ General ▸ Login Items.
+        //
+        // So registration stays exactly where it is: under the user's finger, in the menu
+        // and welcome-window toggles, which is also Apple's own advice. The stale records
+        // that already exist in the field are handled at runtime, by the guard, rather than
+        // by writing more records.
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.menu = NSMenu()
         statusItem.menu!.delegate = self
@@ -105,6 +137,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { [weak self] _ in
             self?.checkForUpdates()
         }
+    }
+
+    /// Finds the other copies of WhereAmIP that are already running and acts on the
+    /// arbiter's verdict: quietly quit (`.yield`), ask them to quit (`.takeOver`), or carry
+    /// on (`.proceed`).
+    ///
+    /// A thin translation layer over tested pieces, on purpose — this target has no test
+    /// target, so everything that could be a rule lives in Core: which running apps count
+    /// as us (`InstanceArbiter.isSibling`), how a bundle's version is read
+    /// (`InstalledVersion.shortVersion`), and who wins (`InstanceArbiter.verdict`). What is
+    /// left here is AppKit plumbing and logging.
+    ///
+    /// Terminated-but-still-listed apps are filtered out, and that is not belt-and-braces.
+    /// `relaunch(from:)` deliberately waits for our PID to disappear before running `open`,
+    /// so a restart never overlaps — but `NSWorkspace`'s list is event-driven and can lag a
+    /// dying process by a moment. Without this filter a freshly relaunched instance could
+    /// meet the ghost of the copy that just relaunched it, read an equal version and an
+    /// earlier start time, and dutifully terminate itself — turning "Restart WhereAmIP"
+    /// into "quit WhereAmIP". `isTerminated` is exactly the question to ask.
+    ///
+    /// Terminating is always the polite `terminate()` (a quit request the other instance
+    /// can act on normally), never `forceTerminate()`. If it refuses or is too wedged to
+    /// answer, this instance logs it and proceeds anyway: two icons in the menu bar is a
+    /// worse day than one, but it beats SIGKILLing a process on a hunch.
+    @discardableResult
+    func resolveDuplicateInstances() -> InstanceArbiter.Verdict {
+        let ownIdentifier = Bundle.main.bundleIdentifier
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let others = NSWorkspace.shared.runningApplications.filter { app in
+            app.processIdentifier != ownPID && !app.isTerminated
+                && InstanceArbiter.isSibling(bundleIdentifier: app.bundleIdentifier,
+                                             ownIdentifier: ownIdentifier)
+        }
+        guard !others.isEmpty else { return .proceed }
+
+        let mine = InstanceArbiter.Instance(version: whereamipVersion,
+                                            startedAt: NSRunningApplication.current.launchDate)
+        // The other copy's version comes from ITS bundle on disk, not from ours: a stale
+        // BTM record points at a path we know nothing about, and whatever sits there now is
+        // what actually launched. Unreadable counts as older (see InstanceArbiter).
+        let found: [(app: NSRunningApplication, instance: InstanceArbiter.Instance)] = others.map { app in
+            let version = app.bundleURL.flatMap { InstalledVersion.shortVersion(ofBundleAtPath: $0.path) }
+            return (app, InstanceArbiter.Instance(version: version, startedAt: app.launchDate))
+        }
+        let verdict = InstanceArbiter.verdict(mine, versus: found.map(\.instance))
+
+        // Every arbitration is logged, always — this decision happens before there is any UI
+        // to show it in, and "why did my menu bar icon vanish (or double)?" is answerable
+        // only from here. `whereamip debug` streams it with everything else.
+        for (app, instance) in found {
+            Log.instance.notice("""
+                guard: other pid=\(app.processIdentifier, privacy: .public) \
+                id=\(app.bundleIdentifier ?? "?", privacy: .public) \
+                version=\(instance.version ?? "unreadable", privacy: .public) \
+                path=\(app.bundleURL?.path ?? "?", privacy: .public)
+                """)
+        }
+        Log.instance.notice("""
+            guard: self version=\(whereamipVersion, privacy: .public) \
+            others=\(found.count, privacy: .public) \
+            verdict=\(String(describing: verdict), privacy: .public)
+            """)
+
+        if verdict == .takeOver {
+            for (app, _) in found {
+                if !app.terminate() {
+                    Log.instance.error("guard: pid \(app.processIdentifier, privacy: .public) refused the quit request — proceeding anyway")
+                }
+            }
+        }
+        return verdict
     }
 
     @objc func didWake() { Task { await self.runMonitorRefresh(full: true) } }

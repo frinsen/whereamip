@@ -57,7 +57,14 @@ Optional — make it show up in /Applications (the symlink survives upgrades); t
 ln -s "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app" /Applications/WhereAmIP.app
 ```
 
-> If Launch at Login stops working after a `brew upgrade`, re-toggle it in Settings.
+> If Launch at Login stops working after a `brew upgrade`, re-toggle it in Settings. macOS
+> ties a login-item registration to the app's *path*, and Homebrew's paths carry the version
+> number, so an upgrade leaves the old registration pointing at the old location — the toggle
+> reads as off, and switching it back on registers the new path while the stale record stays
+> behind. If two such records ever launch two copies at once, WhereAmIP now settles it at
+> startup instead of leaving you with two menu bar icons: the copies compare versions, the
+> newest one wins (same version: the one that started first), and the others quit before they
+> ever appear.
 
 ## CLI
 

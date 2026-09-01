@@ -19,4 +19,9 @@ public enum Log {
     public static let relay   = Logger(subsystem: subsystem, category: "relay")
     public static let update  = Logger(subsystem: subsystem, category: "update")
     public static let dns     = Logger(subsystem: subsystem, category: "dns")
+    // Launch-time single-instance arbitration (AppDelegate + InstanceArbiter). Its own
+    // category because the thing it records is a duplicate LAUNCH — the evidence someone
+    // needs when two icons appear, and the one decision that happens before any other
+    // category has produced a single line.
+    public static let instance = Logger(subsystem: subsystem, category: "instance")
 }
