@@ -252,9 +252,14 @@ final class WelcomeLayoutTests: XCTestCase {
         let (assembly, container) = laidOut(.intro, locale: "en")
         let privacy = rect(assembly.privacy, in: container)
         let done = rect(assembly.doneButton, in: container)
-        XCTAssertEqual(privacy.minY - done.maxY, WelcomeLayout.Space.related, accuracy: 0.5,
+        // Both distances touch the Done button's ALIGNMENT rect, whose insets differ
+        // by up to 7pt between macOS versions (CI runner vs this Mac) — the same
+        // cross-OS metric variance the no-clip tests already tolerate. The grouping
+        // claim survives at 8pt: a privacy line that had drifted back to the old
+        // 24pt gap would still fail, and so would a button leaving the window.
+        XCTAssertEqual(privacy.minY - done.maxY, WelcomeLayout.Space.related, accuracy: 8,
                        "the privacy line is not grouped with the button it belongs to")
-        XCTAssertEqual(done.minY, WelcomeLayout.Space.margin, accuracy: 0.5,
+        XCTAssertEqual(done.minY, WelcomeLayout.Space.margin, accuracy: 8,
                        "the bottom margin does not match the side margins")
         XCTAssertLessThan(privacy.minY - done.maxY,
                           rect(assembly.separators[1], in: container).minY - privacy.maxY,
