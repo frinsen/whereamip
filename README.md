@@ -17,8 +17,9 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 
 **Website:** [frinsen.github.io/whereamip](https://frinsen.github.io/whereamip/)
 
-<!-- TODO: take a real screenshot of the menu open (⌘⇧4) and drop it into docs/screenshot.png, then uncomment: -->
-<!-- ![WhereAmIP menu bar dropdown](docs/screenshot.png) -->
+<p align="center">
+  <img src="docs/screenshot.png" width="860" alt="WhereAmIP with a VPN active: the Argentine flag with a warning badge in the menu bar, the dropdown showing the exit in Buenos Aires, an IPv6 leak warning, PureVPN owning the default route, and the DNS submenu listing the resolvers that actually answered">
+</p>
 
 ## Features
 
