@@ -4,6 +4,13 @@
 
 # WhereAmIP
 
+[![Latest release](https://img.shields.io/github/v/release/frinsen/whereamip?label=release)](https://github.com/frinsen/whereamip/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)](https://frinsen.github.io/whereamip/)
+[![Homebrew tap](https://img.shields.io/badge/homebrew-frinsen%2Ftap-orange)](https://github.com/frinsen/homebrew-tap)
+[![MacPorts](https://img.shields.io/badge/macports-whereamip-blue)](https://ports.macports.org/port/whereamip/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Swift](https://img.shields.io/badge/swift-5.9-F05138)](Package.swift)
+
 > Where am I(P)? — a native macOS menu bar app that shows the country flag of your current internet exit point, tells you when your connection is *actually* dead, and untangles what your VPNs and iCloud Private Relay are really doing to your traffic.
 
 Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula name are lowercase `whereamip`.
