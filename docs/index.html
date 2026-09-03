@@ -58,7 +58,13 @@ nav .links a{color:var(--ink-2)}
 .hero .wrap{display:grid; grid-template-columns:minmax(300px,1fr) minmax(320px,1.15fr); gap:48px; align-items:center}
 @media (max-width:900px){ .hero .wrap{grid-template-columns:1fr} }
 .hero h1{font-size:clamp(2.4rem,5.4vw,3.6rem); font-weight:800; line-height:1.04; margin-bottom:18px}
-.hero h1 .flag{display:inline-block; transform:translateY(2px)}
+.hero .eyebrow{color:#8fb3ff}
+.rot{position:relative; display:block}
+.rot .sizer{visibility:hidden; display:block}
+.rot .line{position:absolute; left:0; top:0; width:100%; opacity:0; transform:translateY(10px); transition:opacity .55s ease, transform .55s ease; will-change:opacity,transform}
+.rot .line.on{opacity:1; transform:translateY(0)}
+.rot .line.out{opacity:0; transform:translateY(-10px)}
+@media (prefers-reduced-motion:reduce){ .rot .line{transition:none} }
 .hero p{color:var(--hero-muted); font-size:1.12rem; max-width:52ch; margin-bottom:26px}
 .cta{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
 .btn{display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border-radius:10px; font-weight:600; font-size:15px; border:1px solid transparent; transition:transform .08s ease}
@@ -164,7 +170,14 @@ footer .sp{flex:1}
 
 <header class="hero" id="top"><div class="wrap">
   <div>
-    <h1>Where am I(P)? <span class="flag">🇩🇪</span><br>Your exit, in the menu bar.</h1>
+    <p class="eyebrow">Where am I(P)? · macOS menu bar</p>
+    <h1><span class="rot" id="rot">
+      <span class="sizer" aria-hidden="true">Leaks show up here before they show up anywhere else.</span>
+      <span class="line on">Is the VPN actually on? Now you can see it.</span>
+      <span class="line" aria-hidden="true">The country your traffic really leaves from.</span>
+      <span class="line" aria-hidden="true">Leaks show up here before they show up anywhere else.</span>
+      <span class="line" aria-hidden="true">Where am I(P)? Ask the flag.</span>
+    </span></h1>
     <p>WhereAmIP shows the country your traffic really leaves from — and tells you the moment a VPN takes over, an IPv6 or DNS leak opens, or a connection that claims to be online isn't.</p>
     <div class="cta">
       <a class="btn primary" href="#install">Install with Homebrew</a>
@@ -398,6 +411,24 @@ open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"</pre>
       ours.innerHTML = styles[b.getAttribute("data-style")];
     });
   });
+  var rot = document.getElementById("rot");
+  if (rot) {
+    var lines = rot.querySelectorAll(".line"), i = 0, paused = false;
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var hold = reduce ? 6500 : 4200;
+    function show(n){
+      lines.forEach(function(l, k){
+        l.classList.remove("on","out");
+        if (k === i) l.classList.add("out");
+        if (k === n) l.classList.add("on");
+        l.setAttribute("aria-hidden", k === n ? "false" : "true");
+      });
+      i = n;
+    }
+    setInterval(function(){ if (!paused) show((i + 1) % lines.length); }, hold);
+    rot.addEventListener("mouseenter", function(){ paused = true; });
+    rot.addEventListener("mouseleave", function(){ paused = false; });
+  }
   var pm = {
     brew: { cmd: "$ brew install frinsen/tap/whereamip", copy: "brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip", note: "Recommended. Builds from source on your Mac — no Gatekeeper warnings." },
     port: { cmd: "$ sudo port install whereamip", copy: "sudo port install whereamip", note: "For Macs without Homebrew. The app lands in /Applications/MacPorts." }
