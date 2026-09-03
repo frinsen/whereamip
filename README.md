@@ -8,6 +8,8 @@
 
 Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula name are lowercase `whereamip`.
 
+**Website:** [frinsen.github.io/whereamip](https://frinsen.github.io/whereamip/)
+
 <!-- TODO: take a real screenshot of the menu open (⌘⇧4) and drop it into docs/screenshot.png, then uncomment: -->
 <!-- ![WhereAmIP menu bar dropdown](docs/screenshot.png) -->
 
