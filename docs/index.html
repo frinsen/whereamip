@@ -113,8 +113,9 @@ nav .links a{color:var(--ink-2)}
 pre{margin:0; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; overflow-x:auto; font-family:"IBM Plex Mono",monospace; font-size:13.5px; line-height:1.7; color:var(--ink)}
 pre .c{color:var(--muted)}
 details{border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:0 18px; margin-top:12px}
-details summary{cursor:pointer; padding:14px 0; font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center}
-details summary::after{content:"+"; color:var(--muted); font-weight:400; font-size:20px}
+details summary{cursor:pointer; padding:14px 30px 14px 0; font-weight:600; list-style:none; display:block; position:relative}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+"; color:var(--muted); font-weight:400; font-size:20px; line-height:1; position:absolute; right:0; top:50%; transform:translateY(-50%)}
 details[open] summary::after{content:"–"}
 details .body{padding:0 0 16px; color:var(--ink-2); font-size:15px}
 details .body p{margin-bottom:10px}
