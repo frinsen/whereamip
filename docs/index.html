@@ -69,6 +69,8 @@ nav .links a{color:var(--ink-2)}
 .brewline b{color:var(--hero-ink); font-weight:500; overflow-wrap:anywhere}
 .copybtn{margin-left:auto; flex:none; font:inherit; font-size:12px; color:var(--hero-ink); background:rgba(255,255,255,.12); border:0; border-radius:6px; padding:5px 9px; cursor:pointer}
 .copybtn:focus-visible{outline:2px solid #fff; outline-offset:2px}
+.altline{margin-top:10px; font-size:13.5px; color:var(--hero-muted)}
+.altline code{background:rgba(255,255,255,.08); color:var(--hero-ink); font-size:.9em}
 
 /* desktop mockup */
 .desk{border-radius:16px; padding:0; background:linear-gradient(146deg,#1d3b4a 0%,#245069 46%,#3a3a62 100%); box-shadow:0 30px 70px rgba(0,0,0,.45); overflow:hidden; position:relative}
@@ -165,6 +167,7 @@ footer .sp{flex:1}
       <a class="btn ghost" href="https://github.com/frinsen/whereamip/releases/latest">Download the app</a>
     </div>
     <div class="brewline"><b>$ brew install frinsen/tap/whereamip</b><button class="copybtn" data-copy="brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip">Copy</button></div>
+    <p class="altline">No Homebrew? MacPorts works too: <code>sudo port install whereamip</code></p>
   </div>
   <div>
     <div class="desk" id="desk">
