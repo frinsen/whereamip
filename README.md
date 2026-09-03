@@ -66,6 +66,17 @@ ln -s "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app" /Applications/Where
 > newest one wins (same version: the one that started first), and the others quit before they
 > ever appear.
 
+### If you use MacPorts instead of Homebrew
+
+WhereAmIP is also in the MacPorts tree — offered as a fallback for Macs without Homebrew, which remains the recommended path:
+
+```bash
+sudo port install whereamip
+open /Applications/MacPorts/WhereAmIP.app
+```
+
+The dropdown's update row knows it is a MacPorts install and copies `sudo port selfupdate && sudo port upgrade whereamip` when a release is out.
+
 ## CLI
 
 ```bash
