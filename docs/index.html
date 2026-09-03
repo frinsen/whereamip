@@ -65,12 +65,15 @@ nav .links a{color:var(--ink-2)}
 .btn:hover{text-decoration:none; transform:translateY(-1px)}
 .btn.primary{background:#ffffff; color:#0d1b33}
 .btn.ghost{border-color:rgba(255,255,255,.22); color:var(--hero-ink)}
-.brewline{margin-top:22px; font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:var(--hero-muted); background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:12px 14px; display:flex; gap:12px; align-items:center}
+.brewline{margin-top:0; font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:var(--hero-muted); background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:12px 14px; display:flex; gap:12px; align-items:center}
 .brewline b{color:var(--hero-ink); font-weight:500; overflow-wrap:anywhere}
 .copybtn{margin-left:auto; flex:none; font:inherit; font-size:12px; color:var(--hero-ink); background:rgba(255,255,255,.12); border:0; border-radius:6px; padding:5px 9px; cursor:pointer}
 .copybtn:focus-visible{outline:2px solid #fff; outline-offset:2px}
-.altline{margin-top:10px; font-size:13.5px; color:var(--hero-muted)}
-.altline code{background:rgba(255,255,255,.08); color:var(--hero-ink); font-size:.9em}
+.pmtabs{display:inline-flex; gap:4px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); padding:3px; border-radius:8px; margin-bottom:10px}
+.pmtabs button{font:inherit; font-size:12.5px; font-weight:600; color:rgba(255,255,255,.85); background:transparent; border:0; border-radius:6px; padding:4px 11px; cursor:pointer}
+.pmtabs button[aria-pressed="true"]{background:#ffffff; color:#0d1b33}
+.pmtabs button:focus-visible{outline:2px solid #fff}
+.pmnote{margin-top:8px; font-size:12.5px; color:var(--hero-muted)}
 
 /* desktop mockup */
 .desk{border-radius:16px; padding:0; background:linear-gradient(146deg,#1d3b4a 0%,#245069 46%,#3a3a62 100%); box-shadow:0 30px 70px rgba(0,0,0,.45); overflow:hidden; position:relative}
@@ -166,8 +169,14 @@ footer .sp{flex:1}
       <a class="btn primary" href="#install">Install with Homebrew</a>
       <a class="btn ghost" href="https://github.com/frinsen/whereamip/releases/latest">Download the app</a>
     </div>
-    <div class="brewline"><b>$ brew install frinsen/tap/whereamip</b><button class="copybtn" data-copy="brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip">Copy</button></div>
-    <p class="altline">No Homebrew? MacPorts works too: <code>sudo port install whereamip</code></p>
+    <div style="margin-top:22px">
+      <div class="pmtabs" role="group" aria-label="Package manager">
+        <button type="button" data-pm="brew" aria-pressed="true">Homebrew</button>
+        <button type="button" data-pm="port" aria-pressed="false">MacPorts</button>
+      </div>
+      <div class="brewline"><b id="pmcmd">$ brew install frinsen/tap/whereamip</b><button class="copybtn" id="pmcopy" data-copy="brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip">Copy</button></div>
+      <p class="pmnote" id="pmnote">Recommended. Builds from source on your Mac — no Gatekeeper warnings.</p>
+    </div>
   </div>
   <div>
     <div class="desk" id="desk">
@@ -386,6 +395,20 @@ open "$(brew --prefix)/opt/whereamip/libexec/WhereAmIP.app"</pre>
       document.querySelectorAll(".styletabs button").forEach(function(x){ x.setAttribute("aria-pressed","false"); });
       b.setAttribute("aria-pressed","true");
       ours.innerHTML = styles[b.getAttribute("data-style")];
+    });
+  });
+  var pm = {
+    brew: { cmd: "$ brew install frinsen/tap/whereamip", copy: "brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip", note: "Recommended. Builds from source on your Mac — no Gatekeeper warnings." },
+    port: { cmd: "$ sudo port install whereamip", copy: "sudo port install whereamip", note: "For Macs without Homebrew. The app lands in /Applications/MacPorts." }
+  };
+  document.querySelectorAll(".pmtabs button").forEach(function(b){
+    b.addEventListener("click", function(){
+      document.querySelectorAll(".pmtabs button").forEach(function(x){ x.setAttribute("aria-pressed","false"); });
+      b.setAttribute("aria-pressed","true");
+      var v = pm[b.getAttribute("data-pm")];
+      document.getElementById("pmcmd").textContent = v.cmd;
+      document.getElementById("pmcopy").setAttribute("data-copy", v.copy);
+      document.getElementById("pmnote").textContent = v.note;
     });
   });
   document.querySelectorAll("[data-copy]").forEach(function(btn){
