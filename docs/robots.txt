@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://frinsen.github.io/whereamip/sitemap.xml

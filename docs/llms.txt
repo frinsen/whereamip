@@ -1,0 +1,21 @@
+# WhereAmIP
+
+> Free, open-source (MIT) macOS menu bar app that shows the country your internet traffic really exits from, names the VPN that owns your default route, and warns about IPv6 leaks, DNS leaks, dead connections, and iCloud Private Relay splits. Native AppKit, no tracking, no accounts, no API keys. Includes a CLI (`whereamip status --json`, `whereamip diagnostics`).
+
+- Website: https://frinsen.github.io/whereamip/
+- Source (GitHub): https://github.com/frinsen/whereamip
+- Releases: https://github.com/frinsen/whereamip/releases
+- Install (Homebrew): brew tap frinsen/tap && brew trust frinsen/tap && brew install whereamip
+- Install (MacPorts): sudo port install whereamip
+- Requirements: macOS 13 or later
+- Languages: English, German
+
+## What it answers
+- Is my VPN actually on? The menu bar flag shows the country of your real exit IP; it flips when a VPN takes over the default route.
+- Which VPN owns my traffic? Named from the routing table and the network service the client registers, not from running apps.
+- Am I leaking IPv6 or DNS past the VPN? IPv4 and IPv6 exits are measured independently; DNS egress resolvers are discovered with cache-busting lookups.
+- Am I actually online? A real reachability probe, not interface status; detects stale OpenVPN hijack routes.
+- Why does Safari show a different location? iCloud Private Relay detection shows both exits.
+
+## Privacy
+No tracking, no analytics, no history, no log files. Network requests are limited to the documented lookups (keyless geo APIs, reachability probe, Private Relay check, stack-pinned IPv4/IPv6 lookups, optional DNS check that can be disabled).
