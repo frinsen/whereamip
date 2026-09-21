@@ -8,23 +8,17 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-21
+
 ### Fixed
 - **Two menu bar icons after a restart.** Only one copy of WhereAmIP runs now, and it is the
   newest one installed. macOS ties each login-item registration to the app's *path*, and
-  Homebrew's paths carry the version number — so every upgrade orphans the previous
-  registration, and the "re-toggle Launch at Login after an upgrade" fix writes a second one
-  rather than moving the first. Two registrations mean two launches at the next login. Seen
-  in the field with v0.6 (from Homebrew) and v0.5.5 (an old build in a `dist/` folder, still
-  registered under the pre-0.5 bundle identifier) side by side in the menu bar, neither
-  started by hand. WhereAmIP now checks at launch, before it puts anything on screen: if
-  another copy is already running, the newer version takes over and asks the older one to
-  quit; two copies of the same version settle it on start time, with the one that started
-  first keeping the menu bar. The loser terminates before it has an icon, so there is nothing
-  to see and nothing to click. Copies launched from the old bundle identifier are recognised
-  too — those registrations are still out there, macOS keeps such records deliberately, and
-  no API can remove a single one. Nothing is registered, unregistered or written to fix this:
-  Launch at Login remains exactly as user-controlled as it was, and the duplicate is resolved
-  at runtime instead.
+  Homebrew's paths carry the version number — so an upgrade could leave an older copy
+  registered next to the new one, and both launched at the next login. WhereAmIP now checks
+  at launch, before it puts anything on screen: if another copy is already running, the newer
+  version takes over and asks the older one to quit; two copies of the same version settle it
+  on start time, with the one that started first keeping the menu bar. Copies launched from
+  the old bundle identifier are recognised too. Launch at Login stays exactly as you set it.
 
 ## [0.6] — 2026-08-25
 
