@@ -93,7 +93,12 @@ The dropdown's update row knows it is a MacPorts install and copies `sudo port s
 $ whereamip status
 🇩🇪 203.0.113.7  Berlin, DE
    Deutsche Telekom AG
-route: en0
+route: Wi-Fi (en0)
+dns: 192.168.178.1 +3
+   egress: 198.51.100.9 (Quad9), 2001:db8:171::242 (Quad9)
+IPv4: 203.0.113.7 (Berlin, DE)
+IPv6: 2001:db8:9e8::c1b3 (Berlin, DE)
+whereamip v0.6
 
 $ whereamip status --json
 {"connectivity":"online","exit":{"city":"Berlin","countryCode":"DE","ip":"203.0.113.7",...
@@ -102,17 +107,18 @@ $ whereamip watch            # prints a new status line whenever exit IP, route,
 $ whereamip watch --json
 
 $ whereamip diagnostics      # paste-ready report for a bug report — same text the dropdown's ⌘D copies
-WhereAmIP 0.4.2 — checked 17.08.26, 21:46:41
+WhereAmIP 0.6 — checked 03.09.26, 15:43:57
 Warning IPv6 leak — v6 exits via Deutsche Telekom AG (DE)
-Exit    104.28.225.96 · Berlin, DE · Cloudflare, Inc.
-IPv6    2a09:bac5:27cd:2a0::43:80 · Berlin, DE
-Route   Cloudflare WARP (utun17) owns default route
-Since   17.08.26, 21:40:13
-DNS     127.0.2.2, 127.0.2.3 (utun17)
+Exit    203.0.113.84 · Buenos Aires, AR · Example VPN Inc.
+IPv6    2001:db8:9e8::c1b3 · Berlin, DE · Deutsche Telekom AG
+Route   PureVPN (utun17) owns default route
+Since   03.09.26, 15:42:32
+DNS     10.64.0.1 (utun17)
         192.168.178.1 (en0)
-Egress  162.158.245.7 · Cloudflare, Inc. (Berlin, DE) · UDP
+Egress  203.0.113.77 · Example VPN Inc. (Buenos Aires, AR) · UDP
+        Router forwards to Quad9 — encryption of that hop is set on the router
 
-$ whereamip config get       # notify=false / style=emoji / updates=true / dns=true / language=system
+$ whereamip config get       # notify=true / style=emoji / updates=true / dns=true / language=system / applications=true
 $ whereamip config set style code
 $ whereamip config set notify true
 $ whereamip config set updates false
