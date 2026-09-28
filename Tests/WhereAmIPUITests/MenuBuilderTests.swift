@@ -464,6 +464,16 @@ final class MenuBuilderTests: XCTestCase {
         let sym = StatusItemRenderer.render(.symbol("wifi.slash"))
         XCTAssertNil(sym.title); XCTAssertNotNil(sym.image); XCTAssertTrue(sym.image!.isTemplate)
     }
+    /// The offline glyph must render on every supported macOS: network.slash where the OS has
+    /// it, its SF Symbols 1 stand-in on macOS 13. An unknown name with no stand-in stays nil so
+    /// a typo cannot silently draw the wrong picture.
+    func testOfflineSymbolRendersOnEverySupportedOS() {
+        let offline = StatusItemRenderer.render(.symbol("network.slash"))
+        XCTAssertNil(offline.title); XCTAssertNotNil(offline.image); XCTAssertTrue(offline.image!.isTemplate)
+        XCTAssertEqual(StatusItemRenderer.symbolFallbacks["network.slash"], "wifi.slash")
+        XCTAssertNotNil(StatusItemRenderer.symbolImage(named: "wifi.slash"))
+        XCTAssertNil(StatusItemRenderer.symbolImage(named: "no.such.symbol.whereamip"))
+    }
     // Flags asset bundle is available (added in Task 14), but codes without assets still
     // fall back to emoji. "zz" is a valid 2-letter code format but has no flagcdn asset,
     // so it must fall back to emoji (not the asset-present path). This tests the critical

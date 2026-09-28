@@ -6,8 +6,8 @@
   flag image instead; the ISO code is the readable choice at 16 px.
 - The app follows your Mac's language. Settings ▸ Language switches it by hand —
   English or Deutsch — and takes effect the next time you open the menu, no restart.
-- A **crossed-out Wi-Fi symbol** means nothing actually loads right now, whatever
-  Wi-Fi claims. A **question mark** means the exit could not be placed.
+- A **crossed-out network symbol** means nothing actually loads right now, whatever
+  Wi-Fi or Ethernet claims. A **question mark** means the exit could not be placed.
 - A small **⚠️ badge** next to the symbol means a confirmed leak — IPv6 or DNS
   traffic is escaping past the tunnel. The dropdown's first rows say which.
 

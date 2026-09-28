@@ -254,7 +254,10 @@ public enum Glyph: Equatable {
 
 public extension ExitState {
     func glyph(style: MenuBarStyle) -> Glyph {
-        if connectivity == .offline { return .symbol("wifi.slash") }
+        // "No network" rather than "no Wi-Fi": the probe fails the same way on Ethernet,
+        // Thunderbolt bridges and tethering. network.slash is an SF Symbols 5 name (macOS 14);
+        // StatusItemRenderer substitutes wifi.slash on macOS 13, where it does not exist.
+        if connectivity == .offline { return .symbol("network.slash") }
         guard let iso = exit?.countryCode, let emoji = Flags.emoji(countryCode: iso) else {
             return .symbol("questionmark")
         }

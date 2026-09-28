@@ -23,7 +23,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 
 ## Features
 
-- 🇩🇪 Country flag of your exit IP in the menu bar — flips to 🇳🇱 the moment a VPN grabs your default route, ❌ when the internet is unreachable (even when Wi-Fi claims otherwise)
+- 🇩🇪 Country flag of your exit IP in the menu bar — flips to 🇳🇱 the moment a VPN grabs your default route, a crossed-out network symbol when the internet is unreachable (even when Wi-Fi or Ethernet claims otherwise)
 - Real-reachability probe, not interface status — catches the "connected but blackholed" state
 - Dropdown: public IP (click to copy), city/country, ISP/org, which VPN interface owns the default route, last-change timestamp
 - Truthful VPN naming — the VPN that owns your default route is named from the macOS network service it registers (works for any client, including ones this app has never heard of), with fingerprints for Tailscale, Cloudflare WARP and OpenVPN on top. A tunnel it can't put a brand to shows as "VPN (utun4)" rather than a confident guess

@@ -19,11 +19,24 @@ public enum StatusItemRenderer {
         return (title.map { "\($0) ⚠️" } ?? "⚠️", image)
     }
 
+    /// Older stand-ins for symbols that postdate the macOS 13 floor. `NSImage(systemSymbolName:)`
+    /// returns nil for a name the running OS does not know, which would leave the status item
+    /// blank — the one state that must never happen for the offline glyph.
+    static let symbolFallbacks: [String: String] = [
+        "network.slash": "wifi.slash",   // SF Symbols 5 (macOS 14) → SF Symbols 1
+    ]
+
+    static func symbolImage(named name: String) -> NSImage? {
+        if let img = NSImage(systemSymbolName: name, accessibilityDescription: name) { return img }
+        guard let fallback = symbolFallbacks[name] else { return nil }
+        return NSImage(systemSymbolName: fallback, accessibilityDescription: name)
+    }
+
     private static func renderGlyph(_ glyph: Glyph) -> (title: String?, image: NSImage?) {
         switch glyph {
         case .text(let s): return (s, nil)
         case .symbol(let name):
-            let img = NSImage(systemSymbolName: name, accessibilityDescription: name)
+            let img = symbolImage(named: name)
             img?.isTemplate = true
             return (nil, img)
         case .flagImage(let iso):

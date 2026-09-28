@@ -8,8 +8,8 @@
 - Die App folgt der Sprache deines Macs. Unter Einstellungen ▸ Sprache lässt sie sich von
   Hand umstellen — English oder Deutsch — und zwar ab dem nächsten Öffnen des Menüs, ohne
   Neustart.
-- Ein **durchgestrichenes WLAN-Symbol** heißt, dass gerade nichts wirklich lädt — egal, was
-  das WLAN behauptet. Ein **Fragezeichen** heißt, der Austritt ließ sich nicht zuordnen.
+- Ein **durchgestrichenes Netzwerk-Symbol** heißt, dass gerade nichts wirklich lädt — egal, was
+  WLAN oder Ethernet behaupten. Ein **Fragezeichen** heißt, der Austritt ließ sich nicht zuordnen.
 - Ein kleines **⚠️-Zeichen** am Symbol steht für ein bestätigtes Leck: IPv6- oder
   DNS-Verkehr läuft am Tunnel vorbei. Die obersten Zeilen im Menü sagen, welches.
 

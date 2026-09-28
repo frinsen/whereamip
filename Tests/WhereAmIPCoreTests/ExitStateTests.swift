@@ -8,8 +8,8 @@ final class ExitStateTests: XCTestCase {
                   since: Date())
     }
     func testOfflineBeatsEverything() {
-        XCTAssertEqual(makeState(.offline, iso: "DE").glyph(style: .emoji), .symbol("wifi.slash"))
-        XCTAssertEqual(makeState(.offline, iso: "DE").glyph(style: .code), .symbol("wifi.slash"))
+        XCTAssertEqual(makeState(.offline, iso: "DE").glyph(style: .emoji), .symbol("network.slash"))
+        XCTAssertEqual(makeState(.offline, iso: "DE").glyph(style: .code), .symbol("network.slash"))
     }
     func testUnknownCountryIsQuestionmark() {
         XCTAssertEqual(makeState(.online, iso: nil).glyph(style: .emoji), .symbol("questionmark"))

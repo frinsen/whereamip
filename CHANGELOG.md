@@ -8,6 +8,12 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Changed
+- **Offline glyph is a crossed-out network symbol** instead of a crossed-out Wi-Fi symbol —
+  the reachability probe fails the same way on Ethernet, Thunderbolt bridges and tethering,
+  and the old picture blamed Wi-Fi for all of them. On macOS 13, where that symbol does not
+  exist, the Wi-Fi one is still shown.
+
 ## [0.6.1] — 2026-09-21
 
 ### Fixed
