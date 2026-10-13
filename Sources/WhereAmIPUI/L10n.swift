@@ -114,6 +114,7 @@ public enum L10nKey: String, CaseIterable {
     case notificationOfflineBody = "notification.offline.body"
     case notificationOfflineBodyHijack = "notification.offline.body.hijack"
     case notificationOnlineTitle = "notification.online.title"
+    case notificationOnlineTitleNoExit = "notification.online.title.noexit"
     case notificationLeakTitle = "notification.leak.title"
     case notificationLeakBody = "notification.leak.body"
     case notificationRelayOnTitle = "notification.relay.on.title"

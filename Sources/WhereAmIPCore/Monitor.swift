@@ -423,6 +423,9 @@ public actor Monitor {
         }
     }
 
+    /// See RestoreGate: defers "back online" until the exit lookup has answered.
+    private var restoreGate = RestoreGate()
+
     func apply(_ new: ExitState) {
         var next = new
         let old = state
@@ -435,7 +438,7 @@ public actor Monitor {
         state = next
         Log.monitor.debug("apply: connectivity=\(next.connectivity.rawValue, privacy: .public) exit=\(next.exit?.ip ?? "nil", privacy: .public)/\(next.exit?.countryCode ?? "nil", privacy: .public) route=\(next.route.defaultInterface ?? "nil", privacy: .public)/vpn=\(next.route.vpnName ?? "nil", privacy: .public) dns=\(next.dns.leak.rawValue, privacy: .public)/\(next.dns.resolvers.count, privacy: .public)res")
         onChange(next)
-        let events = Reducer.events(old: old, new: next)
+        let events = restoreGate.filter(Reducer.events(old: old, new: next), new: next)
         if !events.isEmpty {
             Log.reducer.debug("events: \(String(describing: events), privacy: .public)")
             onEvents(events)

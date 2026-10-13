@@ -18,6 +18,9 @@ public enum NotificationText {
                     hijack ? L10n.string(.notificationOfflineBodyHijack)
                            : L10n.string(.notificationOfflineBody))
         case .connectivityRestored(let country, let city, let org):
+            guard let country, Flags.emoji(countryCode: country) != nil else {
+                return (L10n.string(.notificationOnlineTitleNoExit), org ?? "")
+            }
             return (L10n.string(.notificationOnlineTitle, flag(country), city ?? ""),
                     org ?? "")
         case .leakSuspected(let org):

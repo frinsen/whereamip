@@ -51,3 +51,39 @@ public enum Reducer {
         return out
     }
 }
+
+/// Holds a "back online" event until the exit is known.
+///
+/// Connectivity flips back to online as soon as the reachability probe succeeds, which is
+/// usually a beat before the exit lookup answers. Notifying at that instant produced
+/// "Back online: ❓" — true but useless, and it read like an error. The gate swallows a
+/// restore that arrives without an exit country and re-emits it with the real exit on the
+/// first later state that has one. Going offline again in between drops the pending restore,
+/// so a flapping link yields one honest notification, not a stale one.
+public struct RestoreGate: Sendable {
+    public private(set) var pending = false
+    public init() {}
+
+    public mutating func filter(_ events: [Event], new: ExitState) -> [Event] {
+        var out: [Event] = []
+        for event in events {
+            switch event {
+            case .connectivityRestored(let country, _, _) where country == nil:
+                pending = true
+                continue
+            case .connectivityRestored:
+                pending = false
+            case .connectivityLost:
+                pending = false
+            default:
+                break
+            }
+            out.append(event)
+        }
+        if pending, new.connectivity == .online, let iso = new.exit?.countryCode {
+            pending = false
+            out.append(.connectivityRestored(country: iso, city: new.exit?.city, org: new.exit?.org))
+        }
+        return out
+    }
+}

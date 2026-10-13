@@ -137,6 +137,7 @@
 "notification.offline.body.hijack" = "OpenVPN-Hijack-Routen vorhanden — Tunnel vermutlich tot";
 /* %1 Flagge, %2 Stadt (kann leer sein) */
 "notification.online.title" = "Wieder online: %@ %@";
+"notification.online.title.noexit" = "Wieder online";
 "notification.leak.title" = "⚠️ Mögliches VPN-Leck";
 "notification.leak.body" = "VPN-Route aktiv, Datenverkehr tritt weiterhin über %@ aus";
 "notification.relay.on.title" = "Privat-Relay EIN";

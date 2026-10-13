@@ -35,6 +35,37 @@ final class ReducerTests: XCTestCase {
                                 new: state(.online, ip: "1.1.1.1", iso: "DE", org: "Vodafone"))
         XCTAssertTrue(ev.contains(.connectivityRestored(country: "DE", city: nil, org: "Vodafone")))
     }
+    // Field case 2026-10-13: "Back online: ❓". The probe recovers before the exit lookup.
+    func testRestoreWithoutExitIsHeldUntilTheExitArrives() {
+        var gate = RestoreGate()
+        let offline = state(.offline, ip: nil, iso: nil)
+        let onlineNoExit = state(.online, ip: nil, iso: nil)
+        let onlineDE = state(.online, ip: "1.1.1.1", iso: "DE", org: "Vodafone")
+        let first = gate.filter(Reducer.events(old: offline, new: onlineNoExit), new: onlineNoExit)
+        XCTAssertFalse(first.contains { if case .connectivityRestored = $0 { true } else { false } })
+        XCTAssertTrue(gate.pending)
+        let second = gate.filter(Reducer.events(old: onlineNoExit, new: onlineDE), new: onlineDE)
+        XCTAssertEqual(second.filter { if case .connectivityRestored = $0 { true } else { false } },
+                       [.connectivityRestored(country: "DE", city: nil, org: "Vodafone")])
+        XCTAssertFalse(gate.pending)
+    }
+    func testPendingRestoreIsDroppedWhenTheLinkFailsAgain() {
+        var gate = RestoreGate()
+        let offline = state(.offline, ip: nil, iso: nil)
+        let onlineNoExit = state(.online, ip: nil, iso: nil)
+        _ = gate.filter(Reducer.events(old: offline, new: onlineNoExit), new: onlineNoExit)
+        let lost = gate.filter(Reducer.events(old: onlineNoExit, new: offline), new: offline)
+        XCTAssertFalse(gate.pending)
+        XCTAssertTrue(lost.contains(.connectivityLost(hijackSuspected: false)))
+    }
+    func testRestoreWithExitPassesStraightThrough() {
+        var gate = RestoreGate()
+        let old = state(.offline, ip: nil, iso: nil)
+        let new = state(.online, ip: "1.1.1.1", iso: "DE", org: "Vodafone")
+        XCTAssertTrue(gate.filter(Reducer.events(old: old, new: new), new: new)
+            .contains(.connectivityRestored(country: "DE", city: nil, org: "Vodafone")))
+        XCTAssertFalse(gate.pending)
+    }
     func testCheckingToOnlineIsSilent() {
         XCTAssertEqual(Reducer.events(old: state(.checking, ip: nil, iso: nil),
                                       new: state(.online, ip: "1.1.1.1", iso: "DE", org: nil)), [])

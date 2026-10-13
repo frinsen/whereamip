@@ -17,6 +17,13 @@ final class NotificationTextTests: XCTestCase {
     func testLeak() {
         XCTAssertTrue(NotificationText.text(for: .leakSuspected(org: "Vodafone"))!.body.contains("Vodafone"))
     }
+    func testBackOnlineNeverShowsAQuestionMark() {
+        let known = NotificationText.text(for: .connectivityRestored(country: "DE", city: "Berlin", org: "Vodafone"))!
+        XCTAssertTrue(known.title.contains("🇩🇪"))
+        let unknown = NotificationText.text(for: .connectivityRestored(country: nil, city: nil, org: nil))!
+        XCTAssertFalse(unknown.title.contains("❓"))
+        XCTAssertEqual(unknown.title, L10n.string(.notificationOnlineTitleNoExit))
+    }
     func testRouteChangeAloneIsSilent() {
         XCTAssertNil(NotificationText.text(for: .vpnRouteChanged(vpnName: "Tailscale", interface: "utun0")))
     }

@@ -16,6 +16,11 @@ install-ready notes per version.
   applications-menu entry are standard desktop entries. elementary OS needs the community
   AppIconTray panel indicator to show the flag; see the README's Linux section.
 
+### Fixed
+- **"Back online: ❓"** — the notification fired the instant the connection returned, a
+  moment before the exit lookup answered. It now waits for the exit and says where you are
+  back online from; if the exit stays unknown it simply says "Back online".
+
 ### Changed
 - **Offline glyph is a crossed-out network symbol** instead of a crossed-out Wi-Fi symbol —
   the reachability probe fails the same way on Ethernet, Thunderbolt bridges and tethering,
