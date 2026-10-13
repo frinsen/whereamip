@@ -13,17 +13,27 @@ public struct InterfacePrefix: Equatable, Sendable {
 
 public enum RouteInspector {
     public static func isTunnelInterface(_ name: String) -> Bool {
-        name.hasPrefix("utun") || name.hasPrefix("ppp") || name.hasPrefix("ipsec")
+        #if os(Linux)
+        // Linux names are free-form, so the kernel's own link facts decide (see LinuxTunnel).
+        if LinuxTunnel.namePrefixes.contains(where: name.hasPrefix) || LinuxTunnel.isTunnelLink(name) { return true }
+        #endif
+        return name.hasPrefix("utun") || name.hasPrefix("ppp") || name.hasPrefix("ipsec")
     }
 
     /// Which interface owns the IPv4 default route? Connected UDP socket to 8.8.8.8:53 — NO packet is sent
     /// (UDP connect() only queries the kernel routing table), then getsockname → local addr → getifaddrs.
     public static func defaultRouteInterface() -> (interface: String, localAddress: String)? {
+        #if os(Linux)
+        let fd = socket(AF_INET, Int32(SOCK_DGRAM.rawValue), 0)
+        #else
         let fd = socket(AF_INET, SOCK_DGRAM, 0)
+        #endif
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         var addr = sockaddr_in()
+        #if canImport(Darwin)
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        #endif
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = UInt16(53).bigEndian
         inet_pton(AF_INET, "8.8.8.8", &addr.sin_addr)
@@ -51,11 +61,17 @@ public enum RouteInspector {
     /// using AF_INET6/sockaddr_in6 and a public IPv6 anycast address (Google DNS) as the
     /// connect() target — no packet is actually sent.
     public static func defaultRouteInterface6() -> (interface: String, localAddress: String)? {
+        #if os(Linux)
+        let fd = socket(AF_INET6, Int32(SOCK_DGRAM.rawValue), 0)
+        #else
         let fd = socket(AF_INET6, SOCK_DGRAM, 0)
+        #endif
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         var addr = sockaddr_in6()
+        #if canImport(Darwin)
         addr.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
+        #endif
         addr.sin6_family = sa_family_t(AF_INET6)
         addr.sin6_port = UInt16(53).bigEndian
         inet_pton(AF_INET6, "2001:4860:4860::8888", &addr.sin6_addr)
@@ -177,7 +193,12 @@ public enum RouteInspector {
         while let cur = ptr {
             defer { ptr = cur.pointee.ifa_next }
             let flags = Int32(cur.pointee.ifa_flags)
+            #if os(Linux)
+            // glibc declares the IFF_ flags in an enum, which Swift imports as Int.
+            guard flags & Int32(IFF_UP) != 0, flags & Int32(IFF_LOOPBACK) == 0 else { continue }
+            #else
             guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 else { continue }
+            #endif
             guard let sa = cur.pointee.ifa_addr, let netmask = cur.pointee.ifa_netmask else { continue }
             switch Int32(sa.pointee.sa_family) {
             case AF_INET:
@@ -207,7 +228,11 @@ public enum RouteInspector {
     }
 
     public static func snapshot(runningBundleIDs: [String] = []) -> RouteInfo {
+        #if os(Linux)
+        let hijack = RouteTable.liveHijackPairPresent()
+        #else
         let hijack = RouteTable.liveDump().map { RouteTable.hijackPairPresent(dump: $0) } ?? false
+        #endif
         if hijack {
             Log.route.error("snapshot: hijack route pair present (0.0.0.0/1 + 128.0.0.0/1)")
         }
@@ -220,7 +245,13 @@ public enum RouteInspector {
                              v6DefaultInterface: v6?.interface, v6IsVPN: v6IsVPN)
         }
         let isVPN = isTunnelInterface(iface)
+        #if os(Linux)
+        // NetworkManager's connection name, or a vendor-assigned interface name — the Linux
+        // equivalents of the registered network service (see LinuxServiceNamer).
+        let scServiceName = isVPN ? LinuxServiceNamer.serviceName(forInterface: iface) : nil
+        #else
         let scServiceName = isVPN ? SCServiceNamer.serviceName(forInterface: iface) : nil
+        #endif
         // Process scan is only worth its cost when the SC widening (A1) genuinely came up
         // empty on a tunnel — classic daemon tunnels are exactly the case scServiceName can
         // never explain, so scanning otherwise would just burn a libproc walk for nothing.

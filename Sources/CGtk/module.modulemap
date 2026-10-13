@@ -1,0 +1,6 @@
+module CGtk [system] {
+    header "shim.h"
+    link "ayatana-appindicator3"
+    link "X11"
+    export *
+}

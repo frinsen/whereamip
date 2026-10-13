@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 /// The welcome window's category pill: a small rounded-rect badge with uppercase,
@@ -111,3 +112,4 @@ public final class BadgePill: NSView {
         }
     }
 }
+#endif

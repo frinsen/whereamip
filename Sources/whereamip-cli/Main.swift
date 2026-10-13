@@ -88,6 +88,22 @@ struct Debug: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Live-stream WhereAmIP's diagnostic log (nothing is written to disk).")
     func run() async throws {
+        #if os(Linux)
+        // There is no system log stream to attach to without persisting entries (journald
+        // keeps them), so the trace is produced here instead: the same monitor the panel app
+        // runs, with its log switched on and written to stderr as it happens — every
+        // refresh, route snapshot, DNS round and verdict. To trace the panel app itself,
+        // start it with WHEREAMIP_DEBUG=1.
+        LogSink.isEnabled = true
+        let m = makeMonitor()
+        await m.fullRefresh()
+        var tick = 0
+        while true {
+            try await Task.sleep(nanoseconds: 30_000_000_000)
+            tick += 1
+            if tick % 10 == 0 { await m.fullRefresh() } else { await m.probeTick() }
+        }
+        #else
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
         process.arguments = ["stream", "--level", "debug",
@@ -97,6 +113,7 @@ struct Debug: AsyncParsableCommand {
         process.standardError = FileHandle.standardError
         try process.run()
         process.waitUntilExit()
+        #endif
     }
 }
 
@@ -124,12 +141,23 @@ struct Config: AsyncParsableCommand {
             guard value == "true" || value == "false" else {
                 throw SettingsError.invalid("applications must be true|false")
             }
+            #if os(Linux)
+            // On Linux "applications" is the launcher entry in the desktop's applications
+            // menu, pointing at the indicator app installed next to this CLI.
+            guard let indicator = LinuxDesktopEntry.indicatorExecutable(nextTo: CommandLine.arguments[0])
+                    ?? LinuxDesktopEntry.indicatorExecutable(nextTo: (try? FileManager.default
+                        .destinationOfSymbolicLink(atPath: "/proc/self/exe")) ?? "") else {
+                throw LinuxDesktopEntry.EntryError.cannotDetermineExecutable
+            }
+            try LinuxDesktopEntry.setInstalled(value == "true", kind: .launcher, executable: indicator)
+            #else
             guard let appPath = ApplicationsLink.appPath(fromExecutablePath: CommandLine.arguments[0]) else {
                 throw SettingsError.invalid(
                     "Could not determine the installed WhereAmIP.app location from this CLI — " +
                     "'applications' is only supported for Homebrew installs.")
             }
             try ApplicationsLink.setLinked(value == "true", bundlePath: appPath)
+            #endif
         }
     }
 }

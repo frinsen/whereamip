@@ -1,9 +1,12 @@
+#if os(macOS)
 import SystemConfiguration
+#endif
 
 /// Physical-interface classification via SCNetworkInterface — the system's own
 /// interface type and localized display name ("Wi-Fi", "iPhone USB", …); no
 /// hardcoded vendor knowledge (design rule: names come from the system).
 public enum InterfaceKind {
+    #if os(macOS)
     /// IMPURE: bsdName -> (kind, displayName) via SCNetworkInterfaceCopyAll.
     public static func lookup(bsdName: String) -> (kind: String, displayName: String)? {
         guard let ifaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else { return nil }
@@ -15,6 +18,7 @@ public enum InterfaceKind {
         }
         return nil
     }
+    #endif
     /// PURE, tested: SC type string -> short kind label.
     static func kindLabel(type: String, display: String?) -> String {
         switch type {

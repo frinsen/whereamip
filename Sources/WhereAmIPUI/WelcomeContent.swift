@@ -1,4 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#else
+import Foundation
+#endif
 import WhereAmIPCore
 
 /// The welcome window's prose: which heading it shows, and the Markdown body that
@@ -132,10 +136,18 @@ public enum WelcomeContent {
 
     // MARK: - rendering
 
-    private struct Block {
-        var text: String
-        var isBullet: Bool
+    /// One paragraph or bullet of the small Markdown subset this window renders, with its
+    /// inline `**bold**`/`*italic*` markup still in place. Public so a non-AppKit frontend
+    /// (the Linux welcome and help windows) renders the same blocks the same way.
+    public struct Block: Equatable {
+        public var text: String
+        public var isBullet: Bool
     }
+
+    /// The block structure of `markdown`, as `rendered` lays it out.
+    public static func blocks(_ markdown: String) -> [Block] { parse(markdown) }
+
+    #if canImport(AppKit)
 
     /// Renders the small Markdown subset the welcome copy uses — paragraphs,
     /// `- ` bullets, and inline `**bold**`/`*italic*` — for an AppKit label.
@@ -183,8 +195,10 @@ public enum WelcomeContent {
         return out
     }
 
-    static let bulletPrefix = "• "
     private static let bulletIndent: CGFloat = 11
+    #endif
+
+    public static let bulletPrefix = "• "
 
     /// Groups hard-wrapped source lines into blocks: a blank line ends one, a
     /// `- `/`* ` line starts a bullet, `#` headings lose their hashes, and every
@@ -226,6 +240,7 @@ public enum WelcomeContent {
         return nil
     }
 
+    #if canImport(AppKit)
     /// Inline Markdown only. `AttributedString(markdown:)` records emphasis as an
     /// `inlinePresentationIntent` *attribute* rather than as a bold/italic font, so
     /// the intents are mapped onto real fonts here — without that step `**bold**`
@@ -254,4 +269,5 @@ public enum WelcomeContent {
         }
         return result
     }
+    #endif
 }

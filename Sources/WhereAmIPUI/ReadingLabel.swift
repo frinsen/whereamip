@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 /// Labels for READING copy — prose the user reads, never interacts with.
@@ -37,3 +38,4 @@ public enum ReadingLabel {
         return label
     }
 }
+#endif

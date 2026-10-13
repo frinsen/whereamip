@@ -5,7 +5,7 @@
 # WhereAmIP
 
 [![Latest release](https://img.shields.io/github/v/release/frinsen/whereamip?label=release)](https://github.com/frinsen/whereamip/releases/latest)
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)](https://frinsen.github.io/whereamip/)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Linux-lightgrey)](https://frinsen.github.io/whereamip/)
 [![Homebrew tap](https://img.shields.io/badge/homebrew-frinsen%2Ftap-orange)](https://github.com/frinsen/homebrew-tap)
 [![MacPorts](https://img.shields.io/badge/macports-whereamip-blue)](https://ports.macports.org/port/whereamip/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -40,6 +40,7 @@ Stylized as **WhereAmIP** in the UI; the process, repo, and Homebrew formula nam
 - Honest freshness: the dropdown shows both "Since" (when the current state began, to the second) and "Checked" (when it was last verified), and a manual Refresh shows a brief loading cue in the menu bar
 - Speaks German when your Mac does — menu, notifications, welcome and help windows follow the system language, with English everywhere else (`whereamip` output stays English on purpose: it's a parseable interface). **Settings ▸ Language** overrides it in-app (English/Deutsch/system), and the change is live: the next time you open the menu it's in the new language, no restart
 - Native AppKit (`NSStatusItem` + `NSMenu`), zero third-party runtime dependencies, no API keys
+- **Also runs on Linux** — the same core and CLI, plus a panel indicator for GNOME, KDE, Cinnamon, Xfce, MATE, Budgie and elementary OS; see [Linux](#linux)
 
 ## Install
 
@@ -86,6 +87,67 @@ open /Applications/MacPorts/WhereAmIP.app
 ```
 
 The dropdown's update row knows it is a MacPorts install and copies `sudo port selfupdate && sudo port upgrade whereamip` when a release is out.
+
+## Linux
+
+The same app, built for Linux desktops: the whole core (exit lookups, IPv6 and DNS leak
+detection, VPN naming, the diagnostics report), the full `whereamip` CLI, and a **panel
+indicator** in place of the menu bar item — flag in the panel, the same dropdown, the same
+settings, English and German. Developed against Ubuntu 24.04, the base of elementary OS 8.
+
+### Install (builds from source, into `~/.local`, no sudo for the app itself)
+
+```bash
+sudo apt install git libgtk-3-dev libayatana-appindicator3-dev
+# A Swift toolchain, if you don't have one — swiftly installs it into your home directory
+# (https://swift.org/install/linux/); it lists any system packages it still needs:
+curl -O "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz"
+tar zxf "swiftly-$(uname -m).tar.gz" && ./swiftly init --quiet-shell-followup
+. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh" && hash -r
+
+git clone https://github.com/frinsen/whereamip.git && cd whereamip
+scripts/linux/install.sh
+```
+
+The script builds a release, installs `whereamip` and `whereamip-indicator` into
+`~/.local/lib/whereamip` (linked from `~/.local/bin`), adds WhereAmIP to your applications
+menu and starts it. The first-start window offers **Launch at Login**. To update, `git pull`
+and run the script again — a running copy then offers **Restart to finish update**.
+`scripts/linux/install.sh --uninstall` removes it again.
+
+### elementary OS: let the panel show the flag
+
+elementary OS's panel shows no third-party app indicators out of the box. The community
+[AppIconTray indicator](https://github.com/barunespadhy/wingpanel-indicator-appicontray)
+adds them (StatusNotifierItem support for Wingpanel):
+
+```bash
+sudo apt install wingpanel
+# download the .deb from its releases page, then:
+sudo dpkg -i ./wingpanel-indicator-appicontray_*_amd64.deb
+```
+
+Log out and back in, and the flag appears. Without it WhereAmIP still runs — it tells you
+once, in a notification, that the panel can't show it — and `whereamip status` works as
+always. Other desktops need nothing extra, except GNOME, which shows indicators through
+the AppIndicator extension (preinstalled on Ubuntu).
+
+### What differs from macOS
+
+- **VPN naming** reads the connection name from NetworkManager — whatever you called the
+  VPN in the network settings — and recognises Tailscale, Cloudflare WARP, NordVPN and
+  Mullvad by the interface names their own clients create. The macOS-only bundle-ID table
+  does not apply.
+- **DNS** reads the per-interface resolvers from systemd-resolved (plain `resolv.conf`
+  elsewhere); the leak check's lookups go through the system resolver, like every app's.
+- **No keyboard shortcuts** in the dropdown — a panel draws the menu, and panels don't pass
+  shortcuts on. Every copy row is a click instead; **Copy both exit addresses** is a visible
+  row when there is an IPv6 exit.
+- **No Private Relay** detection — iCloud Private Relay doesn't exist on Linux.
+- **`whereamip debug`** runs its own live trace (Linux has no in-memory system log to stream
+  without persisting it). For the panel app itself: `WHEREAMIP_DEBUG=1 whereamip-indicator`.
+- The **icon** is drawn for the panel as an image in all three styles (emoji flag, ISO code
+  on a badge, flag image), with the leak warning as a small badge in its corner.
 
 ## CLI
 
@@ -165,6 +227,8 @@ WhereAmIP has **no tracking, no analytics, no history, and no log files**. Nothi
 The DNS leak check is the one part that sends DNS queries of its own: per full refresh it looks up the TXT record of up to six random names under `test.dnscheck.tools` (each name is used once, so nothing is cached and every lookup reaches that zone's authoritative server, which reports which resolver address asked). That server therefore sees your resolvers' egress addresses — the same thing every website you visit sees — and nothing else about you; the queries carry no identifier beyond the random label. If that service is unreachable, a single TXT lookup of Google's `o-o.myaddr.l.google.com` beacon serves as the fallback. Reading your resolver *configuration* needs no network at all and always works. Turn the check off with `whereamip config set dns false` (or the "Check for DNS Leaks" toggle in Settings) and no such query is ever sent.
 
 WhereAmIP also checks `api.github.com/repos/frinsen/whereamip/releases/latest` a few times a day (at most once every six hours, plus whenever you hit Refresh) to see if a newer release exists — this is a passive version check only, it never downloads or installs anything, it just shows a dropdown row that copies your package manager's upgrade command for you to run yourself (or, for a zip install, opens the releases page in your browser when you click it). This check is on by default; turn it off with `whereamip config set updates false` (or the "Check for Updates" toggle in Settings) and no such request is ever made.
+
+On Linux the same promise holds: settings live in `~/.config/io.github.frinsen.whereamip.plist`, network lookups keep no disk cache or cookies, the panel icon is drawn into `$XDG_RUNTIME_DIR` (memory, gone at logout), and the log is written only to the terminal of whoever asked for it (`whereamip debug`, or `WHEREAMIP_DEBUG=1`) — never to the system journal, which would keep it.
 
 WhereAmIP does emit diagnostics through Apple's unified logging (`os.Logger`), but this creates no privacy problem: the app never writes a log file anywhere. Entries are logged at debug level, which macOS does not persist to disk by default — they exist only in the local system's in-memory ring buffer while you're actively streaming them with `whereamip debug` (or Console.app), and expire on their own shortly after. Nothing is collected, stored, or sent off your Mac.
 

@@ -1,3 +1,4 @@
+#if os(macOS)
 import XCTest
 @testable import WhereAmIPCore
 
@@ -98,3 +99,4 @@ final class RouteTableTests: XCTestCase {
         XCTAssertFalse(RouteTable.hijackPairPresent(dump: dump))
     }
 }
+#endif

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 private final class RelayRangesBundleToken {}
 
@@ -25,7 +28,12 @@ public struct RelayRanges: Sendable {
     }
 
     private static func findResourceBundle() -> Bundle {
+        #if os(Linux)
+        // SwiftPM on Linux emits resource bundles as plain `.resources` directories.
+        let bundleName = "whereamip_WhereAmIPCore.resources"
+        #else
         let bundleName = "whereamip_WhereAmIPCore.bundle"
+        #endif
         let token = Bundle(for: RelayRangesBundleToken.self)
         let candidates = [
             Bundle.main.resourceURL,
@@ -97,10 +105,17 @@ public struct HTTPIPFetcher: Sendable {
     let session: URLSession
     let deadline: Double
     static let url = URL(string: "http://api.ipify.org")!
-    public init(session: URLSession = URLSession(configuration: .default), deadlineSeconds: Double = 4) {
+    public init(session: URLSession = URLSession(configuration: .whereamip), deadlineSeconds: Double = 4) {
         self.session = session; self.deadline = deadlineSeconds
     }
     public func fetch() async -> String? {
+        #if os(Linux)
+        // iCloud Private Relay exists only on Apple platforms, so on Linux there is nothing
+        // for the plain-HTTP comparison to find — and no reason to spend a request on it.
+        // nil is the detector's "no measurement" input, which decides `.unknown`: shown
+        // nowhere, notified never.
+        return nil
+        #else
         let s = try? await withHardDeadline(seconds: deadline) { [session] in
             let (data, resp) = try await session.data(from: Self.url)
             guard (resp as? HTTPURLResponse)?.statusCode == 200,
@@ -110,5 +125,6 @@ public struct HTTPIPFetcher: Sendable {
         }
         Log.relay.debug("HTTPIPFetcher: httpIP=\(s ?? "nil", privacy: .public)")
         return s
+        #endif
     }
 }

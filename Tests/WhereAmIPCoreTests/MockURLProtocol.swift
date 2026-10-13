@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 final class MockURLProtocol: URLProtocol {
     nonisolated(unsafe) static var handlers: [String: (status: Int, body: Data)] = [:]  // key: URL absoluteString prefix

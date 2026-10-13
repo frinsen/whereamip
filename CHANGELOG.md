@@ -8,6 +8,14 @@ install-ready notes per version.
 
 ## [Unreleased]
 
+### Added
+- **Linux.** WhereAmIP now builds and runs on Linux desktops — the whole core, the full
+  `whereamip` CLI, and a panel indicator with the same dropdown and settings (English and
+  German), installed per user by `scripts/linux/install.sh`. VPN names come from
+  NetworkManager, DNS configuration from systemd-resolved, and Launch at Login / the
+  applications-menu entry are standard desktop entries. elementary OS needs the community
+  AppIconTray panel indicator to show the flag; see the README's Linux section.
+
 ### Changed
 - **Offline glyph is a crossed-out network symbol** instead of a crossed-out Wi-Fi symbol —
   the reachability probe fails the same way on Ethernet, Thunderbolt bridges and tethering,

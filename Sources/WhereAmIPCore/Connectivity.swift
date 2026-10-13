@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct ProbeGate: Equatable, Sendable {
     private var connectivity: Connectivity = .checking
@@ -21,7 +24,7 @@ public struct ConnectivityProbe: Sendable {
     let session: URLSession
     let deadline: Double
     static let url = URL(string: "https://www.gstatic.com/generate_204")!
-    public init(session: URLSession = URLSession(configuration: .default), deadlineSeconds: Double = 4) {
+    public init(session: URLSession = URLSession(configuration: .whereamip), deadlineSeconds: Double = 4) {
         self.session = session; self.deadline = deadlineSeconds
     }
     public func check() async -> Bool {

@@ -96,6 +96,8 @@
 "settings.notifications" = "Mitteilungen anzeigen";
 "settings.launchAtLogin" = "Bei der Anmeldung starten";
 "settings.applicationsLink" = "Zum Ordner „Programme“ hinzufügen";
+/* Nur Linux: derselbe Schalter verwaltet dort den Eintrag im Anwendungsmenü des Desktops */
+"settings.launcherEntry" = "Im Anwendungsmenü anzeigen";
 "settings.updates" = "Nach Updates suchen";
 "settings.dnsProbe" = "Auf DNS-Lecks prüfen";
 "settings.welcome" = "Willkommensfenster anzeigen";
@@ -148,6 +150,9 @@
 "notification.dns.body.egress" = " — Resolver-Austritt %@";
 "notification.flag.unknown" = "❓";
 "notification.org.unknown" = "deinen Internetanbieter";
+/* Nur Linux: einmal beim Start, wenn kein Panel das Symbol anzeigen kann */
+"notification.noTray.title" = "WhereAmIP läuft ohne Panel-Symbol";
+"notification.noTray.body" = "Dieses Panel zeigt keine App-Indikatoren. Unter elementary OS ergänzt sie der AppIconTray-Indikator; bis dahin zeigt whereamip status dasselbe im Terminal.";
 
 /* MARK: - Willkommensfenster (Fließtext liegt in Resources/welcome/de/*.md) */
 
@@ -165,6 +170,8 @@
 /* Nur in der Vorstellung — der Satz sagt neuen Leuten, wo die Flagge steckt; wer
    „Neue Funktionen" öffnet, weiß das längst */
 "welcome.hint" = "Flagge nicht zu sehen? In einer vollen Menüleiste verschwindet sie leicht hinter der Notch.";
+/* Nur Linux, statt des Notch-Hinweises */
+"welcome.trayHint" = "Flagge nicht zu sehen? Manche Panels, auch das von elementary OS, zeigen App-Indikatoren erst mit einer Erweiterung — welche, steht in der README.";
 /* Abschnittsüberschrift. Hier normal geschrieben, die Großschreibung macht die View */
 "welcome.setup.header" = "Deine Einrichtung";
 /* Die zugehörige Bildunterschrift: die Überschrift benennt, die Unterschrift erklärt.

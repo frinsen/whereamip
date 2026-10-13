@@ -1,3 +1,4 @@
+#if os(macOS)
 import Darwin
 
 /// Running process names via libproc — kernel API, no AppKit, works from the CLI.
@@ -31,3 +32,4 @@ public enum ProcessScanner {
         return names
     }
 }
+#endif

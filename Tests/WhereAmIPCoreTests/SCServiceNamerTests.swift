@@ -1,3 +1,4 @@
+#if os(macOS)
 import XCTest
 @testable import WhereAmIPCore
 
@@ -59,3 +60,4 @@ final class SCServiceNamerTests: XCTestCase {
         XCTAssertNil(SCServiceNamer.matchingServiceID(candidates: [], interface: "utun0"))
     }
 }
+#endif

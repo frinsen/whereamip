@@ -37,8 +37,68 @@ public enum AppLanguage {
     /// through to German would be a worse answer than the honest per-file English fallback
     /// that `LocalizedMarkdown` already provides.
     public static func effectiveLanguages(override stored: String,
-                                          systemPreference: [String] = Locale.preferredLanguages) -> [String] {
+                                          systemPreference: [String] = AppLanguage.systemPreferredLanguages) -> [String] {
         guard let code = overrideCode(stored) else { return systemPreference }
         return [code]
+    }
+
+    /// The user's language list as their system states it — what "System Language" follows.
+    ///
+    /// On Linux this cannot come from Foundation: swift-corelibs-foundation answers
+    /// `Locale.preferredLanguages` (and `Locale.current`) from its own defaults, never from
+    /// the desktop session, so a German desktop would get an English app. The session's
+    /// language lives in the POSIX environment instead (see `posixPreferredLanguages`).
+    public static var systemPreferredLanguages: [String] {
+        #if os(Linux)
+        return posixPreferredLanguages(environment: ProcessInfo.processInfo.environment)
+        #else
+        return Locale.preferredLanguages
+        #endif
+    }
+
+    /// The first language in `languages` this build ships ("de-AT" → "de"), in preference
+    /// order — or nil when none is. Region variants share their language's translation, the
+    /// same rule `LocalizedMarkdown` applies to the bundled Markdown.
+    public static func firstSupported(in languages: [String]) -> String? {
+        for language in languages {
+            let code = language.prefix { $0 != "-" && $0 != "_" }.lowercased()
+            if supported.contains(code) { return code }
+        }
+        return nil
+    }
+
+    /// PURE, tested. The language list gettext would use: `LANGUAGE` (a colon-separated
+    /// priority list) first — ignored, as gettext ignores it, when the locale itself is C or
+    /// POSIX — then the first one set of `LC_ALL`, `LC_MESSAGES`, `LANG`. `de_DE.UTF-8@euro`
+    /// becomes the BCP 47 tag `de-DE`; C/POSIX mean "no preference" and yield nothing.
+    public static func posixPreferredLanguages(environment: [String: String]) -> [String] {
+        let locale = ["LC_ALL", "LC_MESSAGES", "LANG"].lazy.compactMap { environment[$0] }.first { !$0.isEmpty }
+        guard let primary = locale.flatMap(languageTag) else { return [] }
+        let list = (environment["LANGUAGE"] ?? "").split(separator: ":").compactMap { languageTag(String($0)) }
+        var out: [String] = []
+        for tag in list + [primary] where !out.contains(tag) { out.append(tag) }
+        return out
+    }
+
+    /// The locale dates are formatted in: `Locale.current` on macOS; on Linux the session's
+    /// `LC_ALL` / `LC_TIME` / `LANG`, for the same reason as `systemPreferredLanguages`.
+    public static var systemLocale: Locale {
+        #if os(Linux)
+        let environment = ProcessInfo.processInfo.environment
+        let posix = ["LC_ALL", "LC_TIME", "LANG"].lazy.compactMap { environment[$0] }.first { !$0.isEmpty }
+        guard let tag = posix.flatMap(languageTag) else { return Locale.current }
+        return Locale(identifier: tag.replacingOccurrences(of: "-", with: "_"))
+        #else
+        return Locale.current
+        #endif
+    }
+
+    /// `de_DE.UTF-8@euro` → `de-DE`; nil for C, POSIX and anything without a language.
+    static func languageTag(_ posix: String) -> String? {
+        let base = posix.prefix { $0 != "." && $0 != "@" }
+        guard !base.isEmpty, base != "C", base != "POSIX" else { return nil }
+        let parts = base.split(separator: "_", maxSplits: 1)
+        guard let language = parts.first, language.count >= 2, language.allSatisfy(\.isLetter) else { return nil }
+        return parts.count == 2 ? "\(language)-\(parts[1])" : String(language)
     }
 }

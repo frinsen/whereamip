@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import WhereAmIPCore
 
@@ -565,3 +566,4 @@ public enum MenuBuilder {
         return Locale(identifier: "en_US").localizedString(forRegionCode: iso) ?? iso
     }
 }
+#endif

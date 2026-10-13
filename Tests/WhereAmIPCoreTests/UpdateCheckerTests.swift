@@ -1,5 +1,8 @@
 import XCTest
 @testable import WhereAmIPCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 final class UpdateCheckerTests: XCTestCase {
     override func setUp() { MockURLProtocol.reset() }

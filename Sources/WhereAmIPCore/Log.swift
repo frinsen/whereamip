@@ -1,4 +1,6 @@
+#if canImport(os)
 import os
+#endif
 
 // Public (not just internal to this module) so WhereAmIPApp can log through
 // the same subsystem/categories — e.g. AppDelegate's relaunch() failure path

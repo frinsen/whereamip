@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 struct BadResponse: Error {}
 
@@ -11,7 +14,7 @@ struct GeoEndpoint: Sendable {
 public struct GeoProviderChain: Sendable {
     let session: URLSession
     let deadline: Double
-    public init(session: URLSession = URLSession(configuration: .default), deadlineSeconds: Double = 5) {
+    public init(session: URLSession = URLSession(configuration: .whereamip), deadlineSeconds: Double = 5) {
         self.session = session
         self.deadline = deadlineSeconds
     }

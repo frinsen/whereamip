@@ -24,7 +24,11 @@ public enum DiagnosticsReport {
     /// rows use (see `MenuBuilder.timeFormatter`) — a report pasted by a German user
     /// should read the way their menu did. Tests inject their own fixed formatter.
     public static let timeFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .medium; return f
+        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .medium
+        #if os(Linux)
+        f.locale = AppLanguage.systemLocale   // Foundation there ignores the session's locale
+        #endif
+        return f
     }()
 
     /// Width of the label column. Continuation lines are indented by exactly this

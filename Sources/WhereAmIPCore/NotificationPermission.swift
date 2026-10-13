@@ -1,3 +1,4 @@
+#if os(macOS)
 import UserNotifications
 
 /// What should happen next when the user opts to turn notifications on,
@@ -30,3 +31,4 @@ public enum NotificationPermission {
         }
     }
 }
+#endif

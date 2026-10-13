@@ -1,3 +1,4 @@
+#if os(macOS)
 import UserNotifications
 import XCTest
 @testable import WhereAmIPCore
@@ -19,3 +20,4 @@ final class NotificationPermissionTests: XCTestCase {
         XCTAssertEqual(NotificationPermission.action(for: .provisional), .enableDirectly)
     }
 }
+#endif
