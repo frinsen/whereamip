@@ -106,6 +106,10 @@ final class L10nTests: XCTestCase {
         return found
     }
 
+    // macOS only: on Linux, swift-corelibs-foundation's matcher ignores the preference list
+    // (it answers "de" for ["en"]), which is why L10n resolves the system language itself
+    // there — covered by AppLanguageLinuxTests instead.
+    #if os(macOS)
     /// Foundation, not us, decides which `.lproj` a German Mac reads — so this pins the two
     /// things that decision depends on: that the shipped bundle actually ADVERTISES both
     /// localizations, and that Foundation's own matcher picks German for a German
@@ -126,6 +130,8 @@ final class L10nTests: XCTestCase {
         }
     }
 
+    #endif
+
     /// One heading, both variants, every locale: the category the heading used to spell
     /// out ("Welcome to …", "— what's new", "— Neuerungen") now lives in the badge above
     /// it, and having it in BOTH places is exactly the duplication this change removed.
@@ -143,6 +149,7 @@ final class L10nTests: XCTestCase {
         }
     }
 
+    #if canImport(AppKit)
     /// The welcome window's notify caption is a SINGLE-LINE label in a fixed 353pt slot
     /// (see WelcomeWindow) — it truncates rather than wraps. German runs longer than
     /// English almost by default, so this is measured, not eyeballed, for every locale.
@@ -180,6 +187,8 @@ final class L10nTests: XCTestCase {
         }
     }
 
+    #endif
+
     func testKeysAreLowercaseDotSeparatedAndUnderAKnownPrefix() {
         let prefixes = ["menu.", "settings.", "dns.", "notification.", "welcome.", "help."]
         for key in L10nKey.allCases {
@@ -191,6 +200,7 @@ final class L10nTests: XCTestCase {
 
     // MARK: - bundle resolution from a real .app layout
 
+    #if canImport(AppKit)
     /// make-app-bundle.sh copies the SwiftPM resource bundle into
     /// `WhereAmIP.app/Contents/Resources/`. Nothing in `swift test` exercises that
     /// path (tests resolve from `.build/debug/`), so this rebuilds that layout in a
@@ -224,6 +234,8 @@ final class L10nTests: XCTestCase {
         XCTAssertNotNil(resolved.url(forResource: "welcome/intro", withExtension: "md"))
         XCTAssertNotNil(resolved.url(forResource: "flags/de", withExtension: "png"))
     }
+
+    #endif
 
     func testResolutionReturnsNilRatherThanCrashingWhenNothingIsFound() {
         let fm = FileManager.default

@@ -92,6 +92,9 @@
 "settings.notifications" = "Show Notifications";
 "settings.launchAtLogin" = "Launch at Login";
 "settings.applicationsLink" = "Add to Applications folder";
+/* Linux build only: the same toggle, which there manages the app's entry in the desktop's
+   applications menu (a .desktop launcher) — there is no Applications folder to add to. */
+"settings.launcherEntry" = "Show in Applications Menu";
 "settings.updates" = "Check for Updates";
 "settings.dnsProbe" = "Check for DNS Leaks";
 "settings.welcome" = "Show Welcome Window";
@@ -146,6 +149,10 @@
 "notification.dns.body.egress" = " — resolver egress %@";
 "notification.flag.unknown" = "❓";
 "notification.org.unknown" = "your ISP";
+/* Linux build only: sent once at start when no panel on this desktop can show the icon,
+   so the app is not silently invisible */
+"notification.noTray.title" = "WhereAmIP is running without a panel icon";
+"notification.noTray.body" = "This panel shows no app indicators. On elementary OS, the AppIconTray indicator adds them; until then, whereamip status shows the same in a terminal.";
 
 /* MARK: - welcome window (body copy lives in Resources/welcome/*.md) */
 
@@ -161,6 +168,9 @@
 /* Shown in the first-run pitch only — it tells a new reader where to look for the
    flag, which is not what someone opening What's New came for */
 "welcome.hint" = "Can't see the flag? A crowded menu bar may hide it behind the notch.";
+/* Linux build only, in place of the notch hint: some panels show no app indicators until
+   an add-on is installed — elementary OS's among them, which is the README's to name */
+"welcome.trayHint" = "Can't see the flag? Some panels, elementary OS's among them, only show app indicators with an add-on — the README says which.";
 /* Section header. Title case here, uppercased by the view, exactly like the badges */
 "welcome.setup.header" = "Your setup";
 /* Its caption: the header carries the pattern, this carries the explanation. Verb

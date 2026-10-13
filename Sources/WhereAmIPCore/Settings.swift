@@ -14,13 +14,32 @@ public final class Settings: @unchecked Sendable {
     // identifier (`...whereamip.cli`), so it keeps using the real named suite unaffected.
     public init(defaults: UserDefaults = UserDefaults(suiteName: Settings.suiteName) ?? .standard) { d = defaults }
 
+    /// Linux only, and load-bearing there: swift-corelibs-foundation keeps preferences in a
+    /// per-process cache that reaches the file only on `synchronize()` — not at exit, so a
+    /// `whereamip config set` that skipped it changed nothing — and that picks up another
+    /// process's writes only on the same call. macOS's cfprefsd does both on its own, so
+    /// these are no-ops there.
+    private func persist() {
+        #if os(Linux)
+        d.synchronize()
+        #endif
+    }
+
+    /// Re-reads values another process (the CLI) may have changed. For long-running
+    /// frontends; a fresh `Settings` in a new process always starts from the file.
+    public func refreshFromDisk() {
+        #if os(Linux)
+        d.synchronize()
+        #endif
+    }
+
     public var menuBarStyle: MenuBarStyle {
         get { MenuBarStyle(rawValue: d.string(forKey: "menuBarStyle") ?? "") ?? .emoji }
-        set { d.set(newValue.rawValue, forKey: "menuBarStyle") }
+        set { d.set(newValue.rawValue, forKey: "menuBarStyle"); persist() }
     }
     public var notificationsEnabled: Bool {
         get { d.bool(forKey: "notificationsEnabled") }
-        set { d.set(newValue, forKey: "notificationsEnabled") }
+        set { d.set(newValue, forKey: "notificationsEnabled"); persist() }
     }
     // Default-on, unlike notificationsEnabled: `d.bool(forKey:)` returns false
     // for an absent key, which would make "unset" indistinguishable from
@@ -28,11 +47,11 @@ public final class Settings: @unchecked Sendable {
     // install checks for updates by default.
     public var updatesEnabled: Bool {
         get { d.object(forKey: "updatesEnabled") == nil ? true : d.bool(forKey: "updatesEnabled") }
-        set { d.set(newValue, forKey: "updatesEnabled") }
+        set { d.set(newValue, forKey: "updatesEnabled"); persist() }
     }
     public var dnsProbeEnabled: Bool {
         get { d.object(forKey: "dnsProbeEnabled") == nil ? true : d.bool(forKey: "dnsProbeEnabled") }
-        set { d.set(newValue, forKey: "dnsProbeEnabled") }
+        set { d.set(newValue, forKey: "dnsProbeEnabled"); persist() }
     }
     /// The app's UI language: `system` (default) or a code from `AppLanguage.supported`.
     /// The getter normalizes on the way OUT as well as the setter validating on the way in,
@@ -40,7 +59,7 @@ public final class Settings: @unchecked Sendable {
     /// `system` instead of leaving the UI stuck on a language this build cannot render.
     public var language: String {
         get { AppLanguage.overrideCode(d.string(forKey: "language") ?? "") ?? AppLanguage.system }
-        set { d.set(newValue, forKey: "language") }
+        set { d.set(newValue, forKey: "language"); persist() }
     }
     // Internal, not surfaced in `set(key:value:)`/the config-command switch below:
     // the milestone (see `welcomeMilestone` in Version.swift) last
@@ -52,7 +71,7 @@ public final class Settings: @unchecked Sendable {
     // rather than just whether any welcome ever happened.
     public var welcomedMilestone: String {
         get { d.string(forKey: "welcomedMilestone") ?? "" }
-        set { d.set(newValue, forKey: "welcomedMilestone") }
+        set { d.set(newValue, forKey: "welcomedMilestone"); persist() }
     }
     public func set(key: String, value: String) throws {
         switch key {
@@ -84,13 +103,22 @@ public final class Settings: @unchecked Sendable {
         }
     }
     /// `applicationsLinkPath` is injectable for tests; real callers use the
-    /// default `/Applications/WhereAmIP.app`. Unlike the other values
+    /// default `/Applications/WhereAmIP.app` — on Linux, the launcher entry in the
+    /// desktop's applications menu (see LinuxDesktopEntry). Unlike the other values
     /// this one isn't read from `d` — it's live filesystem state.
-    public func allValues(applicationsLinkPath: String = "/Applications/WhereAmIP.app") -> [(key: String, value: String)] {
+    public func allValues(applicationsLinkPath: String = Settings.defaultApplicationsLinkPath) -> [(key: String, value: String)] {
         [("notify", String(notificationsEnabled)), ("style", menuBarStyle.rawValue), ("updates", String(updatesEnabled)),
          ("dns", String(dnsProbeEnabled)), ("language", language),
-         ("applications", String(ApplicationsLink.isLinked(linkPath: applicationsLinkPath)))]
+         ("applications", String(Settings.applicationsLinked(at: applicationsLinkPath)))]
     }
+
+    #if os(Linux)
+    public static var defaultApplicationsLinkPath: String { LinuxDesktopEntry.path(.launcher) }
+    static func applicationsLinked(at path: String) -> Bool { LinuxDesktopEntry.isInstalled(at: path) }
+    #else
+    public static let defaultApplicationsLinkPath = "/Applications/WhereAmIP.app"
+    static func applicationsLinked(at path: String) -> Bool { ApplicationsLink.isLinked(linkPath: path) }
+    #endif
 }
 
 /// Whether the welcome window should be shown automatically at launch, given

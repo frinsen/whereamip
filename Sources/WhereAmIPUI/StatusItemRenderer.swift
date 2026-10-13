@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import WhereAmIPCore
 
@@ -50,3 +51,4 @@ public enum StatusItemRenderer {
         }
     }
 }
+#endif

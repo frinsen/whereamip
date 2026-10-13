@@ -69,6 +69,7 @@ final class LanguageOverrideTests: XCTestCase {
         XCTAssertTrue(HelpContent.markdown().contains("Keyboard shortcuts"))
     }
 
+    #if canImport(AppKit)
     /// The heading itself is now language-NEUTRAL — "WhereAmIP v%@" in every locale,
     /// because the category it used to spell out moved into the badge. So the thing that
     /// has to follow the override alongside the body is the badge, and that is what this
@@ -85,6 +86,8 @@ final class LanguageOverrideTests: XCTestCase {
         XCTAssertEqual(BadgePill.forVariant(.whatsNew).text, "WHAT'S NEW")
     }
 
+    #endif
+
     /// The milestone decision is a version comparison, not a text one — it must not shift
     /// when the language does.
     func testWhichMilestoneIsShownIsLanguageIndependent() {
@@ -100,6 +103,7 @@ final class LanguageOverrideTests: XCTestCase {
 
     // MARK: - the whole menu, and notifications
 
+    #if canImport(AppKit)
     func testTheDropdownRendersInTheOverriddenLanguage() {
         let state = ExitState(connectivity: .online,
                               exit: ExitInfo(ip: "1.2.3.4", countryCode: "DE", city: "Berlin",
@@ -121,6 +125,8 @@ final class LanguageOverrideTests: XCTestCase {
         XCTAssertTrue(english.contains("Refresh"), "got: \(english)")
         XCTAssertTrue(english.contains("Quit WhereAmIP"))
     }
+
+    #endif
 
     /// Notifications go through L10n like everything else, so they follow for free — but
     /// "for free" is worth one assertion, since they are built on a different code path.

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Stack-pinned exit-IP discovery: `api4.ipify.org` has only an A record (so a request to it
 /// is forced over IPv4) and `api6.ipify.org` has only an AAAA record (forced over IPv6).
@@ -19,7 +22,7 @@ public struct StackPinnedIP: Sendable {
     static let url4 = URL(string: "https://api4.ipify.org")!
     static let url6 = URL(string: "https://api6.ipify.org")!
 
-    public init(session: URLSession = URLSession(configuration: .default), deadlineSeconds: Double = 4) {
+    public init(session: URLSession = URLSession(configuration: .whereamip), deadlineSeconds: Double = 4) {
         self.session = session
         self.deadline = deadlineSeconds
     }

@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 /// The welcome window's layout: every view it stacks, every gap between them, and
@@ -382,3 +383,4 @@ public enum WelcomeLayout {
         return row
     }
 }
+#endif

@@ -1,5 +1,7 @@
 import Foundation
+#if os(macOS)
 import SystemConfiguration
+#endif
 
 /// Raw SCDynamicStore DNS dictionaries, keyed by store key — the syscall boundary returns
 /// dumb data so `parse` stays pure and fixture-testable (the RouteTable.liveDump pattern).
@@ -15,6 +17,7 @@ public struct DNSRawConfig {
 }
 
 public enum DNSConfigReader {
+    #if os(macOS)
     /// IMPURE: one SCDynamicStore read (mirrors SCServiceNamer's store usage).
     public static func snapshotRaw() -> DNSRawConfig {
         guard let store = SCDynamicStoreCreate(nil, "whereamip-dns" as CFString, nil, nil) else {
@@ -39,6 +42,7 @@ public enum DNSConfigReader {
         }
         return raw
     }
+    #endif
 
     /// PURE: raw dictionaries → model. Unique by (address, interface); global first, then
     /// scoped services in deterministic (sorted-ID) order.
@@ -81,6 +85,10 @@ public enum DNSConfigReader {
 public struct LiveDNSConfigReader: Sendable {
     public init() {}
     public func snapshot() -> (resolvers: [DNSResolver], encryption: DNSEncryption) {
-        DNSConfigReader.parse(DNSConfigReader.snapshotRaw())
+        #if os(Linux)
+        return LinuxDNSConfigReader.snapshot()
+        #else
+        return DNSConfigReader.parse(DNSConfigReader.snapshotRaw())
+        #endif
     }
 }

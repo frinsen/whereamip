@@ -1,3 +1,4 @@
+#if os(macOS)
 import SystemConfiguration
 
 public enum SCServiceNamer {
@@ -46,3 +47,4 @@ public enum SCServiceNamer {
         return nil
     }
 }
+#endif

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Numeric segment-wise semver-ish comparison. Tolerates a leading "v" and a
 /// "-prerelease" suffix; only the dotted numeric core is compared. A
@@ -120,7 +123,7 @@ public struct UpdateChecker: Sendable {
     private let deadline: Double
     static let url = URL(string: "https://api.github.com/repos/frinsen/whereamip/releases/latest")!
 
-    public init(session: URLSession = URLSession(configuration: .default), deadlineSeconds: Double = 5) {
+    public init(session: URLSession = URLSession(configuration: .whereamip), deadlineSeconds: Double = 5) {
         self.session = session
         self.deadline = deadlineSeconds
     }

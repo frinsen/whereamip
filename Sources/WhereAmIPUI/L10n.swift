@@ -75,6 +75,8 @@ public enum L10nKey: String, CaseIterable {
     case settingsNotifications = "settings.notifications"
     case settingsLaunchAtLogin = "settings.launchAtLogin"
     case settingsApplicationsLink = "settings.applicationsLink"
+    /// Linux build only — the desktop's applications menu, not an Applications folder.
+    case settingsLauncherEntry = "settings.launcherEntry"
     case settingsUpdates = "settings.updates"
     case settingsDNSProbe = "settings.dnsProbe"
     case settingsWelcome = "settings.welcome"
@@ -125,6 +127,9 @@ public enum L10nKey: String, CaseIterable {
     case notificationDNSBodyEgress = "notification.dns.body.egress"
     case notificationFlagUnknown = "notification.flag.unknown"
     case notificationOrgUnknown = "notification.org.unknown"
+    /// Linux build only — no panel on this desktop can show the indicator.
+    case notificationNoTrayTitle = "notification.noTray.title"
+    case notificationNoTrayBody = "notification.noTray.body"
 
     // MARK: - welcome: the first-run / what's-new window
     //
@@ -150,6 +155,8 @@ public enum L10nKey: String, CaseIterable {
     case welcomeBadgeWhatsNew = "welcome.badge.whatsNew"
     /// First-run pitch only — see `WelcomeContent.showsNotchHint(variant:)`.
     case welcomeHint = "welcome.hint"
+    /// Linux build only, in place of `welcomeHint`.
+    case welcomeTrayHint = "welcome.trayHint"
     /// Section header for the toggles. Stored title case, uppercased by the view
     /// (WelcomeLayout.sectionHeader), the same split the badges make.
     case welcomeSetupHeader = "welcome.setup.header"
@@ -203,7 +210,17 @@ public enum L10n {
     /// fallback the rest of this file relies on. (SwiftPM leaves the .strings files as
     /// plain text in the bundle, which is what makes the sub-bundle load work.)
     static func stringsBundle() -> Bundle {
-        guard let code = AppLanguage.overrideCode(languageSetting()) else { return uiResourceBundle }
+        guard let code = AppLanguage.overrideCode(languageSetting()) else {
+            #if os(Linux)
+            // Foundation's own .lproj matching on Linux works from its built-in locale, not
+            // the desktop session's language, so "System Language" is resolved here from
+            // the session's list — the same list LocalizedMarkdown walks for the Markdown.
+            if let system = AppLanguage.firstSupported(in: AppLanguage.systemPreferredLanguages) {
+                return lproj(system) ?? uiResourceBundle
+            }
+            #endif
+            return uiResourceBundle
+        }
         return lproj(code) ?? uiResourceBundle
     }
 

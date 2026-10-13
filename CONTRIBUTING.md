@@ -3,7 +3,33 @@
 - Build: `swift build`  ·  Test: `swift test`  ·  App bundle: `scripts/make-app-bundle.sh`
 - Logic lives in `WhereAmIPCore` and `WhereAmIPUI`, both unit-tested (see `Tests/`).
 - Refresh data snapshots: `scripts/update-flags.sh`, `scripts/update-relay-ranges.sh`.
-- PRs run CI (build + test on macOS). Keep the CLI's `--json` output backward compatible.
+- PRs run CI (build + test on macOS and on Linux). Keep the CLI's `--json` output backward compatible.
+
+## Linux
+
+The package builds on Linux too (Swift 5.9+, plus `libgtk-3-dev` and
+`libayatana-appindicator3-dev` for the panel app): `swift build` and `swift test` work the
+same, and `scripts/linux/install.sh` installs into `~/.local`. `Package.swift` declares the
+macOS package verbatim and then, under `#if os(Linux)`, swaps the AppKit app for the Linux
+targets — so nothing Linux-specific can reach the macOS build.
+
+- **Core** compiles on both. Each macOS-only reader has a Linux counterpart in a
+  `*+Linux.swift` / `Linux*.swift` file behind `#if os(Linux)`: `/proc/net/route` for the
+  hijack pair, sysfs for interface kinds and tunnel detection, NetworkManager for VPN names
+  (`LinuxServiceNamer`), systemd-resolved for DNS config, glibc's resolver (`CLinuxSupport`)
+  for the egress probe, and freedesktop `.desktop` entries for Launch at Login and the
+  applications menu. Their parsers are pure and tested in `Tests/WhereAmIPLinuxTests`.
+- **`WhereAmIPLinuxUI`** builds the panel menu as data (`MenuModelBuilder`) and decides the
+  panel icon (`PanelIcon`); **`whereamip-indicator`** is the GTK/AppIndicator glue (`CGtk`
+  holds the few C helpers Swift can't call directly). When a row changes in `MenuBuilder`,
+  change it in `MenuModelBuilder` too — `MenuModelTests` pins the shared rows.
+- Linux has its own help and first-run copy (no shortcuts, a panel instead of a menu bar):
+  `Sources/WhereAmIPLinuxUI/Resources/{help,welcome}/`, translated the same way as the macOS
+  Markdown below.
+- Two Foundation differences shape the code, both commented where they bite: preferences
+  reach the file only on `synchronize()` (see `Settings.persist`), and `Locale` ignores the
+  session's `LANG`, so "System Language" is read from the POSIX environment
+  (`AppLanguage.systemPreferredLanguages`).
 
 ## Editing user-facing texts
 
@@ -49,6 +75,11 @@ captures live detector assertions.
 Most VPNs need no code: if the client registers a macOS network service, `SCServiceNamer`
 finds its name and the app shows it. That path is structural and vendor-neutral — prefer
 fixing it there if a service name exists but isn't being read.
+
+On Linux the structural source is NetworkManager's connection name, plus the short table of
+interface names a vendor's own Linux client assigns (`LinuxServiceNamer.vendorInterfaces` in
+`Sources/WhereAmIPCore/LinuxVPNNaming.swift`) — same bar as below: a constant that vendor
+chose, never a generic default like `tun0` or `wg0`.
 
 A *fingerprint* is for the clients that register nothing (classic daemons, some native
 profiles). They live in `Sources/WhereAmIPCore/VPNNamer.swift`:

@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(dnssd)
 import dnssd
+#endif
 
 /// Egress-level DNS leak probe. A TXT query for o-o.myaddr.l.google.com answers with the IP
 /// of the resolver that performed the lookup (the dnsleaktest.com mechanism). Sent through
@@ -46,6 +48,7 @@ public struct DNSEgressProbe: Sendable {
         return out
     }
 
+    #if os(macOS)
     /// IMPURE dnssd bridge. Accumulates TXT strings until the callback reports no MoreComing,
     /// then resumes; a queue-scheduled timeout resumes with whatever arrived (usually []).
     /// The DNSServiceRef is always deallocated on the same queue — never leaked, never raced.
@@ -85,4 +88,5 @@ public struct DNSEgressProbe: Sendable {
             }
         }
     }
+    #endif
 }

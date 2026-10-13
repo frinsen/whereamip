@@ -16,7 +16,7 @@ import Foundation
 /// pure addition. It also stays inside the ResourceBundleLocator pattern: everything is still
 /// resolved through `Bundle.url(forResource:withExtension:)` on the located bundle, never
 /// through `Bundle.module` (banned here) or a constructed path.
-enum LocalizedMarkdown {
+public enum LocalizedMarkdown {
     /// The language the un-suffixed files are written in. Reaching it in the preference list
     /// stops the search: if English outranks German for this user, English is what they want,
     /// even when a German file exists.
@@ -28,7 +28,7 @@ enum LocalizedMarkdown {
     ///
     /// `preferredLanguages` is injected (defaulting to the real user preference) so the
     /// language-selection rules are testable without touching system settings.
-    static func load(folder: String, name: String, bundle: Bundle,
+    public static func load(folder: String, name: String, bundle: Bundle,
                      preferredLanguages: [String] = L10n.effectiveLanguages()) -> String? {
         for language in preferredLanguages {
             // "de-DE", "de_DE", "de" all mean the same folder here. Region variants are

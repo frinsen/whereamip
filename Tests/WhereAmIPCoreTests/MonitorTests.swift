@@ -1,5 +1,8 @@
 import XCTest
 @testable import WhereAmIPCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 actor Counter {
     var geoCalls = 0; var probeCalls = 0; var lookupCalls = 0; var httpIPCalls = 0

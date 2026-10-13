@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 /// Builds the dropdown's item tree ONCE per menu-tracking session.
@@ -62,3 +63,4 @@ public final class MenuTrackingSession {
         builtForThisSession = false
     }
 }
+#endif

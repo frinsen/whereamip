@@ -6,7 +6,9 @@ import WhereAmIPCore
 /// other UI resource uses (never `Bundle.module`), rendered by the same tiny
 /// Markdown renderer the welcome window uses.
 final class HelpContentTests: XCTestCase {
+    #if canImport(AppKit)
     let font = NSFont.systemFont(ofSize: 12)
+    #endif
 
     /// Every assertion below pins the language explicitly. `HelpContent.markdown()` with no
     /// argument follows the HOST's language, so an English-content assertion would pass on an
@@ -42,6 +44,7 @@ final class HelpContentTests: XCTestCase {
         }
     }
 
+    #if canImport(AppKit)
     func testHelpRendersWithoutLeavingMarkupBehind() {
         let rendered = WelcomeContent.rendered(HelpContent.markdown(preferredLanguages: ["en"]),
                                                font: font, alignment: .left).string
@@ -49,6 +52,8 @@ final class HelpContentTests: XCTestCase {
         XCTAssertFalse(rendered.contains("**"), "unrendered bold markup: \(rendered)")
         XCTAssertFalse(rendered.contains("\n- "), "unrendered bullet markup: \(rendered)")
     }
+
+    #endif
 
     // MARK: - never a crash, never a raw path or key on screen
 

@@ -1,5 +1,8 @@
 import XCTest
 @testable import WhereAmIPCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 final class ConnectivityTests: XCTestCase {
     func testGateHysteresis() {

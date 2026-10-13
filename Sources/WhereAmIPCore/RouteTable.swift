@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 #if canImport(Darwin)
 import Darwin
@@ -89,3 +90,4 @@ public enum RouteTable {
         return v
     }
 }
+#endif
